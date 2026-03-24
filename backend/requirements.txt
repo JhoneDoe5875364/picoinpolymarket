@@ -1,0 +1,13 @@
+fastapi==0.115.14
+pydantic==2.11.7
+starlette==0.40.0
+httpx
+uvicorn
+dotenv
+asyncpg
+psycopg
+psycopg2
+PyJWT
+requests
+python-dotenv
+pytz

@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+exec /opt/predictpix/venv/bin/python -B /opt/predictpix/venv/bin/gunicorn "$@"

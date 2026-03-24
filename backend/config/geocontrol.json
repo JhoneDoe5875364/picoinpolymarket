@@ -1,0 +1,58 @@
+{
+  "tiers": {
+    "full_block": ["US", "UK"],
+    "restricted": [],
+    "allowed_default": true
+  },
+  "categories": {
+    "predictions": {
+      "global_block": false,
+      "blocked_regions": [],
+      "restricted_regions": [],
+      "allowed_regions": [],
+      "state_overrides": {}
+    },
+    "financial": {
+      "global_block": false,
+      "blocked_regions": [],
+      "restricted_regions": [],
+      "allowed_regions": [],
+      "state_overrides": {}
+    },
+    "crypto": {
+      "global_block": false,
+      "blocked_regions": [],
+      "restricted_regions": [],
+      "allowed_regions": [],
+      "state_overrides": {}
+    },
+    "sports": {
+      "global_block": false,
+      "blocked_regions": [],
+      "restricted_regions": [],
+      "allowed_regions": [],
+      "state_overrides": {}
+    },
+    "politics": {
+      "global_block": false,
+      "blocked_regions": [],
+      "restricted_regions": [],
+      "allowed_regions": [],
+      "state_overrides": {}
+    },
+    "technology": {
+      "global_block": false,
+      "blocked_regions": [],
+      "restricted_regions": [],
+      "allowed_regions": [],
+      "state_overrides": {}
+    },
+    "entertainment": {
+      "global_block": false,
+      "blocked_regions": [],
+      "restricted_regions": [],
+      "allowed_regions": [],
+      "state_overrides": {}
+    }
+  }
+}

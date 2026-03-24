@@ -1,0 +1,156 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 240 25% 10%;
+    --foreground: 0 0% 98%;
+    --card: 228 48% 8%;
+    --card-foreground: 0 0% 98%;
+    --popover: 228 48% 8%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 312 100% 59%; /* Primary Pink */
+    --primary-foreground: 0 0% 98%;
+    --secondary: 228 48% 12%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 228 48% 10%;
+    --muted-foreground: 225 4% 51%; /* Secondary Text */
+    --accent: 28 100% 55%; /* Accent Orange */
+    --accent-foreground: 20 11% 6%;
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 228 48% 15%;
+    --input: 228 48% 15%;
+    --ring: 28 100% 55%; /* Accent Orange for focus rings */
+    --radius: 0.5rem;
+
+    --chart-1: 312 100% 59%; /* Primary Pink */
+    --chart-2: 182 100% 50%; /* Primary Blue */
+    --chart-3: 28 100% 55%;  /* Accent Orange */
+    --chart-4: 220 70% 50%;
+    --chart-5: 160 60% 45%;
+
+    /* --- Probability + action colors (derived from your palette) --- */
+    --yes: var(--chart-1);   /* YES = your Primary Pink */
+    --no: var(--chart-2);    /* NO  = your Primary Blue */
+    --track: 228 20% 18%;    /* neutral bar track (dark gray) */
+  }
+
+  .dark {
+    --background: 240 25% 10%;
+    --foreground: 0 0% 98%;
+    --card: 228 48% 8%;
+    --card-foreground: 0 0% 98%;
+    --popover: 228 48% 8%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 312 100% 59%; /* Primary Pink */
+    --primary-foreground: 0 0% 98%;
+    --secondary: 228 48% 12%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 228 48% 10%;
+    --muted-foreground: 225 4% 51%; /* Secondary Text */
+    --accent: 28 100% 55%; /* Accent Orange */
+    --accent-foreground: 20 11% 6%;
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 228 48% 15%;
+    --input: 228 48% 15%;
+    --ring: 28 100% 55%; /* Accent Orange for focus rings */
+
+    /* keep probability vars consistent in dark mode */
+    --yes: var(--chart-1);
+    --no: var(--chart-2);
+    --track: 228 20% 18%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    min-height: 100vh;
+    background-color: hsl(var(--background));
+    /* background-image: radial-gradient(
+      ellipse 80% 80% at 50% -20%,
+      hsl(var(--primary) / 0.1),
+      transparent
+    ); */
+  }
+}
+
+@layer components {
+  .btn-yes {
+    background-image: linear-gradient(30deg, #00F5FF, #FF2ECF);
+    @apply text-white font-bold hover:opacity-90 transition-opacity;
+  }
+  .btn-no {
+    background-image: linear-gradient(30deg, #FF2ECF, #00F5FF);
+    @apply text-white font-bold hover:opacity-90 transition-opacity;
+  }
+  .glowing-focus {
+    @apply focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background;
+    --tw-ring-color: hsl(var(--accent));
+  }
+}
+
+/* ========= PPX UI POLISH v1.1 (mobile-first) ========= */
+@layer components {
+  /* Responsive grid: 1 / 2 / 3 columns */
+
+/* === PredictPix markets grid – example-matched spacing === */
+.container{
+  width:100%;
+  margin-left:auto;
+  margin-right:auto;
+  padding-left:1rem;
+  padding-right:1rem;
+}
+@media (min-width:1400px){
+  .container{ 
+    max-width:1200px;
+    margin-left:auto;
+    margin-right:auto;
+    padding-left:2rem;
+    padding-right:2rem;
+  } /* match reference */
+}
+.ppx-markets-grid{
+  display:grid;
+  grid-template-columns: repeat(1,minmax(0,1fr));
+  gap: 1.25rem; /* 20px on mobile */
+}
+@media (min-width: 768px){
+  .ppx-markets-grid{
+    grid-template-columns: repeat(2,minmax(0,1fr));
+    gap: 1.75rem; /* 28px on md */
+  }
+}
+@media (min-width: 1280px){
+  .ppx-markets-grid{
+    grid-template-columns: repeat(3,minmax(0,1fr));
+    gap: 2rem; /* 32px on xl */
+  }
+}
+}
+
+/* ===== PredictPix: wider, rectangular market cards ===== */
+.ppx-markets-grid{
+  display:grid;
+  grid-template-columns: repeat(auto-fill, minmax(460px, 1fr)); /* wider cards */
+  gap: 28px;
+}
+@media (min-width: 1024px){
+  .ppx-markets-grid{
+    grid-template-columns: repeat(3, minmax(0, 1fr)); /* 3-up on desktop, but each wider */
+    gap: 32px;
+  }
+}
+@media (max-width: 640px){
+  .ppx-markets-grid{
+    grid-template-columns: 1fr; /* single column on phones */
+    gap: 16px;
+  }
+}

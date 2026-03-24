@@ -1,0 +1,38 @@
+# --- Secrets / env ---
+.env
+.env.*
+*.env
+*.key
+*.pem
+*.crt
+*.pfx
+*.der
+.secret*
+secrets/
+public/validation-key.txt
+
+# --- Node / Next.js ---
+node_modules/
+.npm/
+.pnpm-store/
+.next/
+out/
+build/
+coverage/
+.cache/
+
+# --- Logs ---
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# --- Editor / OS ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# --- Misc ---
+*.swp
