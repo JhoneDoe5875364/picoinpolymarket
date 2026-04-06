@@ -33,8 +33,6 @@ export interface Market {
   // Resolution fields
   resolved?: boolean;
   outcome?: OutcomeSide | "cancelled" | null;
-  outcome_reason?: string | null;
-  resolution_criteria?: string | null;
   resolution_source?: string | null;
 
   // Misc / analytics
@@ -189,7 +187,6 @@ export interface Suggestion {
   description: string;
   category: string;
   status: string;
-  resolution_criteria: string;
   user_id: string;
   pi_username: string;
   end_time: string;

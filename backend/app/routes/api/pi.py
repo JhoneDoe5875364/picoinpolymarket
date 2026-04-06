@@ -1,17 +1,11 @@
-# Minimal stub to restore API importability and ensure mount works.
-import jwt
 import os
+
 import httpx
-import uuid
 from dotenv import load_dotenv
-from fastapi import APIRouter, Request, Response, HTTPException, Depends
-from fastapi.responses import JSONResponse
-from fastapi.encoders import jsonable_encoder
-from psycopg2.extras import RealDictCursor
-from datetime import datetime, timedelta
-from app.core.security import verify_token
-from app.core.database import _conn
+from fastapi import APIRouter, Depends, HTTPException, Request
+
 from app.core.logger import get_logger
+from app.core.security import verify_token
 
 # Load environment variables
 load_dotenv()

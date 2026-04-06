@@ -1,92 +1,74 @@
 """
-Compliance Logging System
-Records all geocontrol enforcement events
+Compliance logging — uses AsyncSession via request.app (no raw drivers).
 """
-from typing import Optional, Dict, Any
-from datetime import datetime
+from __future__ import annotations
+
+from typing import Optional
+
+from fastapi import Request
+
 from app.core.logger import get_logger
-from app.core.database import _conn
-from psycopg2.extras import RealDictCursor
+from app.repositories import compliance as compliance_repo
 
 logger = get_logger()
 
 
-class ComplianceLogger:
-    """Logs compliance events to database"""
-    
-    def log_event(
-        self,
-        user_id: Optional[str],
-        ip: str,
-        region_code: str,
-        state_code: Optional[str],
-        tier: str,
-        category_key: Optional[str],
-        action_type: str,  # 'registration', 'login', 'access', 'participation', etc.
-        result: str,  # 'allowed', 'blocked', 'restricted'
-        reason: str
-    ) -> None:
-        """Log a compliance event"""
-        try:
-            with _conn() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute(
-                    """
-                    INSERT INTO compliance_logs 
-                    (user_id, ip, region_code, state_code, tier, category_key, action_type, result, reason, timestamp)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    """,
-                    (user_id, ip, region_code, state_code, tier, category_key, action_type, result, reason, datetime.utcnow())
-                )
-                conn.commit()
-                # logger.info(f"✅ Logged compliance event: {action_type} - {result}")
-        except Exception as e:
-            logger.error(f"❌ Failed to log compliance event: {e}")
-    
-    def log_access_blocked(
-        self,
-        ip: str,
-        region_code: str,
-        reason: str,
-        user_id: Optional[str] = None,
-        state_code: Optional[str] = None,
-        category_key: Optional[str] = None
-    ) -> None:
-        """Log blocked access attempt"""
-        self.log_event(
+async def _run_with_session(request: Request, coro_factory) -> None:
+    maker = getattr(request.app.state, "async_session_maker", None)
+    if maker is None:
+        logger.warning("Compliance log skipped: async_session_maker not configured")
+        return
+    try:
+        async with maker() as session:
+            await coro_factory(session)
+            await session.commit()
+    except Exception as e:
+        logger.error("Failed to log compliance event: %s", e)
+
+
+async def log_access_blocked(
+    request: Request,
+    *,
+    ip: str,
+    region_code: str,
+    reason: str,
+    user_id: Optional[str] = None,
+    state_code: Optional[str] = None,
+    category_key: Optional[str] = None,
+) -> None:
+    await _run_with_session(
+        request,
+        lambda s: compliance_repo.log_access_blocked(
+            s,
+            ip=ip,
+            region_code=region_code,
+            reason=reason,
+            user_id=user_id,
+            state_code=state_code,
+            category_key=category_key,
+        ),
+    )
+
+
+async def log_category_restriction(
+    request: Request,
+    *,
+    user_id: Optional[str],
+    ip: str,
+    region_code: str,
+    category_key: str,
+    reason: str,
+    state_code: Optional[str] = None,
+) -> None:
+    await _run_with_session(
+        request,
+        lambda s: compliance_repo.log_category_restriction(
+            s,
             user_id=user_id,
             ip=ip,
             region_code=region_code,
-            state_code=state_code,
-            tier='full_block',
             category_key=category_key,
-            action_type='access_attempt',
-            result='blocked',
-            reason=reason
-        )
-    
-    def log_category_restriction(
-        self,
-        user_id: Optional[str],
-        ip: str,
-        region_code: str,
-        category_key: str,
-        reason: str,
-        state_code: Optional[str] = None
-    ) -> None:
-        """Log category access restriction"""
-        self.log_event(
-            user_id=user_id,
-            ip=ip,
-            region_code=region_code,
+            reason=reason,
             state_code=state_code,
-            tier='unknown',
-            category_key=category_key,
-            action_type='category_access',
-            result='restricted',
-            reason=reason
-        )
-
-
-def get_compliance_logger() -> ComplianceLogger:
-    """Get compliance logger instance"""
-    return ComplianceLogger()
+        ),
+    )

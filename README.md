@@ -240,8 +240,8 @@ sudo chmod 600 /opt/PredictPix/backend/.env
 # PI API KEY
 PI_API_KEY="..................................................."
 
-# Sync DSN (for psycopg2 checks, requires sslmode=require)
-PGURL_SYNC=postgresql://postgres:PASSWORD@db.USERNAME.supabase.co:5432/postgres?sslmode=require
+# Database URL for SQLAlchemy/asyncpg (or set PGHOST+PGDATABASE+PGUSER in backend .env)
+DATABASE_URL=postgresql://postgres:PASSWORD@db.USERNAME.supabase.co:5432/postgres?sslmode=require
 
 # Admin Pi usernames (comma-separated, case-insensitive)
 PREDICTPIX_ADMIN_PI_USERNAMES=xxxxxxxxxxxxx,yyyyyyyyyy

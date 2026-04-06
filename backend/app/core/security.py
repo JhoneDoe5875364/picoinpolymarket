@@ -51,12 +51,11 @@ async def verify_token(request: Request):
             raise HTTPException(status_code=401, detail="Token expired")
         
         return payload
-    except Exception as e:
-        raise HTTPException(status_code=401, detail=f"Invalid token: {e}")
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid token")
 
 
 def mint_jwt_token(user_id, username, role, pi_access_token):
-    logger.info(f"[Mint Jwt Token]: JWT_SECRET_KEY={JWT_SECRET_KEY}, JWT_ISSUER={JWT_ISSUER}, JWT_AUDIENCE={JWT_AUDIENCE}, JWT_ALGORITHM={JWT_ALGORITHM}")
     
     now = int(time.time())
     if role == "superadmin":

@@ -9,9 +9,9 @@ def die(msg, code=2, exc:BaseException|None=None):
     sys.exit(code)
 
 # ---- ENV CHECKS ----
-url = os.getenv("PGURL_SYNC") or os.getenv("DATABASE_URL")
+url = os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL") or os.getenv("SUPABASE_DB_URL")
 if not url:
-    die("Missing PGURL_SYNC or DATABASE_URL")
+    die("Missing DATABASE_URL (or POSTGRES_URL / SUPABASE_DB_URL)")
 
 if not os.getenv("ADMIN_API_KEY"):
     die("Missing env: ADMIN_API_KEY")

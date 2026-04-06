@@ -22,7 +22,6 @@ type Row = {
   resolved_by_username: string | null;
   resolved_outcome: string | null;
   outcome: string | null;
-  payout_status: string | null;
   created_at: string;
   status: string;
   total_volume: number;
@@ -152,12 +151,6 @@ export function ResolutionsManager() {
                   {getSortIcon("resolved_by_username")}
                 </Button>
               </TableHead>
-              <TableHead>
-                <Button variant="ghost" onClick={() => handleSort("payout_status")}>
-                  Payout Status
-                  {getSortIcon("payout_status")}
-                </Button>
-              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -176,11 +169,6 @@ export function ResolutionsManager() {
                 </TableCell>
                 <TableCell>
                   {m.resolved_by_username || "N/A"}
-                </TableCell>
-                <TableCell>
-                  <Badge variant={getPayoutStatusBadgeVariant(m.payout_status)}>
-                    {getPayoutStatusDisplay(m.payout_status)}
-                  </Badge>
                 </TableCell>
               </TableRow>
             ))}

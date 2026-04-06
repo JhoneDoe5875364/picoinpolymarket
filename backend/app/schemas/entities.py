@@ -1,0 +1,219 @@
+"""
+Pydantic shapes for persisted / serialized domain data (API & docs).
+Maps from SQLAlchemy models via model_config.from_attributes.
+"""
+from datetime import date, datetime
+from decimal import Decimal
+from typing import Any, Dict, List, Optional
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class User(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    pi_username: Optional[str] = None
+    created_at: Optional[datetime] = None
+    referral_code: Optional[str] = None
+    referred_by: Optional[str] = None
+    status: Optional[str] = None
+    balance: Decimal = Decimal("0")
+    role_id: int = 3
+
+
+class Market(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    question: str
+    category_id: Optional[UUID] = None
+    creator_id: Optional[UUID] = None
+    tier: Optional[str] = None
+    status: str = "open"
+    created_at: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    closed_date: Optional[datetime] = None
+    liquidity: Optional[Decimal] = None
+    resolution_source: Optional[str] = None
+    resolved: bool = False
+    resolved_at: Optional[datetime] = None
+    resolved_outcome: Optional[str] = None
+    is_archived: bool = False
+    closes_at: Optional[datetime] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+    close_at: Optional[datetime] = None
+    rules: Optional[str] = None
+    sources: List[Dict[str, Any]] = Field(default_factory=list)
+    tags: List[str] = Field(default_factory=list)
+    checklist_resolution_clarity: bool = True
+    checklist_restricted_topics: bool = True
+    checklist_verifiable_outcome: bool = True
+
+
+class Position(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    user_id: Optional[UUID] = None
+    market_id: Optional[UUID] = None
+    side: Optional[str] = None
+    amount: Optional[Decimal] = None
+    created_at: Optional[datetime] = None
+    status: Optional[str] = None
+    user_handle: Optional[str] = None
+    pi_amount: Optional[Decimal] = None
+
+
+class Trade(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    user_id: Optional[UUID] = None
+    market_id: Optional[UUID] = None
+    type: Optional[str] = None
+    side: Optional[str] = None
+    pi_amount: Optional[Decimal] = None
+    created_at: Optional[datetime] = None
+    fee_pi: Decimal = Decimal("0")
+    net_pi: Optional[Decimal] = None
+    invalid: bool = False
+    kind: str = "buy"
+    amount: Optional[Decimal] = None
+
+
+class AdminAudit(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    at: datetime
+    action: str
+    target_id: Optional[UUID] = None
+    details: Dict[str, Any] = Field(default_factory=dict)
+
+
+class Attestation(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    user_id: str
+    ip: str
+    region_code: str
+    state_code: Optional[str] = None
+    attestation_version: str
+    timestamp: Optional[datetime] = None
+
+
+class ComplianceLog(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    user_id: Optional[str] = None
+    ip: str
+    region_code: str
+    state_code: Optional[str] = None
+    tier: str
+    category_key: Optional[str] = None
+    action_type: str
+    result: str
+    reason: Optional[str] = None
+    timestamp: Optional[datetime] = None
+
+
+class Category(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    name: str
+
+
+class Comment(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    market_id: UUID
+    user_id: Optional[UUID] = None
+    username: Optional[str] = None
+    body: str
+    created_at: datetime
+
+
+class MarketComment(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    market_id: UUID
+    created_at: datetime
+    author_id: Optional[str] = None
+    body: str
+
+
+class MarketHistory(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    market_id: UUID
+    ts: datetime
+    implied_yes: Decimal
+    implied_no: Decimal
+    source: str = "snapshot"
+
+
+class MarketPriceHistory(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    market_id: UUID
+    ts_date: date
+    yes_pct: float
+    no_pct: float
+    volume_pi: Decimal = Decimal("0")
+
+
+class Referral(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    referrer_id: Optional[UUID] = None
+    referred_id: Optional[UUID] = None
+    created_at: Optional[datetime] = None
+    reward_earned: bool = False
+
+
+class Role(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    role: Optional[str] = None
+
+
+class Suggestion(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    user_id: Optional[UUID] = None
+    title: str
+    category: str
+    description: Optional[str] = None
+    end_time: datetime
+    status: str = "pending"
+    reject_reason: Optional[str] = None
+    created_at: datetime
+    approved_at: Optional[datetime] = None
+    approved_by: Optional[UUID] = None
+    submitted_by: Optional[str] = None
+
+
+class Transaction(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    user_id: UUID
+    market_id: Optional[UUID] = None
+    amount: Optional[Decimal] = None
+    type: Optional[str] = None
+    status: Optional[str] = None
+    details: Optional[str] = None
+    date: Optional[date] = None
+    pi_amount: Optional[Decimal] = None

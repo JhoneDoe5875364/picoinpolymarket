@@ -1,73 +1,40 @@
 """
-Attestation System
-User confirmation for regional restrictions
+Attestation domain helpers — persistence in app.repositories.attestation.
 """
+from __future__ import annotations
+
 from typing import Optional
-from datetime import datetime
-from app.core.logger import get_logger
-from app.core.database import _conn
-from psycopg2.extras import RealDictCursor
 
-logger = get_logger()
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.repositories import attestation as attestation_repo
 
 
-class AttestationService:
-    """Manages user attestations"""
-    
-    def create_attestation(
-        self,
-        user_id: str,
-        ip: str,
-        region_code: str,
-        state_code: Optional[str],
-        attestation_version: str = "1.0"
-    ) -> bool:
-        """
-        Record user attestation
-        Returns True if successful
-        """
-        try:
-            with _conn() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute(
-                    """
-                    INSERT INTO attestations 
-                    (user_id, ip, region_code, state_code, attestation_version, timestamp)
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                    """,
-                    (user_id, ip, region_code, state_code, attestation_version, datetime.utcnow())
-                )
-                conn.commit()
-                logger.info(f"✅ Recorded attestation for user {user_id}")
-                return True
-        except Exception as e:
-            logger.error(f"❌ Failed to record attestation: {e}")
-            return False
-    
-    def get_latest_attestation(self, user_id: str) -> Optional[dict]:
-        """Get user's latest attestation"""
-        try:
-            with _conn() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute(
-                    """
-                    SELECT * FROM attestations 
-                    WHERE user_id = %s 
-                    ORDER BY timestamp DESC 
-                    LIMIT 1
-                    """,
-                    (user_id,)
-                )
-                result = cur.fetchone()
-                return dict(result) if result else None
-        except Exception as e:
-            logger.error(f"❌ Failed to get attestation: {e}")
-            return None
-    
-    def has_valid_attestation(self, user_id: str) -> bool:
-        """Check if user has a valid attestation"""
-        attestation = self.get_latest_attestation(user_id)
-        return attestation is not None
+async def create_attestation(
+    session: AsyncSession,
+    *,
+    user_id: str,
+    ip: str,
+    region_code: str,
+    state_code: Optional[str],
+    attestation_version: str = "1.0",
+) -> None:
+    await attestation_repo.insert_attestation(
+        session,
+        user_id=user_id,
+        ip=ip,
+        region_code=region_code,
+        state_code=state_code,
+        attestation_version=attestation_version,
+    )
 
 
-def get_attestation_service() -> AttestationService:
-    """Get attestation service instance"""
-    return AttestationService()
+async def get_latest_attestation(
+    session: AsyncSession, user_id: str
+) -> Optional[dict]:
+    return await attestation_repo.get_latest_attestation(session, user_id)
+
+
+async def has_valid_attestation(session: AsyncSession, user_id: str) -> bool:
+    row = await attestation_repo.get_latest_attestation(session, user_id)
+    return row is not None

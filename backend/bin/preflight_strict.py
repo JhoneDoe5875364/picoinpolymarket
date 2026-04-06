@@ -7,7 +7,11 @@ for m in ("app.main", "app.api.market_stats", "app.api.markets"):
     importlib.import_module(m)
 
 # --- DB DSN (env or /etc/predictpix.env) ---
-dsn = os.environ.get("PGURL_SYNC") or os.environ.get("DATABASE_URL")
+dsn = (
+    os.environ.get("DATABASE_URL")
+    or os.environ.get("POSTGRES_URL")
+    or os.environ.get("SUPABASE_DB_URL")
+)
 if not dsn:
     try:
         with open("/etc/predictpix.env") as f:
@@ -16,13 +20,13 @@ if not dsn:
                 if not line or line.startswith("#") or "=" not in line:
                     continue
                 k, v = line.split("=", 1)
-                if k in ("PGURL_SYNC", "DATABASE_URL") and v:
+                if k in ("DATABASE_URL", "POSTGRES_URL", "SUPABASE_DB_URL") and v:
                     dsn = v
                     break
     except Exception:
         pass
 if not dsn:
-    print("No DB DSN (PGURL_SYNC/DATABASE_URL) available for preflight", file=sys.stderr)
+    print("No DB DSN (DATABASE_URL / POSTGRES_URL / SUPABASE_DB_URL) for preflight", file=sys.stderr)
     sys.exit(1)
 
 # --- DB check ---
