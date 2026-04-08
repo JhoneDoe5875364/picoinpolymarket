@@ -5,7 +5,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Date, DateTime, Numeric, String, Text
+from sqlalchemy import BigInteger, Date, DateTime, ForeignKey, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -18,8 +18,12 @@ class Transaction(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    user_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True))
-    market_id: Mapped[Optional[uuid.UUID]] = mapped_column(PGUUID(as_uuid=True))
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    market_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger, ForeignKey("markets.id", ondelete="SET NULL")
+    )
     amount: Mapped[Optional[Decimal]] = mapped_column(Numeric(24, 8))
     type: Mapped[Optional[str]] = mapped_column(String)
     status: Mapped[Optional[str]] = mapped_column(String)

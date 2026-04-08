@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class User(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: UUID
+    id: int
     pi_username: Optional[str] = None
     created_at: Optional[datetime] = None
     referral_code: Optional[str] = None
@@ -26,10 +26,10 @@ class User(BaseModel):
 class Market(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: UUID
+    id: int
     question: str
-    category_id: Optional[UUID] = None
-    creator_id: Optional[UUID] = None
+    category_id: Optional[int] = None
+    creator_id: Optional[int] = None
     tier: Optional[str] = None
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
@@ -53,8 +53,8 @@ class Position(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    user_id: Optional[UUID] = None
-    market_id: Optional[UUID] = None
+    user_id: Optional[int] = None
+    market_id: Optional[int] = None
     side: Optional[str] = None
     amount: Optional[Decimal] = None
     created_at: Optional[datetime] = None
@@ -67,8 +67,8 @@ class Trade(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    user_id: Optional[UUID] = None
-    market_id: Optional[UUID] = None
+    user_id: Optional[int] = None
+    market_id: Optional[int] = None
     type: Optional[str] = None
     side: Optional[str] = None
     pi_amount: Optional[Decimal] = None
@@ -128,8 +128,8 @@ class Comment(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    market_id: UUID
-    user_id: Optional[UUID] = None
+    market_id: int
+    user_id: Optional[int] = None
     username: Optional[str] = None
     body: str
     created_at: datetime
@@ -139,7 +139,7 @@ class MarketComment(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    market_id: UUID
+    market_id: int
     created_at: datetime
     author_id: Optional[str] = None
     body: str
@@ -149,7 +149,7 @@ class MarketHistory(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    market_id: UUID
+    market_id: int
     ts: datetime
     implied_yes: Decimal
     implied_no: Decimal
@@ -160,7 +160,7 @@ class MarketPriceHistory(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    market_id: UUID
+    market_id: int
     ts_date: date
     yes_pct: float
     no_pct: float
@@ -188,7 +188,7 @@ class Suggestion(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    user_id: Optional[UUID] = None
+    user_id: Optional[int] = None
     title: str
     category: str
     description: Optional[str] = None
@@ -197,7 +197,7 @@ class Suggestion(BaseModel):
     reject_reason: Optional[str] = None
     created_at: datetime
     approved_at: Optional[datetime] = None
-    approved_by: Optional[UUID] = None
+    approved_by: Optional[int] = None
     submitted_by: Optional[str] = None
 
 
@@ -205,8 +205,8 @@ class Transaction(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    user_id: UUID
-    market_id: Optional[UUID] = None
+    user_id: int
+    market_id: Optional[int] = None
     amount: Optional[Decimal] = None
     type: Optional[str] = None
     status: Optional[str] = None

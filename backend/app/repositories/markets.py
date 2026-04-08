@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import uuid
 from datetime import datetime
 from decimal import Decimal
 from typing import Any, List, Optional, Union
@@ -17,7 +16,6 @@ _ORDER_COLUMNS: dict[str, Any] = {
     "start_date": Market.start_date,
     "end_date": Market.end_date,
     "volume": Market.volume,
-    "market_no": Market.market_no,
 }
 
 
@@ -83,7 +81,7 @@ async def list_markets(
     return [market_to_dict(m) for m in rows]
 
 
-async def get_market_by_id(session: AsyncSession, market_id: uuid.UUID) -> Optional[dict[str, Any]]:
+async def get_market_by_id(session: AsyncSession, market_id: int) -> Optional[dict[str, Any]]:
     stmt = (
         select(Market)
         .options(selectinload(Market.category))
@@ -112,7 +110,7 @@ async def list_resolved_markets(session: AsyncSession) -> List[dict[str, Any]]:
 # Old functions
 ########################################################
 async def get_market_snapshot(
-    session: AsyncSession, market_id: uuid.UUID
+    session: AsyncSession, market_id: int
 ) -> Optional[dict[str, Any]]:
     q = text(
         """
@@ -122,12 +120,12 @@ async def get_market_snapshot(
         WHERE id = :mid
         """
     )
-    r = await session.execute(q, {"mid": str(market_id)})
+    r = await session.execute(q, {"mid": market_id})
     row = r.mappings().first()
     return dict(row) if row else None
 
 
-async def count_traders(session: AsyncSession, market_id: uuid.UUID) -> int:
+async def count_traders(session: AsyncSession, market_id: int) -> int:
     q = text(
         """
         SELECT COUNT(*) AS traders
@@ -135,13 +133,13 @@ async def count_traders(session: AsyncSession, market_id: uuid.UUID) -> int:
         WHERE market_id = :mid
         """
     )
-    r = await session.execute(q, {"mid": str(market_id)})
+    r = await session.execute(q, {"mid": market_id})
     row = r.mappings().first()
     return int(row["traders"] or 0) if row else 0
 
 
 async def market_price_history(
-    session: AsyncSession, market_id: uuid.UUID
+    session: AsyncSession, market_id: int
 ) -> List[dict[str, Any]]:
     q = text(
         """
@@ -151,12 +149,12 @@ async def market_price_history(
          ORDER BY date ASC
         """
     )
-    r = await session.execute(q, {"mid": str(market_id)})
+    r = await session.execute(q, {"mid": market_id})
     return [dict(row) for row in r.mappings().all()]
 
 
 async def recent_trades(
-    session: AsyncSession, market_id: uuid.UUID, limit: int
+    session: AsyncSession, market_id: int, limit: int
 ) -> List[dict[str, Any]]:
     q = text(
         """
@@ -168,23 +166,23 @@ async def recent_trades(
         LIMIT :lim
         """
     )
-    r = await session.execute(q, {"mid": str(market_id), "lim": limit})
+    r = await session.execute(q, {"mid": market_id, "lim": limit})
     return [dict(row) for row in r.mappings().all()]
 
 
 async def get_market_status_row(
-    session: AsyncSession, market_id: uuid.UUID
+    session: AsyncSession, market_id: int
 ) -> Optional[dict[str, Any]]:
     q = text("SELECT id, status FROM markets WHERE id = :mid")
-    r = await session.execute(q, {"mid": str(market_id)})
+    r = await session.execute(q, {"mid": market_id})
     row = r.mappings().first()
     return dict(row) if row else None
 
 
 async def insert_position_simple(
     session: AsyncSession,
-    user_id: str,
-    market_id: uuid.UUID,
+    user_id: int,
+    market_id: int,
     side: str,
     amount: float,
 ) -> dict[str, Any]:
@@ -197,7 +195,7 @@ async def insert_position_simple(
     )
     r = await session.execute(
         q,
-        {"uid": user_id, "mid": str(market_id), "side": side, "amt": amount},
+        {"uid": user_id, "mid": market_id, "side": side, "amt": amount},
     )
     row = r.mappings().first()
     if not row:

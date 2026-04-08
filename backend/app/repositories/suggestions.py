@@ -36,7 +36,7 @@ async def list_pending_suggestions(
 async def insert_suggestion(
     session: AsyncSession,
     *,
-    user_id: str,
+    user_id: int,
     title: str,
     category: str,
     description: Optional[str],

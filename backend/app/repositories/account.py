@@ -14,7 +14,7 @@ async def open_positions(session: AsyncSession, user_id: str) -> List[dict[str, 
         WHERE status = 'open' AND user_id = :uid
         """
     )
-    r = await session.execute(q, {"uid": str(user_id)})
+    r = await session.execute(q, {"uid": int(user_id)})
     return [dict(x) for x in r.mappings().all()]
 
 
@@ -25,7 +25,7 @@ async def user_info_row(session: AsyncSession, user_id: str) -> dict[str, Any] |
         FROM users WHERE id = :uid
         """
     )
-    r = await session.execute(q, {"uid": str(user_id)})
+    r = await session.execute(q, {"uid": int(user_id)})
     row = r.mappings().first()
     return dict(row) if row else None
 
@@ -40,7 +40,7 @@ async def recent_activity(session: AsyncSession, user_id: str) -> List[dict[str,
         LIMIT 10
         """
     )
-    r = await session.execute(q, {"uid": str(user_id)})
+    r = await session.execute(q, {"uid": int(user_id)})
     return [dict(x) for x in r.mappings().all()]
 
 
@@ -54,7 +54,7 @@ async def transaction_history(
         WHERE user_id = :uid
         """
     )
-    r = await session.execute(q, {"uid": str(user_id)})
+    r = await session.execute(q, {"uid": int(user_id)})
     return [dict(x) for x in r.mappings().all()]
 
 
@@ -62,7 +62,7 @@ async def claim_payouts_flow(session: AsyncSession, user_id: str) -> tuple[Any, 
     """Returns (total_balance_after, claimed_amount)."""
     ur = await session.execute(
         text("SELECT id, balance FROM users WHERE id = :uid"),
-        {"uid": str(user_id)},
+        {"uid": int(user_id)},
     )
     row = ur.mappings().first()
     if not row:
@@ -77,7 +77,7 @@ async def claim_payouts_flow(session: AsyncSession, user_id: str) -> tuple[Any, 
             WHERE user_id = :uid
             """
         ),
-        {"uid": user_id},
+        {"uid": int(user_id)},
     )
     crow = cr.mappings().first()
     claimable_balance = (crow["balance"] or 0) if crow else 0
@@ -87,7 +87,7 @@ async def claim_payouts_flow(session: AsyncSession, user_id: str) -> tuple[Any, 
 
     await session.execute(
         text("UPDATE trades SET invalid = true WHERE user_id = :uid"),
-        {"uid": user_id},
+        {"uid": int(user_id)},
     )
 
     ir = await session.execute(
@@ -98,7 +98,7 @@ async def claim_payouts_flow(session: AsyncSession, user_id: str) -> tuple[Any, 
             RETURNING *
             """
         ),
-        {"uid": user_id, "mid": None, "amt": claimable_balance},
+        {"uid": int(user_id), "mid": None, "amt": claimable_balance},
     )
     if not ir.mappings().first():
         raise RuntimeError("Failed to create transaction")
@@ -106,7 +106,7 @@ async def claim_payouts_flow(session: AsyncSession, user_id: str) -> tuple[Any, 
     new_balance = total_balance + claimable_balance
     up = await session.execute(
         text("UPDATE users SET balance = :bal WHERE id = :uid RETURNING balance"),
-        {"bal": new_balance, "uid": user_id},
+        {"bal": new_balance, "uid": int(user_id)},
     )
     updated = up.mappings().first()
     if not updated:

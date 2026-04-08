@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 
 async def get_market_snapshot_prices(
-    session: AsyncSession, market_id: str
+    session: AsyncSession, market_id: int
 ) -> dict[str, Any]:
     q = text(
         """
@@ -16,7 +16,7 @@ async def get_market_snapshot_prices(
         WHERE id = :mid
         """
     )
-    r = await session.execute(q, {"mid": str(market_id)})
+    r = await session.execute(q, {"mid": market_id})
     row = r.mappings().first()
     if not row:
         raise LookupError("Market not found")
@@ -40,8 +40,8 @@ async def get_market_snapshot_prices(
 async def insert_position_with_tx(
     session: AsyncSession,
     *,
-    user_id: str,
-    market_id: str,
+    user_id: int,
+    market_id: int,
     side: str,
     buy_units: float,
     pi_amount: float,

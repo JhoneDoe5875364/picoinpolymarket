@@ -171,7 +171,7 @@ async def admin_resolutions_page(
 async def resolve_market_row(
     session: AsyncSession,
     *,
-    market_id: str,
+    market_id: int,
     outcome: str,
     user_id: str,
     username: str,
@@ -203,7 +203,7 @@ async def resolve_market_row(
     return dict(row)
 
 
-async def cancel_market_flow(session: AsyncSession, market_id: str) -> None:
+async def cancel_market_flow(session: AsyncSession, market_id: int) -> None:
     qm = text("SELECT * FROM markets m WHERE id = :mid")
     mr = await session.execute(qm, {"mid": market_id})
     market = mr.mappings().first()

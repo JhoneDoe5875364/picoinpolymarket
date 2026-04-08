@@ -204,7 +204,7 @@ async def get_resolutions(
 @router.post("/markets/{market_id}/resolve/{outcome}")
 async def resolve_market(
     db: DbSession,
-    market_id: str = Path(...),
+    market_id: int = Path(...),
     outcome: str = Path(...),
     user=Depends(verify_token),
 ):
@@ -237,7 +237,7 @@ async def resolve_market(
 @router.post("/markets/{market_id}/cancel")
 async def cancel_market(
     db: DbSession,
-    market_id: str = Path(...),
+    market_id: int = Path(...),
     user=Depends(verify_token),
 ):
     _ = user.get("sub", "")

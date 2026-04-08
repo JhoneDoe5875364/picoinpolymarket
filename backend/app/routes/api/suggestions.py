@@ -32,7 +32,13 @@ async def list_suggestions(
 @router.post("/", summary="Create a market suggestion")
 async def create_suggestion(request: Request, db: DbSession, user=Depends(verify_token)):
     data = await request.json()
-    user_id = user.get("sub", "")
+    raw_sub = user.get("sub")
+    try:
+        user_id = int(raw_sub) if raw_sub is not None else None
+    except (TypeError, ValueError):
+        user_id = None
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="Invalid user id in token")
     try:
         async with db.begin():
             suggestion_row = await suggestions_repo.insert_suggestion(

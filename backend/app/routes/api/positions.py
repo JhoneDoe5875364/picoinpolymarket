@@ -16,20 +16,29 @@ except Exception:
     FEE_RATE = 0.02
 
 
-def validate_user(user: dict) -> str:
-    user_id = user.get("sub")
-    if not user_id:
+def validate_user(user: dict) -> int:
+    raw = user.get("sub")
+    if raw is None or raw == "":
         logger.error("[CREATE POSITION]: No user_id found")
         raise HTTPException(status_code=401, detail="Unauthorized: No user_id found")
-    return user_id
+    try:
+        return int(raw)
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=401, detail="Unauthorized: invalid user id in token"
+        )
 
 
-def validate_input(data: dict) -> tuple[str, str, float]:
+def validate_input(data: dict) -> tuple[int, str, float]:
     market_id = data.get("market_id")
     side = data.get("side")
     pi_amount = data.get("amount")
-    if not market_id:
+    if market_id is None:
         raise HTTPException(status_code=400, detail="market_id is required")
+    try:
+        market_id = int(market_id)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="market_id must be an integer")
     if side not in ("yes", "no"):
         raise HTTPException(status_code=400, detail="side must be 'yes' or 'no'")
     try:

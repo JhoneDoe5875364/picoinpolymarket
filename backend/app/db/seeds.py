@@ -1,8 +1,7 @@
-"""Idempotent dev/demo seed rows (deterministic UUIDs)."""
+"""Idempotent dev/demo seed rows."""
 
 from __future__ import annotations
 
-import uuid
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
@@ -12,18 +11,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.tables.category import Category
 from app.models.tables.market import Market
 from app.models.tables.user import User
+from app.models.tables.market_trades import MarketTrade
 
-
-def _seed_uuid(label: str) -> uuid.UUID:
-    return uuid.uuid5(uuid.NAMESPACE_DNS, f"predictpix.seed.{label}")
+from app.utils import generate_bigint_256
 
 
 async def _ensure_user(session: AsyncSession, **kwargs: object) -> None:
-    uid = kwargs["id"]
-    assert isinstance(uid, uuid.UUID)
-    r = await session.execute(select(User.id).where(User.id == uid))
+    username = kwargs.get("pi_username")
+    assert isinstance(username, str)
+    r = await session.execute(select(User.id).where(User.pi_username == username))
     if r.first():
         return
+    kwargs.pop("id", None)
     session.add(User(**kwargs))
 
 
@@ -37,21 +36,41 @@ async def _ensure_category(session: AsyncSession, **kwargs: object) -> None:
 
 
 async def _ensure_market(session: AsyncSession, **kwargs: object) -> None:
-    mid = kwargs["id"]
-    assert isinstance(mid, uuid.UUID)
-    r = await session.execute(select(Market.id).where(Market.id == mid))
+    id = kwargs.get("id")
+    assert isinstance(id, int)
+    r = await session.execute(select(Market.id).where(Market.id == id))
     if r.first():
         return
     session.add(Market(**kwargs))
 
 
+async def _ensure_market_trade(session: AsyncSession, **kwargs: object) -> None:
+    token_id = kwargs.get("token_id")
+    created_at = kwargs.get("created_at")
+    assert isinstance(token_id, str)
+    assert created_at is not None
+    r = await session.execute(
+        select(MarketTrade.id).where(
+            MarketTrade.token_id == token_id,
+            MarketTrade.created_at == created_at,
+        ).limit(1)
+    )
+    if r.first():
+        return
+    kwargs.pop("id", None)
+    session.add(MarketTrade(**kwargs))
+
+
 async def run_seeds(session: AsyncSession) -> None:
     """Insert seed rows if missing."""
-    admin_id = _seed_uuid("user.admin")
-
     await run_seed_categories(session)
-    await run_seed_users(session, admin_id)
-    await run_seed_markets(session, admin_id)
+    await session.flush()
+    await run_seed_users(session)
+    await session.flush()
+    await run_seed_markets(session)
+    await session.flush()
+    await run_seed_market_trades(session)
+    await session.flush()
 
 
 async def run_seed_categories(session: AsyncSession) -> None:
@@ -128,12 +147,13 @@ async def run_seed_categories(session: AsyncSession) -> None:
     )
 
 
-async def run_seed_users(session: AsyncSession, admin_id: uuid.UUID) -> None:
+async def run_seed_users(session: AsyncSession) -> None:
     now: datetime = datetime.now(timezone.utc)
     await _ensure_user(
         session,
-        id=admin_id,
+        id=1,
         pi_username="seed_admin",
+        pi_uid="seed-admin",
         role_id=2,
         balance=Decimal("10000"),
         status="active",
@@ -142,8 +162,9 @@ async def run_seed_users(session: AsyncSession, admin_id: uuid.UUID) -> None:
     )
     await _ensure_user(
         session,
-        id=_seed_uuid("user.regular"),
+        id=2,
         pi_username="seed_user",
+        pi_uid="seed-user",
         role_id=3,
         balance=Decimal("500"),
         status="active",
@@ -152,11 +173,16 @@ async def run_seed_users(session: AsyncSession, admin_id: uuid.UUID) -> None:
     )
 
 
-async def run_seed_markets(session: AsyncSession, admin_id: uuid.UUID) -> None:
+async def run_seed_markets(session: AsyncSession) -> None:
+    r = await session.execute(select(User.id).where(User.pi_username == "seed_admin"))
+    admin_id = r.scalar_one_or_none()
+    if admin_id is None:
+        return
+
     now: datetime = datetime.now(timezone.utc)
     await _ensure_market(
         session,
-        id=_seed_uuid("market.demo-a"),
+        id=100000,
         question="Sample market A: Will demo prediction resolve Yes?",
         slug="seed-demo-market-a",
         description="Seed data for local development.",
@@ -164,6 +190,8 @@ async def run_seed_markets(session: AsyncSession, admin_id: uuid.UUID) -> None:
         category_id=1,
         creator_id=admin_id,
         tier="standard",
+        token_yes_id=str(generate_bigint_256()),
+        token_no_id=str(generate_bigint_256()),
         start_date=now - timedelta(days=5),
         end_date=now + timedelta(days=15),
         liquidity=Decimal("1000"),
@@ -179,7 +207,7 @@ async def run_seed_markets(session: AsyncSession, admin_id: uuid.UUID) -> None:
     )
     await _ensure_market(
         session,
-        id=_seed_uuid("market.demo-b"),
+        id=100001,
         question="Sample market B: Second demo outcome?",
         slug="seed-demo-market-b",
         description="Seed data for local development.",
@@ -187,6 +215,8 @@ async def run_seed_markets(session: AsyncSession, admin_id: uuid.UUID) -> None:
         category_id=2,
         creator_id=admin_id,
         tier="standard",
+        token_yes_id=str(generate_bigint_256()),
+        token_no_id=str(generate_bigint_256()),
         start_date=now - timedelta(days=10),
         end_date=now + timedelta(days=10),
         liquidity=Decimal("1000"),
@@ -202,7 +232,7 @@ async def run_seed_markets(session: AsyncSession, admin_id: uuid.UUID) -> None:
     )
     await _ensure_market(
         session,
-        id=_seed_uuid("market.demo-c"),
+        id=100002,
         question="Sample market C: Third demo outcome?",
         slug="seed-demo-market-c",
         description="Seed data for local development.",
@@ -210,6 +240,8 @@ async def run_seed_markets(session: AsyncSession, admin_id: uuid.UUID) -> None:
         category_id=3,
         creator_id=admin_id,
         tier="standard",
+        token_yes_id=str(generate_bigint_256()),
+        token_no_id=str(generate_bigint_256()),
         start_date=now - timedelta(days=2),
         end_date=now + timedelta(days=30),
         liquidity=Decimal("1000"),
@@ -222,4 +254,62 @@ async def run_seed_markets(session: AsyncSession, admin_id: uuid.UUID) -> None:
         outcome_price_no=Decimal("0.5"),
         created_at=now,
         updated_at=now,
+    )
+
+
+async def run_seed_market_trades(session: AsyncSession) -> None:
+    market_id = 100000
+    mr = await session.execute(
+        select(Market.token_yes_id, Market.token_no_id).where(Market.id == market_id)
+    )
+    mrow = mr.one_or_none()
+    if mrow is None:
+        print("No market found for ID", market_id)
+        return
+        
+    token_yes_id, token_no_id = mrow[0], mrow[1]
+    if not token_yes_id or not token_no_id:
+        print("No token IDs found for market", market_id)
+        return
+
+    now: datetime = datetime.now(timezone.utc)
+
+    await _ensure_market_trade(
+        session,
+        token_id=token_yes_id,
+        market_id=market_id,
+        taker_user_id=2,
+        maker_user_id=1,
+        side="buy",
+        price=Decimal("0.5"),
+        size=Decimal("1000"),
+        amount=Decimal("500"),
+        fee=Decimal("10"),
+        created_at=now,
+    )
+    await _ensure_market_trade(
+        session,
+        token_id=token_no_id,
+        market_id=market_id,
+        taker_user_id=2,
+        maker_user_id=1,
+        side="sell",
+        price=Decimal("0.35"),
+        size=Decimal("1000"),
+        amount=Decimal("350"),
+        fee=Decimal("7"),
+        created_at=now,
+    )
+    await _ensure_market_trade(
+        session,
+        token_id=token_yes_id,
+        market_id=market_id,
+        taker_user_id=2,
+        maker_user_id=1,
+        side="buy",
+        price=Decimal("0.75"),
+        size=Decimal("1000"),
+        amount=Decimal("750"),
+        fee=Decimal("15"),
+        created_at=now,
     )

@@ -42,16 +42,16 @@ class MarketUpdate(BaseModel):
 
 
 class PositionCreate(BaseModel):
-    user_id: UUID
-    market_id: UUID
+    user_id: int
+    market_id: int
     side: str
     amount: Decimal
     pi_amount: Decimal
 
 
 class TradeCreate(BaseModel):
-    user_id: UUID
-    market_id: UUID
+    user_id: int
+    market_id: int
     type: str
     side: str
     pi_amount: Decimal
@@ -59,14 +59,14 @@ class TradeCreate(BaseModel):
 
 
 class CommentCreate(BaseModel):
-    market_id: UUID
-    user_id: Optional[UUID] = None
+    market_id: int
+    user_id: Optional[int] = None
     username: Optional[str] = None
     body: str
 
 
 class SuggestionCreate(BaseModel):
-    user_id: Optional[UUID] = None
+    user_id: Optional[int] = None
     title: str
     category: str
     description: Optional[str] = None
@@ -77,5 +77,5 @@ class SuggestionCreate(BaseModel):
 class SuggestionUpdate(BaseModel):
     status: Optional[str] = None
     reject_reason: Optional[str] = None
-    approved_by: Optional[UUID] = None
+    approved_by: Optional[int] = None
     approved_at: Optional[datetime] = None

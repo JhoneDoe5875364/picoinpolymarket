@@ -1,4 +1,3 @@
-import uuid
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional, Union
@@ -28,7 +27,6 @@ async def list_markets(
     ascending: bool = Query(default=False),
     closed: Optional[bool] = Query(default=None),
     resolved: Optional[bool] = Query(default=None),
-    creator_id: Optional[uuid.UUID] = Query(default=None),
     volume_min: Optional[Union[Decimal, float]] = Query(default=None),
     volume_max: Optional[Union[Decimal, float]] = Query(default=None),
     start_date_min: Optional[datetime] = Query(default=None),
@@ -54,18 +52,12 @@ async def list_markets(
     return {"ok": True, "data": jsonable_encoder(rows)}
 
 
-@router.get("/{market_id:uuid}", summary="Get market by id")
-async def get_market_by_id(market_id: uuid.UUID, db: DbSession):
+@router.get("/{market_id:int}", summary="Get market by id")
+async def get_market_by_id(market_id: int, db: DbSession):
     row = await markets_repo.get_market_by_id(db, market_id)
     if not row:
         raise HTTPException(status_code=404, detail="Market not found")
     return {"ok": True, "data": jsonable_encoder(row)}
-
-
-@router.get("/resolved", summary="List Markets")
-async def list_resolved_markets(db: DbSession):
-    rows = await markets_repo.list_resolved_markets(db)
-    return {"ok": True, "data": jsonable_encoder(rows)}
 
 
 @router.get("/leaderboard")
@@ -74,65 +66,32 @@ async def get_leaderboard(db: DbSession, limit: int = 50):
     return {"ok": True, "items": jsonable_encoder(rows)}
 
 
-@router.get("/{market_id:uuid}", summary="Get Market Detail")
-async def get_market_detail(market_id: uuid.UUID, db: DbSession):
-    row = await markets_repo.get_market_snapshot(db, market_id)
-    if not row:
-        raise HTTPException(status_code=404, detail="Market not found")
-
-    total_volume = row.get("total_volume") or 0
-    yes_volume = row.get("yes_volume") or 0
-    no_volume = row.get("no_volume") or 0
-    yes_pct = row.get("yes_pct") or 0
-    no_pct = row.get("no_pct") or 0
-    yes_price = yes_pct / 100 if yes_pct > 0 else 0
-    no_price = no_pct / 100 if no_pct > 0 else 0
-
-    traders = await markets_repo.count_traders(db, market_id)
-
-    return {
-        "ok": True,
-        "data": {
-            "id": row.get("id"),
-            "title": row.get("title"),
-            "description": row.get("description"),
-            "created_at": row.get("created_at"),
-            "end_date": row.get("end_date"),
-            "resolved_at": row.get("resolved_at"),
-            "status": row.get("status"),
-            "category": row.get("category"),
-            "total_volume": total_volume,
-            "yes_volume": yes_volume,
-            "no_volume": no_volume,
-            "yes_price": yes_price,
-            "no_price": no_price,
-            "yes_pct": yes_pct,
-            "no_pct": no_pct,
-            "traders": traders,
-        },
-    }
-
-
-@router.get("/{market_id:uuid}/price-history")
-async def get_market_price_history(market_id: uuid.UUID, db: DbSession):
+@router.get("/{market_id:int}/price-history")
+async def get_market_price_history(market_id: int, db: DbSession):
     rows = await markets_repo.market_price_history(db, market_id)
     return {"ok": True, "data": jsonable_encoder(rows or [])}
 
 
-@router.get("/{market_id:uuid}/recent-trades")
-async def get_recent_trades(market_id: uuid.UUID, db: DbSession, limit: int = 50):
+@router.get("/{market_id:int}/recent-trades")
+async def get_recent_trades(market_id: int, db: DbSession, limit: int = 50):
     rows = await markets_repo.recent_trades(db, market_id, limit)
     return {"ok": True, "data": jsonable_encoder(rows)}
 
 
-@router.post("/{market_id:uuid}/trade")
+@router.post("/{market_id:int}/trade")
 async def create_market_trade(
-    market_id: uuid.UUID,
+    market_id: int,
     request: Request,
     db: DbSession,
     user=Depends(verify_token),
 ):
-    user_id = user.get("sub", "")
+    raw_sub = user.get("sub")
+    try:
+        user_id = int(raw_sub) if raw_sub is not None else None
+    except (TypeError, ValueError):
+        user_id = None
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="Invalid user id in token")
     data = await request.json()
     side = data.get("side")
     amount = data.get("amount")

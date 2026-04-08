@@ -48,7 +48,7 @@ async def in_play_balance(session: AsyncSession, user_id: str) -> Any:
         WHERE status = 'open' AND user_id = :uid
         """
     )
-    r = await session.execute(q, {"uid": str(user_id)})
+    r = await session.execute(q, {"uid": int(user_id)})
     row = r.mappings().first()
     if row is None or row["balance"] is None:
         return 0
@@ -64,7 +64,7 @@ async def update_user_status(
         RETURNING id, pi_username, status, balance, created_at
         """
     )
-    r = await session.execute(q, {"st": status, "uid": user_id})
+    r = await session.execute(q, {"st": status, "uid": int(user_id)})
     row = r.mappings().first()
     if not row:
         raise LookupError("User not found")

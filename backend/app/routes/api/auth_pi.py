@@ -89,7 +89,7 @@ async def auth_pi_verify(req: VerifyRequest, db: DbSession):
     else:
         role = "user"
 
-    token = mint_jwt_token(str(user_id), username, role, pi_access_token)
+    token = mint_jwt_token(str(user_row["id"]), username, role, pi_access_token)
     if nonce in nonce_store:
         del nonce_store[nonce]
 

@@ -19,6 +19,7 @@ load_dotenv()
 from app.db.config import DATABASE_URL
 from app.db.url import asyncpg_connect_args, to_async_sqlalchemy_url
 from app.models import Base  # noqa: E402 — after load_dotenv
+import app.models.tables  # noqa: E402, F401 — register all ORM tables on Base.metadata
 
 config = context.config
 
