@@ -1,6 +1,9 @@
 import uuid
+from datetime import datetime
+from decimal import Decimal
+from typing import Optional, Union
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
 
 from app.core.config import Config
@@ -17,8 +20,37 @@ FEE_RATE = Config.FEE_RATE
 
 
 @router.get("/", summary="List markets")
-async def list_opened_markets(db: DbSession):
-    rows = await markets_repo.list_opened_markets(db)
+async def list_markets(
+    db: DbSession,
+    limit: int = Query(default=10, ge=1),
+    offset: int = Query(default=0, ge=0),
+    order: str = Query(default="created_at"),
+    ascending: bool = Query(default=False),
+    closed: Optional[bool] = Query(default=None),
+    resolved: Optional[bool] = Query(default=None),
+    creator_id: Optional[uuid.UUID] = Query(default=None),
+    volume_min: Optional[Union[Decimal, float]] = Query(default=None),
+    volume_max: Optional[Union[Decimal, float]] = Query(default=None),
+    start_date_min: Optional[datetime] = Query(default=None),
+    start_date_max: Optional[datetime] = Query(default=None),
+    end_date_min: Optional[datetime] = Query(default=None),
+    end_date_max: Optional[datetime] = Query(default=None),
+):
+    rows = await markets_repo.list_markets(
+        db,
+        limit=limit,
+        offset=offset,
+        order=order,
+        ascending=ascending,
+        closed=closed,
+        resolved=resolved,
+        volume_min=volume_min,
+        volume_max=volume_max,
+        start_date_min=start_date_min,
+        start_date_max=start_date_max,
+        end_date_min=end_date_min,
+        end_date_max=end_date_max,
+    )
     return {"ok": True, "data": jsonable_encoder(rows)}
 
 

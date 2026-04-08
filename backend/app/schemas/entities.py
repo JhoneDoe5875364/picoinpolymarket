@@ -31,26 +31,22 @@ class Market(BaseModel):
     category_id: Optional[UUID] = None
     creator_id: Optional[UUID] = None
     tier: Optional[str] = None
-    status: str = "open"
-    created_at: Optional[datetime] = None
+    start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
-    closed_date: Optional[datetime] = None
     liquidity: Optional[Decimal] = None
+    is_closed: bool = False
+    is_resolved: bool = False
+    is_archived: bool = False
+    is_active: bool = True
     resolution_source: Optional[str] = None
     resolved: bool = False
     resolved_at: Optional[datetime] = None
     resolved_outcome: Optional[str] = None
-    is_archived: bool = False
-    closes_at: Optional[datetime] = None
     title: Optional[str] = None
     description: Optional[str] = None
-    close_at: Optional[datetime] = None
     rules: Optional[str] = None
-    sources: List[Dict[str, Any]] = Field(default_factory=list)
-    tags: List[str] = Field(default_factory=list)
-    checklist_resolution_clarity: bool = True
-    checklist_restricted_topics: bool = True
-    checklist_verifiable_outcome: bool = True
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 
 class Position(BaseModel):
