@@ -336,7 +336,7 @@ async def run_seed_market_price_candles(session: AsyncSession) -> None:
         return
 
     now: datetime = datetime.now(timezone.utc)
-    ts = now.timestamp()
+    ts = int(now.timestamp() * 1000)
     ts_1m_ago = ts - 60 * 1000
     ts_2m_ago = ts - 120 * 1000
     ts_3m_ago = ts - 180 * 1000
@@ -345,7 +345,7 @@ async def run_seed_market_price_candles(session: AsyncSession) -> None:
         session,
         market_id=market_id,
         token_id=token_yes_id,
-        bucket_interval="1m",
+        interval="1m",
         ts=ts_3m_ago,
         open_price=Decimal("0.5"),
         high_price=Decimal("0.5"),
@@ -357,7 +357,7 @@ async def run_seed_market_price_candles(session: AsyncSession) -> None:
         session,
         market_id=market_id,
         token_id=token_no_id,
-        bucket_interval="1m",
+        interval="1m",
         ts=ts_2m_ago,
         open_price=Decimal("0.6"),
         high_price=Decimal("0.6"),
@@ -369,7 +369,7 @@ async def run_seed_market_price_candles(session: AsyncSession) -> None:
         session,
         market_id=market_id,
         token_id=token_yes_id,
-        bucket_interval="1m",
+        interval="1m",
         ts=ts_1m_ago,
         open_price=Decimal("0.7"),
         high_price=Decimal("0.7"),
@@ -416,7 +416,6 @@ async def run_seed_leaderboard(session: AsyncSession) -> None:
     await _ensure_leaderboard(
         session,
         id=1,
-        rank=1,
         category_id=category_id,
         time_bucket=time_bucket,
         user_id=user_id,
@@ -431,7 +430,6 @@ async def run_seed_leaderboard(session: AsyncSession) -> None:
     await _ensure_leaderboard(
         session,
         id=2,
-        rank=2,
         category_id=category_id,
         time_bucket=time_bucket,
         user_id=user_id_2,
@@ -446,7 +444,6 @@ async def run_seed_leaderboard(session: AsyncSession) -> None:
     await _ensure_leaderboard(
         session,
         id=3,
-        rank=3,
         category_id=category_id,
         time_bucket=time_bucket,
         user_id=user_id_3,

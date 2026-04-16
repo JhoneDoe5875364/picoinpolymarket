@@ -113,7 +113,7 @@ async def market_prices_history(
     if end_ts is not None:
         conditions.append(MarketPriceCandle.ts <= end_ts)
     if interval is not None:
-        conditions.append(MarketPriceCandle.bucket_interval == interval)
+        conditions.append(MarketPriceCandle.interval == interval)
 
     candles_stmt = (
         select(MarketPriceCandle.ts, MarketPriceCandle.close_price)

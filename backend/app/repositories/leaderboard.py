@@ -15,13 +15,25 @@ def leaderboard_to_dict(row: Leaderboard) -> dict[str, Any]:
 async def list_leaderboard(
     session: AsyncSession,
     *,
+    category_id: int,
+    time_bucket: str,
+    order_by: str,
     limit: Optional[int] = 50,
     offset: int = 0,
 ) -> List[dict[str, Any]]:
-    stmt = select(Leaderboard).order_by(Leaderboard.rank.asc()).offset(offset)
+    sort_col = Leaderboard.vol if order_by == "VOL" else Leaderboard.pnl
+    stmt = (
+        select(Leaderboard)
+        .where(Leaderboard.category_id == category_id, Leaderboard.time_bucket == time_bucket)
+        .order_by(sort_col.desc())
+        .offset(offset)
+    )
     if limit is not None:
         stmt = stmt.limit(limit)
 
     result = await session.execute(stmt)
     rows = result.scalars().all()
-    return [leaderboard_to_dict(row) for row in rows]
+    return [
+        {**leaderboard_to_dict(row), "rank": offset + idx + 1}
+        for idx, row in enumerate(rows)
+    ]

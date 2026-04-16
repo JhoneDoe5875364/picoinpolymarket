@@ -27,7 +27,7 @@ class MarketPriceCandle(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     market_id: Mapped[int] = mapped_column(Integer, primary_key=True)
     token_id: Mapped[str] = mapped_column(String(255), primary_key=True)
-    bucket_interval: Mapped[str] = mapped_column("interval", String(10), primary_key=True, quote=True)
+    interval: Mapped[str] = mapped_column(String(10), primary_key=True)
     ts: Mapped[int] = mapped_column(BigInteger, primary_key=True)
 
     open_price: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 4))
