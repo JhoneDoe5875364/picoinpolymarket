@@ -9,13 +9,15 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql.ext import ts_headline
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.utils import generate_bigint_256
+
 from app.models.tables.category import Category
 from app.models.tables.market import Market
 from app.models.tables.user import User
 from app.models.tables.market_trades import MarketTrade
-
-from app.utils import generate_bigint_256
-from app.models.tables import Leaderboard, MarketPriceCandle
+from app.models.tables.market_price_candles import MarketPriceCandle
+from app.models.tables.market_holder import MarketHolder
+from app.models.tables.leaderboard import Leaderboard
 
 
 async def _ensure_user(session: AsyncSession, **kwargs: object) -> None:
@@ -38,6 +40,10 @@ async def _ensure_market_price_candle(session: AsyncSession, **kwargs: object) -
     session.add(MarketPriceCandle(**kwargs))
 
 
+async def _ensure_market_holder(session: AsyncSession, **kwargs: object) -> None:
+    session.add(MarketHolder(**kwargs))
+
+
 async def _ensure_leaderboard(session: AsyncSession, **kwargs: object) -> None:
     session.add(Leaderboard(**kwargs))
 
@@ -53,6 +59,8 @@ async def run_seeds(session: AsyncSession) -> None:
     await run_seed_market_trades(session)
     await session.flush()
     await run_seed_market_price_candles(session)
+    await session.flush()
+    await run_seed_market_holders(session)
     await session.flush()
     await run_seed_leaderboard(session)
     await session.flush()
@@ -376,6 +384,77 @@ async def run_seed_market_price_candles(session: AsyncSession) -> None:
         low_price=Decimal("0.7"),
         close_price=Decimal("0.7"),
         volume=Decimal("3000"),
+    )
+
+
+async def run_seed_market_holders(session: AsyncSession) -> None:
+    market_id = 100000
+    mr = await session.execute(select(Market.token_yes_id, Market.token_no_id).where(Market.id == market_id))
+    mrow = mr.one_or_none()
+    if mrow is None:
+        print("No market found for ID", market_id)
+        return
+        
+    token_yes_id, token_no_id = mrow[0], mrow[1]
+    if not token_yes_id or not token_no_id:
+        print("No token IDs found for market", market_id)
+        return
+
+    now: datetime = datetime.now(timezone.utc)
+
+    await _ensure_market_holder(
+        session,
+        market_id=market_id,
+        token_id=token_yes_id,
+        user_id=2,
+        amount=Decimal("1000"),
+        created_at=now,
+        updated_at=now,
+    )
+    await _ensure_market_holder(
+        session,
+        market_id=market_id,
+        token_id=token_yes_id,
+        user_id=3,
+        amount=Decimal("500"),
+        created_at=now,
+        updated_at=now,
+    )
+    await _ensure_market_holder(
+        session,
+        market_id=market_id,
+        token_id=token_yes_id,
+        user_id=4,
+        amount=Decimal("2000"),
+        created_at=now,
+        updated_at=now,
+    )
+    await _ensure_market_holder(
+        session,
+        market_id=market_id,
+        token_id=token_no_id,
+        user_id=2,
+        amount=Decimal("2000"),
+        created_at=now,
+        updated_at=now,
+    )
+    await _ensure_market_holder(
+        session,
+        market_id=market_id,
+        token_id=token_no_id,
+        user_id=3,
+        amount=Decimal("1000"),
+        created_at=now,
+        updated_at=now,
+    )
+    await _ensure_market_holder(
+        session,
+        market_id=market_id,
+        token_id=token_no_id,
+        user_id=4,
+        amount=Decimal("3000"),
+        created_at=now,
+        updated_at=now,
     )
 
 

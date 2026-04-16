@@ -60,6 +60,25 @@ async def get_market_by_id(market_id: int, db: DbSession):
     return {"ok": True, "data": jsonable_encoder(row)}
 
 
+@router.get("/holders", summary="Get top holders for market")
+async def get_market_holders(
+    db: DbSession,
+    market_id: int = Query(..., ge=1),
+    limit: int = Query(default=20, ge=0, le=20),
+    min_balance: int = Query(default=1, ge=0, le=999999),
+):
+    try:
+        rows = await markets_repo.market_holders(
+            db,
+            market_id=market_id,
+            limit=limit,
+            min_balance=min_balance,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "data": jsonable_encoder(rows)}
+
+
 @router.get("/prices-history")
 async def get_market_prices_history(
     db: DbSession,

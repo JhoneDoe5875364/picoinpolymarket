@@ -4,11 +4,12 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any, List, Optional, Union
 
-from sqlalchemy import inspect as sa_inspect, select, text
+from sqlalchemy import func, inspect as sa_inspect, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.tables.market import Market
+from app.models.tables.market_holder import MarketHolder
 from app.models.tables.market_price_candles import MarketPriceCandle
 
 _ORDER_COLUMNS: dict[str, Any] = {
@@ -125,65 +126,55 @@ async def market_prices_history(
     return [{"date": ts, "probability": close_price} for ts, close_price in rows]
 
 
-async def recent_trades(
-    session: AsyncSession, market_id: int, limit: int
-) -> List[dict[str, Any]]:
-    q = text(
-        """
-        SELECT t.id, t.user_id, u.pi_username, t.type, t.side, t.pi_amount, t.created_at
-        FROM trades t
-        JOIN users u ON t.user_id = u.id
-        WHERE t.market_id = :mid
-        ORDER BY t.created_at DESC
-        LIMIT :lim
-        """
-    )
-    r = await session.execute(q, {"mid": market_id, "lim": limit})
-    return [dict(row) for row in r.mappings().all()]
-
-
-async def get_market_status_row(
-    session: AsyncSession, market_id: int
-) -> Optional[dict[str, Any]]:
-    q = text("SELECT id, status FROM markets WHERE id = :mid")
-    r = await session.execute(q, {"mid": market_id})
-    row = r.mappings().first()
-    return dict(row) if row else None
-
-
-async def insert_position_simple(
+async def market_holders(
     session: AsyncSession,
-    user_id: int,
+    *,
     market_id: int,
-    side: str,
-    amount: float,
-) -> dict[str, Any]:
-    q = text(
-        """
-        INSERT INTO positions (user_id, market_id, side, amount, created_at)
-        VALUES (:uid, :mid, :side, :amt, NOW())
-        RETURNING *
-        """
+    limit: int = 20,
+    min_balance: int = 1,
+) -> List[dict[str, Any]]:
+    ranked_holders = (
+        select(
+            MarketHolder.token_id.label("token_id"),
+            MarketHolder.user_id.label("user_id"),
+            MarketHolder.amount.label("amount"),
+            func.row_number()
+            .over(
+                partition_by=MarketHolder.token_id,
+                order_by=MarketHolder.amount.desc(),
+            )
+            .label("rn"),
+        )
+        .where(
+            MarketHolder.market_id == market_id,
+            MarketHolder.amount >= min_balance,
+        )
+        .subquery("ranked_holders")
     )
-    r = await session.execute(
-        q,
-        {"uid": user_id, "mid": market_id, "side": side, "amt": amount},
-    )
-    row = r.mappings().first()
-    if not row:
-        raise RuntimeError("Failed to create position")
-    return dict(row)
 
-
-async def leaderboard(session: AsyncSession, limit: int) -> List[dict[str, Any]]:
-    q = text(
-        """
-        SELECT RANK() OVER (ORDER BY volume DESC) AS rank,
-               user_id, username, volume, success_pct AS accuracy
-        FROM v_leaderboard
-        ORDER BY volume DESC
-        LIMIT :lim
-        """
+    stmt = (
+        select(
+            ranked_holders.c.token_id,
+            ranked_holders.c.user_id,
+            ranked_holders.c.amount,
+        )
+        .where(ranked_holders.c.rn <= limit)
+        .order_by(ranked_holders.c.token_id.asc(), ranked_holders.c.amount.desc())
     )
-    r = await session.execute(q, {"lim": limit})
-    return [dict(row) for row in r.mappings().all()]
+
+    result = await session.execute(
+        stmt
+    )
+    rows = result.mappings().all()
+
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        token = row["token_id"]
+        grouped.setdefault(token, []).append(
+            {
+                "user_id": row["user_id"],
+                "amount": row["amount"],
+            }
+        )
+
+    return [{"token": token, "holders": holders} for token, holders in grouped.items()]
