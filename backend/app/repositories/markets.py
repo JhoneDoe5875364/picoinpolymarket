@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.tables.market import Market
+from app.models.tables.market_price_candles import MarketPriceCandle
 
 _ORDER_COLUMNS: dict[str, Any] = {
     "created_at": Market.created_at,
@@ -92,65 +93,36 @@ async def get_market_by_id(session: AsyncSession, market_id: int) -> Optional[di
     return market_to_dict(row) if row else None
 
 
-async def list_resolved_markets(session: AsyncSession) -> List[dict[str, Any]]:
-    stmt = (
-        select(Market)
-        .options(selectinload(Market.category))
-        .where(Market.is_resolved == True)
-        .order_by(Market.created_at.desc())
-        .limit(10)
-    )
-    result = await session.execute(stmt)
-    rows = result.scalars().all()
-    return [market_to_dict(m) for m in rows]
-
-
-
-########################################################
-# Old functions
-########################################################
-async def get_market_snapshot(
-    session: AsyncSession, market_id: int
-) -> Optional[dict[str, Any]]:
-    q = text(
-        """
-        SELECT id, title, description, created_at, end_date, resolved_at, status, category,
-               total_volume, yes_volume, no_volume, yes_pct, no_pct
-        FROM v_market_snapshots
-        WHERE id = :mid
-        """
-    )
-    r = await session.execute(q, {"mid": market_id})
-    row = r.mappings().first()
-    return dict(row) if row else None
-
-
-async def count_traders(session: AsyncSession, market_id: int) -> int:
-    q = text(
-        """
-        SELECT COUNT(*) AS traders
-        FROM trades
-        WHERE market_id = :mid
-        """
-    )
-    r = await session.execute(q, {"mid": market_id})
-    row = r.mappings().first()
-    return int(row["traders"] or 0) if row else 0
-
-
-async def market_price_history(
-    session: AsyncSession, market_id: int
+async def market_prices_history(
+    session: AsyncSession,
+    market_id: int,
+    *,
+    start_ts: Optional[datetime] = None,
+    end_ts: Optional[datetime] = None,
+    interval: Optional[str] = None,
 ) -> List[dict[str, Any]]:
-    q = text(
-        """
-        SELECT ts_date AS date, yes_pct AS probability
-          FROM market_price_history
-         WHERE market_id = :mid
-         ORDER BY date ASC
-        """
+    market_stmt = select(Market.token_yes_id).where(Market.id == market_id)
+    market_result = await session.execute(market_stmt)
+    token_yes_id = market_result.scalar_one_or_none()
+    if not token_yes_id:
+        return []
+
+    conditions: list[Any] = [MarketPriceCandle.token_id == token_yes_id]
+    if start_ts is not None:
+        conditions.append(MarketPriceCandle.ts >= start_ts)
+    if end_ts is not None:
+        conditions.append(MarketPriceCandle.ts <= end_ts)
+    if interval is not None:
+        conditions.append(MarketPriceCandle.bucket_interval == interval)
+
+    candles_stmt = (
+        select(MarketPriceCandle.ts, MarketPriceCandle.close_price)
+        .where(*conditions)
+        .order_by(MarketPriceCandle.ts.asc())
     )
-    r = await session.execute(q, {"mid": market_id})
-    return [dict(row) for row in r.mappings().all()]
+    candles_result = await session.execute(candles_stmt)
+    rows = candles_result.all()
+    return [{"date": ts, "probability": close_price} for ts, close_price in rows]
 
 
 async def recent_trades(

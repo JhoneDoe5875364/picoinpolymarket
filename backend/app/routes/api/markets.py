@@ -60,62 +60,19 @@ async def get_market_by_id(market_id: int, db: DbSession):
     return {"ok": True, "data": jsonable_encoder(row)}
 
 
-@router.get("/leaderboard")
-async def get_leaderboard(db: DbSession, limit: int = 50):
-    rows = await markets_repo.leaderboard(db, limit)
-    return {"ok": True, "items": jsonable_encoder(rows)}
-
-
-@router.get("/{market_id:int}/price-history")
-async def get_market_price_history(market_id: int, db: DbSession):
-    rows = await markets_repo.market_price_history(db, market_id)
-    return {"ok": True, "data": jsonable_encoder(rows or [])}
-
-
-@router.get("/{market_id:int}/recent-trades")
-async def get_recent_trades(market_id: int, db: DbSession, limit: int = 50):
-    rows = await markets_repo.recent_trades(db, market_id, limit)
-    return {"ok": True, "data": jsonable_encoder(rows)}
-
-
-@router.post("/{market_id:int}/trade")
-async def create_market_trade(
-    market_id: int,
-    request: Request,
+@router.get("/prices-history")
+async def get_market_prices_history(
     db: DbSession,
-    user=Depends(verify_token),
+    market_id: int = Query(..., ge=1),
+    start_ts: Optional[datetime] = Query(default=None),
+    end_ts: Optional[datetime] = Query(default=None),
+    interval: Optional[str] = Query(default=None),
 ):
-    raw_sub = user.get("sub")
-    try:
-        user_id = int(raw_sub) if raw_sub is not None else None
-    except (TypeError, ValueError):
-        user_id = None
-    if user_id is None:
-        raise HTTPException(status_code=401, detail="Invalid user id in token")
-    data = await request.json()
-    side = data.get("side")
-    amount = data.get("amount")
-
-    if side not in ("yes", "no"):
-        raise HTTPException(status_code=400, detail="side must be 'yes' or 'no'")
-    if not amount or amount <= 0:
-        raise HTTPException(status_code=400, detail="amount must be greater than 0")
-
-    fee = amount * FEE_RATE
-    net = amount * (1 - FEE_RATE)
-
-    try:
-        async with db.begin():
-            market = await markets_repo.get_market_status_row(db, market_id)
-            if not market:
-                raise HTTPException(status_code=404, detail="Market not found")
-            if market.get("status") != "open":
-                raise HTTPException(status_code=400, detail="Market is not open")
-            await markets_repo.insert_position_simple(db, user_id, market_id, side, amount)
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("Error creating market trade: %s", e)
-        raise HTTPException(status_code=500, detail="Failed to create trade")
-
-    return {"ok": True, "capped": True, "gross": amount, "fee": fee, "net": net}
+    rows = await markets_repo.market_prices_history(
+        db,
+        market_id,
+        start_ts=start_ts,
+        end_ts=end_ts,
+        interval=interval,
+    )
+    return {"ok": True, "data": jsonable_encoder(rows or [])}

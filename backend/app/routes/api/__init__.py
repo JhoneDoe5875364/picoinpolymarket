@@ -1,6 +1,18 @@
 # Make this a package. Routers live in sibling modules.
 # routes package
-from app.routes.api import users, account, admin, auth_pi, pi, markets, positions, suggestions, geo, attestation
+from app.routes.api import (
+    users,
+    account,
+    admin,
+    auth_pi,
+    pi,
+    markets,
+    positions,
+    suggestions,
+    geo,
+    attestation,
+    leaderboard,
+)
 
 
 def include_api_routers(app):
@@ -14,3 +26,4 @@ def include_api_routers(app):
     app.include_router(suggestions.router, prefix="/api")
     app.include_router(geo.router, prefix="/api")
     app.include_router(attestation.router, prefix="/api")
+    app.include_router(leaderboard.router, prefix="/api")
