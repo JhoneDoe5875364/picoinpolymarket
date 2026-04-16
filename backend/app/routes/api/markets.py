@@ -60,6 +60,14 @@ async def get_market_by_id(market_id: int, db: DbSession):
     return {"ok": True, "data": jsonable_encoder(row)}
 
 
+@router.get("/slug/{slug}", summary="Get market by slug")
+async def get_market_by_slug(slug: str, db: DbSession):
+    row = await markets_repo.get_market_by_slug(db, slug)
+    if not row:
+        raise HTTPException(status_code=404, detail="Market not found")
+    return {"ok": True, "data": jsonable_encoder(row)}
+
+
 @router.get("/holders", summary="Get top holders for market")
 async def get_market_holders(
     db: DbSession,

@@ -94,6 +94,17 @@ async def get_market_by_id(session: AsyncSession, market_id: int) -> Optional[di
     return market_to_dict(row) if row else None
 
 
+async def get_market_by_slug(session: AsyncSession, slug: str) -> Optional[dict[str, Any]]:
+    stmt = (
+        select(Market)
+        .options(selectinload(Market.category))
+        .where(Market.slug == slug)
+    )
+    result = await session.execute(stmt)
+    row = result.scalar_one_or_none()
+    return market_to_dict(row) if row else None
+
+
 async def market_prices_history(
     session: AsyncSession,
     market_id: int,
