@@ -4,12 +4,12 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any, List, Optional, Union
 
-from sqlalchemy import func, inspect as sa_inspect, select, text
+from sqlalchemy import func, inspect as sa_inspect, select, text, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.tables.market import Market
-from app.models.tables.market_holder import MarketHolder
+from app.models.tables.market_position import MarketPosition
 from app.models.tables.market_price_candles import MarketPriceCandle
 
 _ORDER_COLUMNS: dict[str, Any] = {
@@ -144,38 +144,37 @@ async def market_holders(
     limit: int = 20,
     min_balance: int = 1,
 ) -> List[dict[str, Any]]:
-    ranked_holders = (
+    stmt_yes = (
         select(
-            MarketHolder.token_id.label("token_id"),
-            MarketHolder.user_id.label("user_id"),
-            MarketHolder.amount.label("amount"),
-            func.row_number()
-            .over(
-                partition_by=MarketHolder.token_id,
-                order_by=MarketHolder.amount.desc(),
-            )
-            .label("rn"),
+            MarketPosition.yes_token_id.label("token_id"),
+            MarketPosition.user_id.label("user_id"),
+            MarketPosition.yes_shares.label("shares"),
+            MarketPosition.avg_price_yes.label("avg_price"),
         )
         .where(
-            MarketHolder.market_id == market_id,
-            MarketHolder.amount >= min_balance,
+            MarketPosition.market_id == market_id,
+            MarketPosition.yes_shares >= min_balance,
         )
-        .subquery("ranked_holders")
+        .order_by(MarketPosition.yes_shares.desc())
+        .limit(limit)
     )
 
-    stmt = (
+    stmt_no = (
         select(
-            ranked_holders.c.token_id,
-            ranked_holders.c.user_id,
-            ranked_holders.c.amount,
+            MarketPosition.no_token_id.label("token_id"),
+            MarketPosition.user_id.label("user_id"),
+            MarketPosition.no_shares.label("shares"),
+            MarketPosition.avg_price_no.label("avg_price"),
         )
-        .where(ranked_holders.c.rn <= limit)
-        .order_by(ranked_holders.c.token_id.asc(), ranked_holders.c.amount.desc())
+        .where(
+            MarketPosition.market_id == market_id,
+            MarketPosition.no_shares >= min_balance,
+        )
+        .order_by(MarketPosition.no_shares.desc())
+        .limit(limit)
     )
 
-    result = await session.execute(
-        stmt
-    )
+    result = await session.execute(union_all(stmt_yes, stmt_no))
     rows = result.mappings().all()
 
     grouped: dict[str, list[dict[str, Any]]] = {}
@@ -184,8 +183,9 @@ async def market_holders(
         grouped.setdefault(token, []).append(
             {
                 "user_id": row["user_id"],
-                "amount": row["amount"],
+                "shares": row["shares"],
+                "avg_price": row["avg_price"],
             }
         )
 
-    return [{"token": token, "holders": holders} for token, holders in grouped.items()]
+    return [{"token_id": token_id, "holders": holders} for token_id, holders in grouped.items()]

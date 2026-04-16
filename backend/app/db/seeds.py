@@ -16,7 +16,7 @@ from app.models.tables.market import Market
 from app.models.tables.user import User
 from app.models.tables.market_trades import MarketTrade
 from app.models.tables.market_price_candles import MarketPriceCandle
-from app.models.tables.market_holder import MarketHolder
+from app.models.tables.market_position import MarketPosition
 from app.models.tables.leaderboard import Leaderboard
 
 
@@ -40,8 +40,8 @@ async def _ensure_market_price_candle(session: AsyncSession, **kwargs: object) -
     session.add(MarketPriceCandle(**kwargs))
 
 
-async def _ensure_market_holder(session: AsyncSession, **kwargs: object) -> None:
-    session.add(MarketHolder(**kwargs))
+async def _ensure_market_position(session: AsyncSession, **kwargs: object) -> None:
+    session.add(MarketPosition(**kwargs))
 
 
 async def _ensure_leaderboard(session: AsyncSession, **kwargs: object) -> None:
@@ -402,57 +402,42 @@ async def run_seed_market_holders(session: AsyncSession) -> None:
 
     now: datetime = datetime.now(timezone.utc)
 
-    await _ensure_market_holder(
+    await _ensure_market_position(
         session,
         market_id=market_id,
-        token_id=token_yes_id,
         user_id=2,
-        amount=Decimal("1000"),
+        yes_token_id=token_yes_id,
+        no_token_id=token_no_id,
+        yes_shares=Decimal("1000"),
+        no_shares=Decimal("500"),
+        avg_price_yes=Decimal("0.65"),
+        avg_price_no=Decimal("0.35"),
         created_at=now,
         updated_at=now,
     )
-    await _ensure_market_holder(
+    await _ensure_market_position(
         session,
         market_id=market_id,
-        token_id=token_yes_id,
         user_id=3,
-        amount=Decimal("500"),
+        yes_token_id=token_yes_id,
+        no_token_id=token_no_id,
+        yes_shares=Decimal("500"),
+        no_shares=Decimal("200"),
+        avg_price_yes=Decimal("0.75"),
+        avg_price_no=Decimal("0.25"),
         created_at=now,
         updated_at=now,
     )
-    await _ensure_market_holder(
+    await _ensure_market_position(
         session,
         market_id=market_id,
-        token_id=token_yes_id,
         user_id=4,
-        amount=Decimal("2000"),
-        created_at=now,
-        updated_at=now,
-    )
-    await _ensure_market_holder(
-        session,
-        market_id=market_id,
-        token_id=token_no_id,
-        user_id=2,
-        amount=Decimal("2000"),
-        created_at=now,
-        updated_at=now,
-    )
-    await _ensure_market_holder(
-        session,
-        market_id=market_id,
-        token_id=token_no_id,
-        user_id=3,
-        amount=Decimal("1000"),
-        created_at=now,
-        updated_at=now,
-    )
-    await _ensure_market_holder(
-        session,
-        market_id=market_id,
-        token_id=token_no_id,
-        user_id=4,
-        amount=Decimal("3000"),
+        yes_token_id=token_yes_id,
+        no_token_id=token_no_id,
+        yes_shares=Decimal("2000"),
+        no_shares=Decimal("3000"),
+        avg_price_yes=Decimal("0.35"),
+        avg_price_no=Decimal("0.65"),
         created_at=now,
         updated_at=now,
     )
