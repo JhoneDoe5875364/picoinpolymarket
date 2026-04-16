@@ -66,8 +66,15 @@ async def get_market_prices_history(
     market_id: int = Query(..., ge=1),
     start_ts: Optional[datetime] = Query(default=None),
     end_ts: Optional[datetime] = Query(default=None),
-    interval: Optional[str] = Query(default=None),
+    interval: Optional[str] = Query(default='1m'),
 ):
+    allowed_intervals = {"1m", "10m", "1h", "1d"}
+    if interval not in allowed_intervals:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid interval. Allowed values are: 1m, 10m, 1h, 1d",
+        )
+
     rows = await markets_repo.market_prices_history(
         db,
         market_id,
