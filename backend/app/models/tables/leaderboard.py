@@ -13,6 +13,7 @@ from app.models.base import Base
 class Leaderboard(Base):
     __tablename__ = "leaderboards"
 
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     rank: Mapped[int] = mapped_column(Integer)
     category_id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     time_bucket: Mapped[str] = mapped_column(String(50), primary_key=True, index=True)

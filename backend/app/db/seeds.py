@@ -6,6 +6,7 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql.ext import ts_headline
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.tables.category import Category
@@ -14,51 +15,31 @@ from app.models.tables.user import User
 from app.models.tables.market_trades import MarketTrade
 
 from app.utils import generate_bigint_256
+from app.models.tables import Leaderboard, MarketPriceCandle
 
 
 async def _ensure_user(session: AsyncSession, **kwargs: object) -> None:
-    username = kwargs.get("pi_username")
-    assert isinstance(username, str)
-    r = await session.execute(select(User.id).where(User.pi_username == username))
-    if r.first():
-        return
-    kwargs.pop("id", None)
     session.add(User(**kwargs))
 
 
 async def _ensure_category(session: AsyncSession, **kwargs: object) -> None:
-    cid = kwargs["id"]
-    assert isinstance(cid, int)
-    r = await session.execute(select(Category.id).where(Category.id == cid))
-    if r.first():
-        return
     session.add(Category(**kwargs))
 
 
 async def _ensure_market(session: AsyncSession, **kwargs: object) -> None:
-    id = kwargs.get("id")
-    assert isinstance(id, int)
-    r = await session.execute(select(Market.id).where(Market.id == id))
-    if r.first():
-        return
     session.add(Market(**kwargs))
 
 
 async def _ensure_market_trade(session: AsyncSession, **kwargs: object) -> None:
-    token_id = kwargs.get("token_id")
-    created_at = kwargs.get("created_at")
-    assert isinstance(token_id, str)
-    assert created_at is not None
-    r = await session.execute(
-        select(MarketTrade.id).where(
-            MarketTrade.token_id == token_id,
-            MarketTrade.created_at == created_at,
-        ).limit(1)
-    )
-    if r.first():
-        return
-    kwargs.pop("id", None)
     session.add(MarketTrade(**kwargs))
+
+
+async def _ensure_market_price_candle(session: AsyncSession, **kwargs: object) -> None:
+    session.add(MarketPriceCandle(**kwargs))
+
+
+async def _ensure_leaderboard(session: AsyncSession, **kwargs: object) -> None:
+    session.add(Leaderboard(**kwargs))
 
 
 async def run_seeds(session: AsyncSession) -> None:
@@ -70,6 +51,10 @@ async def run_seeds(session: AsyncSession) -> None:
     await run_seed_markets(session)
     await session.flush()
     await run_seed_market_trades(session)
+    await session.flush()
+    await run_seed_market_price_candles(session)
+    await session.flush()
+    await run_seed_leaderboard(session)
     await session.flush()
 
 
@@ -163,10 +148,32 @@ async def run_seed_users(session: AsyncSession) -> None:
     await _ensure_user(
         session,
         id=2,
-        pi_username="seed_user",
-        pi_uid="seed-user",
+        pi_username="seed_user_1",
+        pi_uid="seed-user-1",
         role_id=3,
         balance=Decimal("500"),
+        status="active",
+        created_at=now,
+        updated_at=now,
+    )
+    await _ensure_user(
+        session,
+        id=3,
+        pi_username="seed_user_2",
+        pi_uid="seed-user-2",
+        role_id=3,
+        balance=Decimal("2654"),
+        status="active",
+        created_at=now,
+        updated_at=now,
+    )
+    await _ensure_user(
+        session,
+        id=4,
+        pi_username="seed_user_3",
+        pi_uid="seed-user-3",
+        role_id=3,
+        balance=Decimal("12654"),
         status="active",
         created_at=now,
         updated_at=now,
@@ -313,3 +320,143 @@ async def run_seed_market_trades(session: AsyncSession) -> None:
         fee=Decimal("15"),
         created_at=now,
     )
+
+
+async def run_seed_market_price_candles(session: AsyncSession) -> None:
+    market_id = 100000
+    mr = await session.execute(select(Market.token_yes_id, Market.token_no_id).where(Market.id == market_id))
+    mrow = mr.one_or_none()
+    if mrow is None:
+        print("No market found for ID", market_id)
+        return
+        
+    token_yes_id, token_no_id = mrow[0], mrow[1]
+    if not token_yes_id or not token_no_id:
+        print("No token IDs found for market", market_id)
+        return
+
+    now: datetime = datetime.now(timezone.utc)
+    ts = now.timestamp()
+    ts_1m_ago = ts - 60 * 1000
+    ts_2m_ago = ts - 120 * 1000
+    ts_3m_ago = ts - 180 * 1000
+    
+    await _ensure_market_price_candle(
+        session,
+        market_id=market_id,
+        token_id=token_yes_id,
+        bucket_interval="1m",
+        ts=ts_3m_ago,
+        open_price=Decimal("0.5"),
+        high_price=Decimal("0.5"),
+        low_price=Decimal("0.5"),
+        close_price=Decimal("0.5"),
+        volume=Decimal("1000"),
+    )
+    await _ensure_market_price_candle(
+        session,
+        market_id=market_id,
+        token_id=token_no_id,
+        bucket_interval="1m",
+        ts=ts_2m_ago,
+        open_price=Decimal("0.6"),
+        high_price=Decimal("0.6"),
+        low_price=Decimal("0.6"),
+        close_price=Decimal("0.6"),
+        volume=Decimal("2000"),
+    )
+    await _ensure_market_price_candle(
+        session,
+        market_id=market_id,
+        token_id=token_yes_id,
+        bucket_interval="1m",
+        ts=ts_1m_ago,
+        open_price=Decimal("0.7"),
+        high_price=Decimal("0.7"),
+        low_price=Decimal("0.7"),
+        close_price=Decimal("0.7"),
+        volume=Decimal("3000"),
+    )
+
+
+async def run_seed_leaderboard(session: AsyncSession) -> None:
+    market_id = 100000
+    category_id = 1
+    time_bucket = "1d"
+    user_id = 2
+    user_id_2 = 3
+    user_id_3 = 4
+
+    mr = await session.execute(select(Category.id).where(Category.id == category_id))
+    crow = mr.one_or_none()
+    if crow is None:
+        print("No category found for ID", category_id)
+        return
+
+    ur = await session.execute(select(User).where(User.id == user_id))
+    urow = ur.scalar_one_or_none()
+    if urow is None:
+        print("No user found for ID", user_id)
+        return
+
+    ur = await session.execute(select(User).where(User.id == user_id_2))
+    urow_2 = ur.scalar_one_or_none()
+    if urow_2 is None:
+        print("No user found for ID", user_id_2)
+        return
+
+    ur = await session.execute(select(User).where(User.id == user_id_3))
+    urow_3 = ur.scalar_one_or_none()
+    if urow_3 is None:
+        print("No user found for ID", user_id_3)
+        return
+
+    now: datetime = datetime.now(timezone.utc)
+
+    await _ensure_leaderboard(
+        session,
+        id=1,
+        rank=1,
+        category_id=category_id,
+        time_bucket=time_bucket,
+        user_id=user_id,
+        pi_user_id=urow.pi_uid,
+        pi_username=urow.pi_username,
+        wallet_address='',
+        vol=Decimal("3000"),
+        pnl=Decimal("300"),
+        created_at=now,
+        updated_at=now,
+    )
+    await _ensure_leaderboard(
+        session,
+        id=2,
+        rank=2,
+        category_id=category_id,
+        time_bucket=time_bucket,
+        user_id=user_id_2,
+        pi_user_id=urow_2.pi_uid,
+        pi_username=urow_2.pi_username,
+        wallet_address='',
+        vol=Decimal("2000"),
+        pnl=Decimal("200"),
+        created_at=now,
+        updated_at=now,
+    )
+    await _ensure_leaderboard(
+        session,
+        id=3,
+        rank=3,
+        category_id=category_id,
+        time_bucket=time_bucket,
+        user_id=user_id_3,
+        pi_user_id=urow_3.pi_uid,
+        pi_username=urow_3.pi_username,
+        wallet_address='',
+        vol=Decimal("1000"),
+        pnl=Decimal("100"),
+        created_at=now,
+        updated_at=now,
+    )
+        
+
