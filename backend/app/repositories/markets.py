@@ -4,13 +4,14 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any, List, Optional, Union
 
-from sqlalchemy import func, inspect as sa_inspect, select, text, union_all
+from sqlalchemy import func, inspect as sa_inspect, or_, select, text, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.tables.market import Market
 from app.models.tables.market_position import MarketPosition
 from app.models.tables.market_price_candles import MarketPriceCandle
+from app.core.config import Config
 
 _ORDER_COLUMNS: dict[str, Any] = {
     "created_at": Market.created_at,
@@ -103,6 +104,77 @@ async def get_market_by_slug(session: AsyncSession, slug: str) -> Optional[dict[
     result = await session.execute(stmt)
     row = result.scalar_one_or_none()
     return market_to_dict(row) if row else None
+
+
+async def get_market_price(
+    session: AsyncSession, *, token_id: str, side: str
+) -> Optional[dict[str, Any]]:
+    stmt = select(Market).where(
+        or_(Market.token_yes_id == token_id, Market.token_no_id == token_id)
+    )
+    result = await session.execute(stmt)
+    market = result.scalar_one_or_none()
+    if not market:
+        return None
+
+    is_yes_token = market.token_yes_id == token_id
+    token_side = "YES" if is_yes_token else "NO"
+    base_price = market.outcome_price_yes if is_yes_token else market.outcome_price_no
+    if base_price is None:
+        base_price = Decimal("0")
+
+    if side == "BUY":
+        price = base_price * (1 + Decimal(Config.SPREAD))
+    else:
+        price = base_price * (1 - Decimal(Config.SPREAD))
+
+    return {
+        "market_id": market.id,
+        "token_id": token_id,
+        "token_side": token_side,
+        "side": side,
+        "price": price,
+    }
+
+
+async def get_market_prices(
+    session: AsyncSession, *, token_ids: list[str], sides: list[str]
+) -> Optional[dict[str, dict[str, Decimal]]]:
+    stmt = select(Market).where(
+        or_(Market.token_yes_id.in_(token_ids), Market.token_no_id.in_(token_ids))
+    )
+    result = await session.execute(stmt)
+    markets = result.scalars().all()
+
+    if not markets:
+        return None
+
+    token_to_market: dict[str, Market] = {}
+    for market in markets:
+        if market.token_yes_id:
+            token_to_market[market.token_yes_id] = market
+        if market.token_no_id:
+            token_to_market[market.token_no_id] = market
+
+    price_map: dict[str, dict[str, Decimal]] = {}
+    for token_id, side in zip(token_ids, sides):
+        market = token_to_market.get(token_id)
+        if not market:
+            return None
+
+        is_yes_token = market.token_yes_id == token_id
+        base_price = market.outcome_price_yes if is_yes_token else market.outcome_price_no
+        if base_price is None:
+            base_price = Decimal("0")
+
+        if side == "BUY":
+            price = base_price * (1 + Decimal(Config.SPREAD))
+        else:
+            price = base_price * (1 - Decimal(Config.SPREAD))
+
+        price_map[token_id] = {side: price}
+
+    return price_map
 
 
 async def market_prices_history(

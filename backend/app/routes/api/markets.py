@@ -1,6 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional, Union
+from typing import Literal, Optional, Union
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
@@ -110,6 +110,50 @@ async def get_market_prices_history(
         interval=interval,
     )
     return {"ok": True, "data": jsonable_encoder(rows or [])}
+
+
+@router.get("/price", summary="Get market price by token id")
+async def get_market_price(
+    db: DbSession,
+    token_id: str = Query(..., min_length=1),
+    side: Literal["BUY", "SELL"] = Query(...),
+):
+    row = await markets_repo.get_market_price(db, token_id=token_id, side=side)
+    if not row:
+        raise HTTPException(status_code=404, detail="Market not found for token_id")
+    return {"ok": True, "data": jsonable_encoder(row)}
+
+
+@router.get("/prices", summary="Get market prices by token ids")
+async def get_market_prices(
+    db: DbSession,
+    token_ids: str = Query(..., min_length=1),
+    sides: str = Query(..., min_length=1),
+):
+    token_id_list = [token_id.strip() for token_id in token_ids.split(",") if token_id.strip()]
+    side_list = [side.strip().upper() for side in sides.split(",") if side.strip()]
+
+    if not token_id_list:
+        raise HTTPException(status_code=400, detail="token_ids is required")
+    if not side_list:
+        raise HTTPException(status_code=400, detail="sides is required")
+    if len(token_id_list) != len(side_list):
+        raise HTTPException(
+            status_code=400,
+            detail="token_ids and sides must have the same number of items",
+        )
+    if any(side not in {"BUY", "SELL"} for side in side_list):
+        raise HTTPException(
+            status_code=400,
+            detail="sides must be a comma-separated list of BUY or SELL",
+        )
+
+    rows = await markets_repo.get_market_prices(
+        db, token_ids=token_id_list, sides=side_list
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail="Market not found for token_ids")
+    return {"ok": True, "data": jsonable_encoder(rows)}
 
 
 @router.get("/positions", summary="Get positions by market")
