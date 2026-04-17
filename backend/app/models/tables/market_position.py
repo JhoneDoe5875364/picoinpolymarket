@@ -23,6 +23,8 @@ class MarketPosition(Base):
     no_token_id: Mapped[str] = mapped_column(String(255), nullable=False)
     yes_shares: Mapped[Decimal] = mapped_column(Numeric(24, 4), nullable=False)
     no_shares: Mapped[Decimal] = mapped_column(Numeric(24, 4), nullable=False)
+    yes_pi_amount: Mapped[Decimal] = mapped_column(Numeric(24, 4), nullable=False)
+    no_pi_amount: Mapped[Decimal] = mapped_column(Numeric(24, 4), nullable=False)
     avg_price_yes: Mapped[Decimal] = mapped_column(Numeric(24, 4), nullable=False)
     avg_price_no: Mapped[Decimal] = mapped_column(Numeric(24, 4), nullable=False)
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))

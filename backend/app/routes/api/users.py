@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
 
 from app.core.logger import get_logger
@@ -81,3 +82,29 @@ async def update_user_status(request: Request, db: DbSession, user=Depends(verif
         raise HTTPException(status_code=500, detail="Failed to update user status")
 
     return {"ok": True, "user": jsonable_encoder(user_row)}
+
+
+@router.get("/positions", summary="Get positions by user")
+async def get_open_positions(
+    db: DbSession,
+    user_id: int = Query(..., ge=1),
+    status: Optional[str] = Query(default='ALL'),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    sort_by: str = Query(default="shares"),
+    sort_direction: str = Query(default="DESC"),
+):
+    try:
+        rows = await users_repo.list_positions(
+            db,
+            user_id=user_id,
+            status=status,
+            limit=limit,
+            offset=offset,
+            sort_by=sort_by,
+            sort_direction=sort_direction,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True, "data": jsonable_encoder(rows)}
+

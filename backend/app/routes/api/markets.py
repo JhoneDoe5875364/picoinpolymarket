@@ -110,3 +110,29 @@ async def get_market_prices_history(
         interval=interval,
     )
     return {"ok": True, "data": jsonable_encoder(rows or [])}
+
+
+@router.get("/positions", summary="Get positions by market")
+async def get_positions(
+    db: DbSession,
+    market_id: int = Query(..., ge=1),
+    status: Optional[str] = Query(default='ALL'),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    sort_by: str = Query(default="shares"),
+    sort_direction: str = Query(default="DESC"),
+):
+    try:
+        rows = await markets_repo.list_positions(
+            db,
+            market_id=market_id,
+            status=status,
+            limit=limit,
+            offset=offset,
+            sort_by=sort_by,
+            sort_direction=sort_direction,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True, "data": jsonable_encoder(rows)}
+
