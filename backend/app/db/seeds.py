@@ -149,7 +149,7 @@ async def run_seed_users(session: AsyncSession) -> None:
         pi_uid="seed-admin",
         role_id=2,
         balance=Decimal("10000"),
-        status="active",
+        status="ACTIVE",
         created_at=now,
         updated_at=now,
     )
@@ -160,7 +160,7 @@ async def run_seed_users(session: AsyncSession) -> None:
         pi_uid="seed-user-1",
         role_id=3,
         balance=Decimal("500"),
-        status="active",
+        status="ACTIVE",
         created_at=now,
         updated_at=now,
     )
@@ -171,7 +171,7 @@ async def run_seed_users(session: AsyncSession) -> None:
         pi_uid="seed-user-2",
         role_id=3,
         balance=Decimal("2654"),
-        status="active",
+        status="ACTIVE",
         created_at=now,
         updated_at=now,
     )
@@ -182,7 +182,7 @@ async def run_seed_users(session: AsyncSession) -> None:
         pi_uid="seed-user-3",
         role_id=3,
         balance=Decimal("12654"),
-        status="active",
+        status="ACTIVE",
         created_at=now,
         updated_at=now,
     )

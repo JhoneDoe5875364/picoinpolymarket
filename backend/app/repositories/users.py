@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import select, union_all
+from sqlalchemy import func, select, union_all, update
 from typing import Any, List, Optional, Tuple
 
 from sqlalchemy import text
@@ -8,71 +8,85 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.tables.market import Market
 from app.models.tables.market_position import MarketPosition
+from app.models.tables.user import User
 
 
-async def list_users_page(
+async def get_users(
     session: AsyncSession,
     *,
+    status: Optional[str] = "ALL",
     limit: int,
     offset: int,
     sort_by: str,
     order: str,
     search: str,
 ) -> Tuple[List[dict[str, Any]], int]:
-    params: dict[str, Any] = {"limit": limit, "offset": offset}
-    where_sql = ""
-    if search:
-        where_sql = "WHERE pi_username ILIKE :search"
-        params["search"] = f"%{search}%"
+    sort_columns: dict[str, Any] = {
+        "created_at": User.created_at,
+        "pi_username": User.pi_username,
+        "balance": User.balance,
+    }
+    sort_col = sort_columns.get(sort_by, User.created_at)
+    order_expr = sort_col.asc() if order == "ASC" else sort_col.desc()
 
-    query = text(
-        f"""
-        SELECT id, pi_username, status, balance, created_at
-        FROM users
-        {where_sql}
-        ORDER BY {sort_by} {order}
-        LIMIT :limit OFFSET :offset
-        """
+    filters: list[Any] = []
+    filters.append(User.role_id == 3)
+    if status != "ALL":
+        filters.append(User.status == status)
+    if search and search.strip():
+        filters.append(User.pi_username.ilike(f"%{search}%"))
+
+    users_stmt = (
+        select(
+            User.id,
+            User.pi_username,
+            User.status,
+            User.balance,
+            User.created_at,
+        )
+        .where(*filters)
+        .order_by(order_expr)
+        .limit(limit)
+        .offset(offset)
     )
-    r = await session.execute(query, params)
-    rows = [dict(x) for x in r.mappings().all()]
+    users_result = await session.execute(users_stmt)
+    rows = [dict(x) for x in users_result.mappings().all()]
 
-    cq = text(f"SELECT COUNT(*) AS total FROM users {where_sql}")
-    cp = {k: v for k, v in params.items() if k in ("search",)}
-    cr = await session.execute(cq, cp)
-    total = cr.mappings().first()["total"] or 0
-    return rows, int(total)
+    count_stmt = select(func.count()).select_from(User).where(*filters)
+    total = await session.scalar(count_stmt)
+    return rows, int(total or 0)
 
 
-async def in_play_balance(session: AsyncSession, user_id: str) -> Any:
-    q = text(
-        """
-        SELECT SUM(pi_amount) AS balance
-        FROM v_portfolio_open_markets
-        WHERE status = 'open' AND user_id = :uid
-        """
-    )
-    r = await session.execute(q, {"uid": int(user_id)})
-    row = r.mappings().first()
-    if row is None or row["balance"] is None:
-        return 0
-    return row["balance"] or 0
+async def get_user_balance_by_uuid(session: AsyncSession, pi_uid: str) -> Any:
+    stmt = select(User).where(User.pi_uid == pi_uid)
+    result = await session.execute(stmt)
+    user_row = result.scalar_one_or_none()
+    if not user_row:
+        raise LookupError("User not found")
+    return user_row.balance
 
 
 async def update_user_status(
-    session: AsyncSession, *, user_id: str, status: str
+    session: AsyncSession, *, pi_uid: str, status: str
 ) -> dict[str, Any]:
-    q = text(
-        """
-        UPDATE users SET status = :st WHERE id = :uid
-        RETURNING id, pi_username, status, balance, created_at
-        """
+    stmt = (
+        update(User)
+        .where(User.pi_uid == pi_uid)
+        .values(status=status, updated_at=func.now())
+        .returning(
+            User.id,
+            User.pi_uid,
+            User.pi_username,
+            User.status,
+            User.balance,
+            User.updated_at,
+        )
     )
-    r = await session.execute(q, {"st": status, "uid": int(user_id)})
-    row = r.mappings().first()
-    if not row:
+    result = await session.execute(stmt)
+    user_row = result.mappings().first()
+    if not user_row:
         raise LookupError("User not found")
-    return dict(row)
+    return dict(user_row)
 
 
 async def list_positions(
