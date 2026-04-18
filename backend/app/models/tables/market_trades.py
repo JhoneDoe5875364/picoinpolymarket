@@ -42,11 +42,16 @@ class MarketTrade(Base):
     maker_user_id: Mapped[int] = mapped_column(BigInteger, nullable=True)
 
     side: Mapped[str] = mapped_column(
-        Enum("buy", "sell", name="market_trade_side", create_constraint=True),
+        Enum("BUY", "SELL", name="market_trade_side", create_constraint=True),
+        nullable=False,
+    )
+    outcome: Mapped[str] = mapped_column(
+        Enum("YES", "NO", name="market_trade_outcome_side", create_constraint=True),
         nullable=False,
     )
 
     price: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
-    size: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
-    amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
-    fee: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
+    shares: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
+    pi_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
+    pi_fee: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
+    pi_total_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)

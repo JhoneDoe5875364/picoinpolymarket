@@ -12,6 +12,7 @@ from app.routes.api import (
     geo,
     attestation,
     leaderboard,
+    orders,
 )
 
 
@@ -27,3 +28,4 @@ def include_api_routers(app):
     app.include_router(geo.router, prefix="/api")
     app.include_router(attestation.router, prefix="/api")
     app.include_router(leaderboard.router, prefix="/api")
+    app.include_router(orders.router, prefix="/api")

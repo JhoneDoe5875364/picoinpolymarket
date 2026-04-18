@@ -2,16 +2,17 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, List, Optional, Union
+from typing import Any, List, Literal, Optional, Union
 
-from sqlalchemy import func, inspect as sa_inspect, or_, select, text, union_all
+from sqlalchemy import func, insert, inspect as sa_inspect, or_, select, text, union_all, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.config import Config
 from app.models.tables.market import Market
 from app.models.tables.market_position import MarketPosition
+from app.models.tables.market_trades import MarketTrade
 from app.models.tables.market_price_candles import MarketPriceCandle
-from app.core.config import Config
 
 _ORDER_COLUMNS: dict[str, Any] = {
     "created_at": Market.created_at,
@@ -104,6 +105,15 @@ async def get_market_by_slug(session: AsyncSession, slug: str) -> Optional[dict[
     result = await session.execute(stmt)
     row = result.scalar_one_or_none()
     return market_to_dict(row) if row else None
+
+
+async def get_market_token_id(session: AsyncSession, market_id: int, outcome: Literal["YES", "NO"]) -> Optional[str]:
+    stmt = select(Market.token_yes_id if outcome == "YES" else Market.token_no_id).where(Market.id == market_id)
+    result = await session.execute(stmt)
+    token_id = result.scalar_one_or_none()
+    if not token_id:
+        raise ValueError("Market not found")
+    return token_id
 
 
 async def get_market_price(
@@ -332,3 +342,148 @@ async def list_positions(
         grouped.setdefault(token, []).append(row)
 
     return [{"token_id": token_id, "positions": positions} for token_id, positions in grouped.items()]
+
+
+async def insert_trade(
+    session: AsyncSession,
+    *,
+    market_id: int,
+    token_id: str,
+    user_id: int,
+    side: Literal["BUY", "SELL"],
+    outcome: Literal["YES", "NO"],
+    price: float,
+    shares: float,
+) -> int:
+    pi_amount = price * shares
+    pi_fee = pi_amount * Decimal(Config.FEE)
+    pi_total_amount = pi_amount + pi_fee
+    stmt = insert(MarketTrade).values(
+        market_id=market_id,
+        token_id=token_id,
+        taker_user_id=user_id,
+        side=side,
+        outcome=outcome,
+        price=Decimal(price),
+        shares=Decimal(shares),
+        pi_amount=Decimal(pi_amount),
+        pi_fee=Decimal(pi_fee),
+        pi_total_amount=Decimal(pi_total_amount),
+        created_at=datetime.now(),
+    )
+    result = await session.execute(stmt)
+    await session.commit()
+    return result.scalar_one_or_none()
+
+
+async def get_position(
+    session: AsyncSession,
+    *,
+    market_id: int,
+    user_id: int,
+) -> Optional[dict[str, Any]]:
+    stmt = select(MarketPosition).where(
+        MarketPosition.market_id == market_id,
+        MarketPosition.user_id == user_id,
+    )
+    result = await session.execute(stmt)
+    row = result.scalar_one_or_none()
+    return dict(row) if row else None
+
+
+async def update_position(
+    session: AsyncSession,
+    *,
+    market_id: int,
+    user_id: int,
+    outcome: Literal["YES", "NO"],
+    price: float,
+    shares: float,
+) -> dict[str, Any]:
+    market = await get_market_by_id(session, market_id=market_id)
+    if not market:
+        raise ValueError("Market not found")
+    
+    token_yes_id = market["token_yes_id"]
+    token_no_id = market["token_no_id"]
+    pi_amount = price * shares
+
+    position = await get_position(session, market_id=market_id, user_id=user_id)
+    if not position:
+        yes_shares = shares if outcome == "YES" else 0
+        no_shares = shares if outcome == "NO" else 0
+        yes_pi_amount = pi_amount if outcome == "YES" else 0
+        no_pi_amount = pi_amount if outcome == "NO" else 0
+        yes_avg_price = pi_amount / shares if outcome == "YES" else 0
+        no_avg_price = pi_amount / shares if outcome == "NO" else 0
+        return await insert_position(
+            session, 
+            market_id=market_id, 
+            user_id=user_id, 
+            yes_token_id=token_yes_id, 
+            no_token_id=token_no_id, 
+            yes_shares=Decimal(yes_shares), 
+            no_shares=Decimal(no_shares), 
+            yes_pi_amount=Decimal(yes_pi_amount), 
+            no_pi_amount=Decimal(no_pi_amount), 
+            yes_avg_price=Decimal(yes_avg_price), 
+            no_avg_price=Decimal(no_avg_price),
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+        )
+    
+    yes_shares = position["yes_shares"] + shares if outcome == "YES" else position["yes_shares"]
+    no_shares = position["no_shares"] + shares if outcome == "NO" else position["no_shares"]
+    yes_pi_amount = position["yes_pi_amount"] + pi_amount if outcome == "YES" else position["yes_pi_amount"]
+    no_pi_amount = position["no_pi_amount"] + pi_amount if outcome == "NO" else position["no_pi_amount"]
+    yes_avg_price = yes_pi_amount / yes_shares if outcome == "YES" else position["yes_avg_price"]
+    no_avg_price = yes_pi_amount / no_shares if outcome == "NO" else position["no_avg_price"]
+
+    stmt = update(MarketPosition).where(
+        MarketPosition.market_id == market_id,
+        MarketPosition.user_id == user_id,
+    ).values(
+        yes_shares=Decimal(yes_shares),
+        no_shares=Decimal(no_shares),
+        yes_pi_amount=Decimal(yes_pi_amount),
+        no_pi_amount=Decimal(no_pi_amount),
+        avg_price_yes=Decimal(yes_avg_price),
+        avg_price_no=Decimal(no_avg_price),
+        updated_at=datetime.now(),
+    )
+    result = await session.execute(stmt)
+    await session.commit()
+    return result.scalar_one_or_none()
+
+
+async def insert_position(
+    session: AsyncSession,
+    *,
+    market_id: int,
+    user_id: int,
+    yes_token_id: str,
+    no_token_id: str,
+    yes_shares: float,
+    no_shares: float,
+    yes_pi_amount: float,
+    no_pi_amount: float,
+    yes_avg_price: float,
+    no_avg_price: float,
+) -> int:
+    stmt = insert(MarketPosition).values(
+        market_id=market_id,
+        user_id=user_id,
+        yes_token_id=yes_token_id,
+        no_token_id=no_token_id,
+        yes_shares=Decimal(yes_shares),
+        no_shares=Decimal(no_shares),
+        yes_pi_amount=Decimal(yes_pi_amount),
+        no_pi_amount=Decimal(no_pi_amount),
+        avg_price_yes=Decimal(yes_avg_price),
+        avg_price_no=Decimal(no_avg_price),
+        created_at=datetime.now(),
+        updated_at=datetime.now(),
+    )
+    result = await session.execute(stmt)
+    await session.commit()
+    return result.scalar_one_or_none()

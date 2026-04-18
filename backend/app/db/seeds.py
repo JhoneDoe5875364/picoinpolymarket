@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql.ext import ts_headline
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.utils import generate_bigint_256
+from app.utils import generate_bigint_64
 
 from app.models.tables.category import Category
 from app.models.tables.market import Market
@@ -205,8 +205,8 @@ async def run_seed_markets(session: AsyncSession) -> None:
         category_id=1,
         creator_id=admin_id,
         tier="standard",
-        token_yes_id=str(generate_bigint_256()),
-        token_no_id=str(generate_bigint_256()),
+        token_yes_id=str(generate_bigint_64()),
+        token_no_id=str(generate_bigint_64()),
         start_date=now - timedelta(days=5),
         end_date=now + timedelta(days=15),
         liquidity=Decimal("1000"),
@@ -230,8 +230,8 @@ async def run_seed_markets(session: AsyncSession) -> None:
         category_id=2,
         creator_id=admin_id,
         tier="standard",
-        token_yes_id=str(generate_bigint_256()),
-        token_no_id=str(generate_bigint_256()),
+        token_yes_id=str(generate_bigint_64()),
+        token_no_id=str(generate_bigint_64()),
         start_date=now - timedelta(days=10),
         end_date=now + timedelta(days=10),
         liquidity=Decimal("1000"),
@@ -255,8 +255,8 @@ async def run_seed_markets(session: AsyncSession) -> None:
         category_id=3,
         creator_id=admin_id,
         tier="standard",
-        token_yes_id=str(generate_bigint_256()),
-        token_no_id=str(generate_bigint_256()),
+        token_yes_id=str(generate_bigint_64()),
+        token_no_id=str(generate_bigint_64()),
         start_date=now - timedelta(days=2),
         end_date=now + timedelta(days=30),
         liquidity=Decimal("1000"),
@@ -281,7 +281,7 @@ async def run_seed_market_trades(session: AsyncSession) -> None:
     if mrow is None:
         print("No market found for ID", market_id)
         return
-        
+    
     token_yes_id, token_no_id = mrow[0], mrow[1]
     if not token_yes_id or not token_no_id:
         print("No token IDs found for market", market_id)
@@ -295,12 +295,14 @@ async def run_seed_market_trades(session: AsyncSession) -> None:
         market_id=market_id,
         taker_user_id=2,
         maker_user_id=1,
-        side="buy",
+        side="BUY",
+        outcome="YES",
         price=Decimal("0.5"),
-        size=Decimal("1000"),
-        amount=Decimal("500"),
-        fee=Decimal("10"),
-        created_at=now,
+        shares=Decimal("1000"),
+        pi_amount=Decimal("500"),
+        pi_fee=Decimal("10"),
+        pi_total_amount=Decimal("510"),
+        created_at=now - timedelta(hours=2),
     )
     await _ensure_market_trade(
         session,
@@ -308,12 +310,14 @@ async def run_seed_market_trades(session: AsyncSession) -> None:
         market_id=market_id,
         taker_user_id=2,
         maker_user_id=1,
-        side="sell",
+        side="SELL",
+        outcome="NO",
         price=Decimal("0.35"),
-        size=Decimal("1000"),
-        amount=Decimal("350"),
-        fee=Decimal("7"),
-        created_at=now,
+        shares=Decimal("1000"),
+        pi_amount=Decimal("350"),
+        pi_fee=Decimal("7"),
+        pi_total_amount=Decimal("357"),
+        created_at=now - timedelta(hours=1),
     )
     await _ensure_market_trade(
         session,
@@ -321,11 +325,13 @@ async def run_seed_market_trades(session: AsyncSession) -> None:
         market_id=market_id,
         taker_user_id=2,
         maker_user_id=1,
-        side="buy",
+        side="BUY",
+        outcome="YES",
         price=Decimal("0.75"),
-        size=Decimal("1000"),
-        amount=Decimal("750"),
-        fee=Decimal("15"),
+        shares=Decimal("1000"),
+        pi_amount=Decimal("750"),
+        pi_fee=Decimal("15"),
+        pi_total_amount=Decimal("765"),
         created_at=now,
     )
 
