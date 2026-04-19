@@ -11,51 +11,49 @@ export type MarketStatus = "open" | "pending_resolution" | "resolved" | "cancele
  * Some of your mock files used `title`, so we keep both.
  */
 export interface Market {
-  id: string;
-
-  // Primary display text. Backend uses `question`; some mocks used `title`.
-  question?: string;
-  title?: string;
-
-  description?: string;
+  id: number;
+  question: string;
+  slug?: string;
+  description?: string | null;
+  icon?: string | null;
+  category_id?: number | null;
+  creator_id?: number | null;
+  tier?: string | null;
+  token_yes_id?: string | null;
+  token_no_id?: string | null;
+  outcome_price_yes?: number | null;
+  outcome_price_no?: number | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  liquidity?: number | null;
+  volume?: number;
+  is_active?: boolean;
+  is_closed?: boolean;
+  is_archived?: boolean;
+  is_resolved?: boolean;
+  rules?: string | null;
+  resolved_at?: string | null;
+  resolved_outcome?: OutcomeSide | "cancelled" | null;
+  resolved_by_user_id?: string | null;
+  resolved_by_username?: string | null;
+  resolution_source?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
   category?: string;
-  tier?: string;
 
-  status: MarketStatus;
-
-  // Timestamps (ISO strings)
-  created_at?: string;
-  updated_at?: string;
-  closes_at?: string;        // when trading ends / resolves
-  end_date?: string;         // legacy/mocks
-  resolved_at?: string;
-
-  // Resolution fields
+  // Compatibility fields used by current frontend responses/components.
+  title?: string;
+  status?: MarketStatus;
   resolved?: boolean;
   outcome?: OutcomeSide | "cancelled" | null;
-  resolution_source?: string | null;
-
-  // Misc / analytics
-  liquidity?: number | null;
-  is_archived?: boolean;
-
-  // Optional for UIs that show extras
   comments?: Array<MarketComment>;
-
-  // Volume
   yes_volume?: number;
   no_volume?: number;
-  volume?: number;
   total_volume?: number;
-
-  // Price
   yes_price?: number;
   no_price?: number;
-
-  // Percent
   yes_pct?: number;
   no_pct?: number;
-
   traders?: number;
 }
 

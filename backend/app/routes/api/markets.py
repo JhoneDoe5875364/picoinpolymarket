@@ -93,13 +93,13 @@ async def get_market_prices_history(
     market_id: int = Query(..., ge=1),
     start_ts: Optional[datetime] = Query(default=None),
     end_ts: Optional[datetime] = Query(default=None),
-    interval: Optional[str] = Query(default='1m'),
+    interval: Optional[str] = Query(default='1H'),
 ):
-    allowed_intervals = {"1m", "10m", "1h", "1d"}
+    allowed_intervals = {"1H", "1D", "1W", "1M", "1Y", "MAX"}
     if interval not in allowed_intervals:
         raise HTTPException(
             status_code=400,
-            detail="Invalid interval. Allowed values are: 1m, 10m, 1h, 1d",
+            detail="Invalid interval. Allowed values are: 1H, 1D, 1W, 1M, 1Y, MAX",
         )
 
     rows = await markets_repo.market_prices_history(
@@ -110,6 +110,26 @@ async def get_market_prices_history(
         interval=interval,
     )
     return {"ok": True, "data": jsonable_encoder(rows or [])}
+
+
+@router.get("/trades", summary="Retrieves trades for a market")
+async def get_market_trades(
+    db: DbSession,
+    market_id: int = Query(..., ge=1),
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=20, ge=1, le=100),
+    order: str = Query(default="created_at"),
+    ascending: bool = Query(default=False),
+):
+    rows = await markets_repo.list_market_trades(
+        db,
+        market_id=market_id,
+        offset=offset,
+        limit=limit,
+        order=order,
+        ascending=ascending,
+    )
+    return {"ok": True, "data": jsonable_encoder(rows)}
 
 
 @router.get("/price", summary="Get market price by token id")
@@ -163,8 +183,8 @@ async def get_positions(
     status: Optional[str] = Query(default='ALL'),
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
-    sort_by: str = Query(default="shares"),
-    sort_direction: str = Query(default="DESC"),
+    order: str = Query(default="shares"),
+    ascending: bool = Query(default=False),
 ):
     try:
         rows = await markets_repo.list_positions(
@@ -173,8 +193,8 @@ async def get_positions(
             status=status,
             limit=limit,
             offset=offset,
-            sort_by=sort_by,
-            sort_direction=sort_direction,
+            order=order,
+            ascending=ascending,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

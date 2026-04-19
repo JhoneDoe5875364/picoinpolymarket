@@ -22,6 +22,15 @@ _ORDER_COLUMNS: dict[str, Any] = {
     "volume": Market.volume,
 }
 
+_TRADE_ORDER_COLUMNS: dict[str, Any] = {
+    "id": MarketTrade.id,
+    "created_at": MarketTrade.created_at,
+    "price": MarketTrade.price,
+    "shares": MarketTrade.shares,
+    "pi_amount": MarketTrade.pi_amount,
+    "pi_total_amount": MarketTrade.pi_total_amount,
+}
+
 
 def market_to_dict(m: Market) -> dict[str, Any]:
     """Return mapped ``Market`` columns plus ``category`` slug (when relationship is loaded)."""
@@ -195,28 +204,83 @@ async def market_prices_history(
     end_ts: Optional[datetime] = None,
     interval: Optional[str] = None,
 ) -> List[dict[str, Any]]:
+    interval_seconds_map: dict[str, int] = {
+        "1H": 60 * 60,
+        "1D": 24 * 60 * 60,
+        "1W": 7 * 24 * 60 * 60,
+        "1M": 30 * 24 * 60 * 60,
+        "1Y": 365 * 24 * 60 * 60,
+        "MAX": 0,
+    }
+    target_points = 60
+
     market_stmt = select(Market.token_yes_id).where(Market.id == market_id)
     market_result = await session.execute(market_stmt)
     token_yes_id = market_result.scalar_one_or_none()
     if not token_yes_id:
         return []
 
-    conditions: list[Any] = [MarketPriceCandle.token_id == token_yes_id]
-    if start_ts is not None:
-        conditions.append(MarketPriceCandle.ts >= start_ts)
-    if end_ts is not None:
-        conditions.append(MarketPriceCandle.ts <= end_ts)
+    has_interval_from_ts = False
     if interval is not None:
-        conditions.append(MarketPriceCandle.interval == interval)
+        end_ts = int(datetime.now().timestamp())
+        if interval != "MAX":
+            start_ts = end_ts - interval_seconds_map[interval]
+            has_interval_from_ts = True
 
-    candles_stmt = (
-        select(MarketPriceCandle.ts, MarketPriceCandle.close_price)
-        .where(*conditions)
-        .order_by(MarketPriceCandle.ts.asc())
+    sampled_stmt = text(
+        """
+        WITH bounds AS (
+            SELECT
+                MIN(ts) AS min_ts,
+                MAX(ts) AS max_ts
+            FROM market_price_candles
+            WHERE market_id = :market_id
+                AND token_id = :token_id
+                AND (:has_from_ts = FALSE OR ts >= :from_ts)
+                AND ts <= :to_ts
+        ),
+        targets AS (
+            SELECT
+                gs.idx,
+                CASE
+                    WHEN b.min_ts IS NULL OR b.max_ts IS NULL THEN NULL
+                    WHEN b.max_ts = b.min_ts THEN b.min_ts
+                    ELSE (b.min_ts + ((b.max_ts - b.min_ts) * gs.idx / :denominator))::bigint
+                END AS target_ts
+            FROM bounds b
+            CROSS JOIN generate_series(0, :denominator) AS gs(idx)
+        )
+        SELECT sampled.ts, sampled.close_price
+        FROM targets t
+        JOIN LATERAL (
+            SELECT c.ts, c.close_price
+            FROM market_price_candles c
+            WHERE c.market_id = :market_id
+                AND c.token_id = :token_id
+                AND c.ts >= t.target_ts
+                AND c.ts <= :to_ts
+            ORDER BY c.ts ASC
+            LIMIT 1
+        ) AS sampled ON t.target_ts IS NOT NULL
+        ORDER BY sampled.ts ASC
+        """
     )
-    candles_result = await session.execute(candles_stmt)
-    rows = candles_result.all()
-    return [{"timestamp": ts, "probability": close_price} for ts, close_price in rows]
+    sampled_result = await session.execute(
+        sampled_stmt,
+        {
+            "market_id": market_id,
+            "token_id": token_yes_id,
+            "has_from_ts": has_interval_from_ts,
+            "from_ts": start_ts,
+            "to_ts": end_ts,
+            "denominator": target_points - 1,
+        },
+    )
+    sampled_rows = sampled_result.all()
+    return [
+        {"timestamp": ts, "probability": close_price}
+        for ts, close_price in sampled_rows
+    ]
 
 
 async def market_holders(
@@ -280,13 +344,11 @@ async def list_positions(
     status: Optional[str] = "ALL",
     limit: int = 20,
     offset: int = 0,
-    sort_by: Optional[str] = "shares",
-    sort_direction: Optional[str] = "DESC",
+    order: Optional[str] = "shares",
+    ascending: bool = False,
 ) -> List[dict[str, Any]]:
-    if sort_by not in ["shares"]:
-        raise ValueError("Invalid sort_by")
-    if sort_direction not in ["ASC", "DESC"]:
-        raise ValueError("Invalid sort_direction")
+    if order not in ["shares"]:
+        raise ValueError("Invalid order")
     if status not in ["ALL", "OPEN", "CLOSED"]:
         raise ValueError("Invalid status")
 
@@ -311,7 +373,7 @@ async def list_positions(
         )
         .join(Market, Market.id == MarketPosition.market_id)
         .where(*base_conditions, MarketPosition.yes_shares > 0)
-        .order_by(MarketPosition.yes_shares.asc() if sort_direction == "asc" else MarketPosition.yes_shares.desc())
+        .order_by(MarketPosition.yes_shares.asc() if ascending else MarketPosition.yes_shares.desc())
         .limit(limit)
         .offset(offset)
     )
@@ -328,7 +390,7 @@ async def list_positions(
         )
         .join(Market, Market.id == MarketPosition.market_id)
         .where(*base_conditions, MarketPosition.no_shares > 0)
-        .order_by(MarketPosition.no_shares.asc() if sort_direction == "asc" else MarketPosition.no_shares.desc())
+        .order_by(MarketPosition.no_shares.asc() if ascending else MarketPosition.no_shares.desc())
         .limit(limit)
         .offset(offset)
     )
@@ -342,6 +404,47 @@ async def list_positions(
         grouped.setdefault(token, []).append(row)
 
     return [{"token_id": token_id, "positions": positions} for token_id, positions in grouped.items()]
+
+
+async def list_market_trades(
+    session: AsyncSession,
+    *,
+    market_id: int,
+    limit: int = 20,
+    offset: int = 0,
+    order: str = "created_at",
+    ascending: bool = False,
+) -> List[dict[str, Any]]:
+    sort_col = _TRADE_ORDER_COLUMNS.get(order, MarketTrade.created_at)
+    stmt = (
+        select(MarketTrade)
+        .where(MarketTrade.market_id == market_id)
+        .order_by(sort_col.asc() if ascending else sort_col.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+
+    result = await session.execute(stmt)
+    rows = result.scalars().all()
+
+    return [
+        {
+            "id": row.id,
+            "created_at": row.created_at,
+            "token_id": row.token_id,
+            "market_id": row.market_id,
+            "taker_user_id": row.taker_user_id,
+            "maker_user_id": row.maker_user_id,
+            "side": row.side,
+            "outcome": row.outcome,
+            "price": row.price,
+            "shares": row.shares,
+            "pi_amount": row.pi_amount,
+            "pi_fee": row.pi_fee,
+            "pi_total_amount": row.pi_total_amount,
+        }
+        for row in rows
+    ]
 
 
 async def insert_trade(

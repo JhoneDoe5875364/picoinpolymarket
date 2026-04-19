@@ -9,6 +9,7 @@ import { OrderBook } from "@/components/OrderBook";
 import { PriceHistoryChart } from "@/components/PriceHistorychart";
 import { apiFetch } from "@/lib/api";
 import { MarketSummary } from "@/components/MarketSummary";
+import { MarketRules } from "@/components/MarketRules";
 
 
 async function loadMarketDetail(id: string): Promise<Market> {
@@ -29,12 +30,14 @@ export default async function MarketDetailsPage({ params }: { params: { id: stri
   return (
     <div className="container mx-auto py-8 px-4 sm:px-6 lg:px-8">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-2 space-y-8">
           <MarketSummary market={market} />
 
           <PriceHistoryChart market={market} />
 
-          <RecentTrades market={market} />
+          <MarketRules market={market} />
+
+          {/* <RecentTrades market={market} /> */}
 
           {/* <MarketComments marketId={market?.id} comments={market.comments} /> */}
         </div>

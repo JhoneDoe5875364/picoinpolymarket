@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+import random
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql.ext import ts_headline
@@ -215,6 +216,13 @@ async def run_seed_markets(session: AsyncSession) -> None:
         is_closed=False,
         is_archived=False,
         is_resolved=False,
+        rules=(
+            "This demo market resolves to YES only if the official announcement confirms the event outcome by the end date. "
+            "Only publicly verifiable sources listed by the platform moderators are accepted for final resolution.\n\n"
+            "If the source is ambiguous, delayed, or contradictory, the market may remain pending until clarification is posted. "
+            "Trades executed before resolution are final and cannot be reversed except for clear technical incidents. "
+            "The resolution note will include evidence links so participants can review why the outcome was decided."
+        ),
         outcome_price_yes=Decimal("0.5"),
         outcome_price_no=Decimal("0.5"),
         created_at=now,
@@ -240,6 +248,13 @@ async def run_seed_markets(session: AsyncSession) -> None:
         is_closed=False,
         is_archived=False,
         is_resolved=False,
+        rules=(
+            "This market resolves based on whether the second demo condition is met within the stated market window. "
+            "The evaluation uses timestamped public records and follows UTC as the reference timezone.\n\n"
+            "Temporary outages or missing updates do not immediately trigger cancellation if reliable data is later restored. "
+            "If the required condition is not satisfied before the deadline, the market resolves to NO. "
+            "Moderators will publish a brief decision summary to explain the final verdict."
+        ),
         outcome_price_yes=Decimal("0.5"),
         outcome_price_no=Decimal("0.5"),
         created_at=now,
@@ -265,6 +280,13 @@ async def run_seed_markets(session: AsyncSession) -> None:
         is_closed=False,
         is_archived=False,
         is_resolved=False,
+        rules=(
+            "This market resolves to YES when the third demo outcome is confirmed by an approved reference source. "
+            "The source must provide enough detail to verify that the exact condition in the question has occurred.\n\n"
+            "If no conclusive evidence appears before expiration, the market resolves to NO by default. "
+            "Any late evidence published after the cutoff is not considered for settlement. "
+            "A final resolution message is posted in the market feed with the supporting citation."
+        ),
         outcome_price_yes=Decimal("0.5"),
         outcome_price_no=Decimal("0.5"),
         created_at=now,
@@ -350,47 +372,38 @@ async def run_seed_market_price_candles(session: AsyncSession) -> None:
         return
 
     now: datetime = datetime.now(timezone.utc)
-    ts = int(now.timestamp() * 1000)
-    ts_1m_ago = ts - 60 * 1000
-    ts_2m_ago = ts - 120 * 1000
-    ts_3m_ago = ts - 180 * 1000
-    
-    await _ensure_market_price_candle(
-        session,
-        market_id=market_id,
-        token_id=token_yes_id,
-        interval="1m",
-        ts=ts_3m_ago,
-        open_price=Decimal("0.5"),
-        high_price=Decimal("0.5"),
-        low_price=Decimal("0.5"),
-        close_price=Decimal("0.5"),
-        volume=Decimal("1000"),
-    )
-    await _ensure_market_price_candle(
-        session,
-        market_id=market_id,
-        token_id=token_no_id,
-        interval="1m",
-        ts=ts_2m_ago,
-        open_price=Decimal("0.6"),
-        high_price=Decimal("0.6"),
-        low_price=Decimal("0.6"),
-        close_price=Decimal("0.6"),
-        volume=Decimal("2000"),
-    )
-    await _ensure_market_price_candle(
-        session,
-        market_id=market_id,
-        token_id=token_yes_id,
-        interval="1m",
-        ts=ts_1m_ago,
-        open_price=Decimal("0.7"),
-        high_price=Decimal("0.7"),
-        low_price=Decimal("0.7"),
-        close_price=Decimal("0.7"),
-        volume=Decimal("3000"),
-    )
+    latest_ts = int(now.timestamp())
+    price_step = Decimal("0.0001")
+    min_price = Decimal("0.0100")
+    max_price = Decimal("0.9900")
+
+    close_price = Decimal("0.5000")
+    for minute_offset in range(119, -1, -1):
+        ts = latest_ts - (minute_offset * 60)
+        open_price = close_price
+
+        delta = Decimal(str(random.uniform(-0.02, 0.02))).quantize(price_step)
+        close_price = (open_price + delta).quantize(price_step)
+        close_price = min(max(close_price, min_price), max_price)
+
+        wick_up = Decimal(str(random.uniform(0, 0.01))).quantize(price_step)
+        wick_down = Decimal(str(random.uniform(0, 0.01))).quantize(price_step)
+        high_price = min(max(open_price, close_price) + wick_up, max_price).quantize(price_step)
+        low_price = max(min(open_price, close_price) - wick_down, min_price).quantize(price_step)
+
+        volume = Decimal(random.randint(500, 5000))
+
+        await _ensure_market_price_candle(
+            session,
+            market_id=market_id,
+            token_id=token_yes_id,
+            ts=ts,
+            open_price=open_price,
+            high_price=high_price,
+            low_price=low_price,
+            close_price=close_price,
+            volume=volume,
+        )
 
 
 async def run_seed_market_holders(session: AsyncSession) -> None:
