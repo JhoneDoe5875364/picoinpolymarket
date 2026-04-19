@@ -6,9 +6,9 @@ import { PredictionPanel } from "@/components/PredictionPanel";
 import { Market } from "@/lib/types";
 import { PriceHistoryChart } from "@/components/PriceHistorychart";
 import { apiFetch } from "@/lib/api";
-import { MarketSummary } from "@/components/MarketSummary";
-import { MarketRules } from "@/components/MarketRules";
-import { MarketParticipants } from "@/components/MarketParticipants";
+import { MarketSummary } from "@/components/market/MarketSummary";
+import { MarketRules } from "@/components/market/MarketRules";
+import { MarketParticipants } from "@/components/market/MarketParticipants";
 
 
 async function loadMarketDetail(id: string): Promise<Market> {

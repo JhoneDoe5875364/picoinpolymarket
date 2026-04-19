@@ -1,6 +1,6 @@
 "use client";
 
-import { LeaderboardCard } from "@/components/leaderboard-card";
+import { LeaderboardCard } from "@/components/LeaderboardCard";
 import { apiFetch } from "@/lib/api";
 import { Response } from "@/lib/types";
 import { useEffect, useState } from "react";

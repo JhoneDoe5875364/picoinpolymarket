@@ -1,6 +1,6 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PiPredictLogo } from "@/components/icons";
+import { PredictPixLogo } from "@/components/PredictPixLogo";
 
 export default function AboutPage() {
   return (
@@ -8,7 +8,7 @@ export default function AboutPage() {
       <Card className="max-w-4xl mx-auto">
         <CardHeader className="text-center">
           <div className="mx-auto bg-primary/10 rounded-full p-4 w-fit">
-            <PiPredictLogo className="h-12 w-12 text-primary" />
+            <PredictPixLogo className="h-12 w-12 text-primary" />
           </div>
           <CardTitle className="text-4xl font-bold font-headline mt-4">About PredictPix</CardTitle>
         </CardHeader>

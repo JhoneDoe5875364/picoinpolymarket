@@ -6,7 +6,7 @@ import LoginWithPi from "./LoginWithPi";
 import { Button } from "./ui/button";
 import { CheckCircle } from "lucide-react";
 import { User } from "@/lib/types";
-import { AppNavigation } from "./app-navigation";
+import { AppNavigation } from "./AppNavigation";
 
 interface AppHeaderProps {
   currentUser: User | null;

@@ -1,4 +1,3 @@
-// src/components/MarketProbability.tsx
 "use client";
 
 type Props = {

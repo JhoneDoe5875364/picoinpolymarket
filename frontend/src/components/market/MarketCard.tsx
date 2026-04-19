@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { Market } from "@/lib/types";
 import { fmtShortDate } from "@/lib/dates";
-import MarketProbability from "@/components/MarketProbability";
+import MarketProbability from "@/components/market/MarketProbability";
 import QuickBuyModal from "@/components/trade/QuickBuyModal";
 import { catCls, statusCls } from "@/lib/utils";
 // -----------------------------------------------------
@@ -57,37 +57,37 @@ export function MarketCard({ market }: { market: Market | any }) {
     <>
       <Link href={`/markets/${market.id}`} className="block">
         <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
+          <CardContent>
+            {/* <div className="flex items-center justify-between">
               <Badge variant="outline" className={`${catCls(category)} border`}>{category}</Badge>
               <Badge className={`px-2 py-0.5 rounded-full ${statusCls(status)}`}>{status}</Badge>
-            </div>
-            <CardTitle className="text-xl pt-2 line-clamp-2 min-h-16">{titleOf(market)}</CardTitle>
-          </CardHeader>
+            </div> */}
+            <CardTitle className="text-lg line-clamp-2 min-h-16">
+              {titleOf(market)}
+            </CardTitle>
 
-          <CardContent>
             <MarketProbability implied={implied} />
             <div className="flex justify-center gap-3 sm:gap-6 mt-5">
               <button
                 className="w-32 sm:w-32 px-4 py-2 rounded-xl btn-yes glowing-focus"
                 onClick={onYes}
-                aria-label="Choose Yes"
+                aria-label="Buy Yes"
                 disabled={market.status !== "open"}
               >
-                Choose Yes
+                Buy Yes
               </button>
               <button
                 className="w-32 sm:w-32 px-4 py-2 rounded-xl btn-no glowing-focus"
                 onClick={onNo}
-                aria-label="Choose No"
+                aria-label="Buy No"
                 disabled={market.status !== "open"}
               >
-                Choose No
+                Buy No
               </button>
             </div>
             <div className="flex justify-between text-xs text-white/70 mt-4 md:mt-5">
               <span>Volume: <span className="font-semibold">{fmtNum(volume)} π</span></span>
-              <span>Ends: {fmtShortDate(market?.end_date)}</span>
+              <span>End Date: {fmtShortDate(market?.end_date)}</span>
             </div>
           </CardContent>
         </Card>

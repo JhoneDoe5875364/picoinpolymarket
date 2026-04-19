@@ -4,11 +4,11 @@ import { useState, useEffect } from "react";
 import { initPiSDK } from "@/lib/pi";
 import type { User } from "@/lib/types";
 import { Skeleton } from "./ui/skeleton";
-import { AppFooter } from "./app-footer";
+import { AppFooter } from "./AppFooter";
 import Link from "next/link";
-import { PiPredictLogo } from "./icons";
+import { PredictPixLogo } from "./PredictPixLogo";
 
-import AppHeader from "./app-header";
+import AppHeader from "./AppHeader";
 import { usePathname } from "next/navigation";
 
 function AppSkeleton() {
@@ -19,7 +19,7 @@ function AppSkeleton() {
           <div className="container flex h-16 items-center justify-between">
             <div className="flex items-center gap-2 md:gap-4">
               <Link href="/" className="flex items-center space-x-2">
-                <PiPredictLogo className="h-6 w-6 text-primary" />
+                <PredictPixLogo className="h-6 w-6 text-primary" />
                 <span className="font-bold font-headline">
                   <span className="text-chart-2">Predict</span>
                   <span className="text-accent">Pix</span>

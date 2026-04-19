@@ -4,7 +4,7 @@ import { useMemo, useState } from "react"
 import type { Market } from "@/lib/types"
 import { format, isValid } from "date-fns"
 import { BarChart, Clock, Users, type LucideIcon } from "lucide-react"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs"
 
 interface MarketRulesProps {
   market: Market

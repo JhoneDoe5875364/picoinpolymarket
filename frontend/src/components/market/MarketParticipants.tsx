@@ -3,11 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import type { Market } from "@/lib/types";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
-import { ActivityTabContent } from "./market/participants/ActivityTabContent";
-import { PositionsTabContent } from "./market/participants/PositionsTabContent";
-import { TopHoldersTabContent } from "./market/participants/TopHoldersTabContent";
-import { normalizeNumber } from "./market/participants/shared";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
+import { ActivityTabContent } from "./participants/ActivityTabContent";
+import { PositionsTabContent } from "./participants/PositionsTabContent";
+import { TopHoldersTabContent } from "./participants/TopHoldersTabContent";
+import { normalizeNumber } from "./participants/shared";
 import type {
   MarketHolder,
   MarketHolderGroup,
@@ -17,7 +17,7 @@ import type {
   MinAmountFilter,
   PositionStatus,
   SortDirection,
-} from "./market/participants/types";
+} from "./participants/types";
 
 export function MarketParticipants({ market }: { market: Market }) {
   const [holdersLoading, setHoldersLoading] = useState(true);

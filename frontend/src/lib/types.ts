@@ -46,7 +46,6 @@ export interface Market {
   status?: MarketStatus;
   resolved?: boolean;
   outcome?: OutcomeSide | "cancelled" | null;
-  comments?: Array<MarketComment>;
   yes_volume?: number;
   no_volume?: number;
   total_volume?: number;
@@ -57,16 +56,7 @@ export interface Market {
   traders?: number;
 }
 
-/** Compact comment type used by MarketComments component (optional feature) */
-export interface MarketComment {
-  id: string;
-  market_id?: string;
-  author_id?: string;
-  body: string;
-  created_at: string; // ISO string
-}
-
-/** Position / recent trade item (used by MarketTradeFeed & buy flow) */
+// Position item
 export interface Position {
   id: string;
   market_id: string;
