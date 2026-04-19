@@ -19,7 +19,7 @@ export function MarketSummary({ market }: MarketSummaryProps) {
           <Badge variant="outline" className="border-accent text-accent">{market?.category}</Badge>
           <Badge variant={market?.status === 'open' ? 'default' : 'secondary'}>{market?.status}</Badge>
         </div>
-        <CardTitle className="text-2xl md:text-3xl font-bold font-headline pt-4">{market?.title}</CardTitle>
+        <CardTitle className="text-2xl md:text-3xl font-bold font-headline pt-4">{market?.question}</CardTitle>
       </CardHeader>
       <CardContent>
         <p className="text-muted-foreground">{market?.description}</p>
@@ -29,7 +29,7 @@ export function MarketSummary({ market }: MarketSummaryProps) {
             <BarChart className="h-5 w-5 text-primary" />
             <div>
               <div className="text-muted-foreground">Volume</div>
-              <div className="font-semibold">{market?.total_volume?.toLocaleString()} π</div>
+              <div className="font-semibold">{market?.volume?.toLocaleString()} π</div>
             </div>
           </div>
           <div className="flex items-center gap-2">

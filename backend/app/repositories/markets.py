@@ -216,7 +216,7 @@ async def market_prices_history(
     )
     candles_result = await session.execute(candles_stmt)
     rows = candles_result.all()
-    return [{"date": ts, "probability": close_price} for ts, close_price in rows]
+    return [{"timestamp": ts, "probability": close_price} for ts, close_price in rows]
 
 
 async def market_holders(

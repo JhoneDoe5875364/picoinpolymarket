@@ -7,7 +7,7 @@ import { ChartContainer, ChartTooltipContent, type ChartConfig } from "./ui/char
 import { Skeleton } from "./ui/skeleton"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
 import { apiFetch } from "@/lib/api"
-import { Market, PriceHistory } from "@/lib/types"
+import { Market } from "@/lib/types"
 
 interface PriceHistoryChartProps {
   market: Market
@@ -20,16 +20,39 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
-async function loadPriceHistory(market_id: string): Promise<PriceHistory[]> {
-  const res = await apiFetch(`/markets/${market_id}/price-history`, {
+type PriceHistoryPoint = {
+  timestamp: number
+  probability: number
+}
+
+function formatDateTime(timestamp: number): string {
+  return new Date(timestamp).toLocaleString(undefined, {
+    year: "2-digit",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+}
+
+async function loadPriceHistory(market_id: string): Promise<PriceHistoryPoint[]> {
+  const params = new URLSearchParams({
+    market_id,
+    interval: "1m",
+  });
+  const res = await apiFetch(`/markets/prices-history?${params.toString()}`, {
     method: "GET",
   });
-  return res?.data ?? [];
+
+  return (res?.data ?? []).map((item: any) => ({
+    timestamp: Number(item.timestamp),
+    probability: Number(item.probability),
+  }));
 }
 
 
 export function PriceHistoryChart({ market }: PriceHistoryChartProps) {
-  const [chartData, setChartData] = useState<any[] | null>(null)
+  const [chartData, setChartData] = useState<PriceHistoryPoint[] | null>(null)
 
   useEffect(() => {
     if (!market) return;
@@ -61,19 +84,25 @@ export function PriceHistoryChart({ market }: PriceHistoryChartProps) {
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.5)" />
               <XAxis
-                dataKey="date"
+                dataKey="timestamp"
+                tickFormatter={(value) => formatDateTime(Number(value))}
                 tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
                 tickLine={{ stroke: 'hsl(var(--muted-foreground))' }}
               />
               <YAxis
-                domain={[0, 100]}
-                tickFormatter={(value) => `${value}%`}
+                domain={[0, 1]}
+                tickFormatter={(value) => `${value * 100}%`}
                 tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
                 tickLine={{ stroke: 'hsl(var(--muted-foreground))' }}
               />
               <Tooltip
                 cursor={{ stroke: "hsl(var(--primary))", strokeWidth: 1, strokeDasharray: "3 3" }}
-                content={<ChartTooltipContent formatter={(value) => `${value}%`} />}
+                content={
+                  <ChartTooltipContent
+                    labelFormatter={(value) => formatDateTime(Number(value))}
+                    formatter={(value: any) => `${(value as number) * 100}%`}
+                  />
+                }
               />
               <Area type="monotone" dataKey="probability" stroke="hsl(var(--primary))" fillOpacity={1} fill="url(#colorUv)" />
             </AreaChart>

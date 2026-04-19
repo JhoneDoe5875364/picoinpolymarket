@@ -31,19 +31,16 @@ export default async function MarketDetailsPage({ params }: { params: { id: stri
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
           <MarketSummary market={market} />
-        </div>
 
-        <div className="space-y-6">
-          <PredictionPanel market={market} />
-          <OrderBook market={market} />
-        </div>
-
-        <div className="lg:col-span-2 space-y-6">
           <PriceHistoryChart market={market} />
 
           <RecentTrades market={market} />
 
           {/* <MarketComments marketId={market?.id} comments={market.comments} /> */}
+        </div>
+
+        <div className="space-y-6">
+          <PredictionPanel market={market} />
         </div>
       </div>
     </div>
