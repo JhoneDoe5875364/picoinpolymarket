@@ -41,6 +41,7 @@ export function PredictionPanel({ market }: PredictionPanelProps) {
   const piAmount = useMemo(() => selectedPrice * shares, [selectedPrice, shares]);
   const piFee = useMemo(() => piAmount * FEE, [piAmount]);
   const piTotalAmount = useMemo(() => piAmount + piFee, [piAmount, piFee]);
+  const potentialProfit = useMemo(() => shares, [shares]);
 
   const handlePay = async () => {
     if (!authUser) {
@@ -228,7 +229,7 @@ export function PredictionPanel({ market }: PredictionPanelProps) {
                 "peer-data-[state=checked]:bg-emerald-600 peer-data-[state=checked]:text-white",
               )}
             >
-              Buy Yes {yesPrice.toFixed(2)} π
+              Yes {yesPrice.toFixed(2)} π
             </Label>
           </div>
 
@@ -243,7 +244,7 @@ export function PredictionPanel({ market }: PredictionPanelProps) {
                 "peer-data-[state=checked]:bg-red-600 peer-data-[state=checked]:text-white",
               )}
             >
-              Buy No {noPrice.toFixed(2)} π
+              No {noPrice.toFixed(2)} π
             </Label>
           </div>
         </RadioGroup>
@@ -278,9 +279,13 @@ export function PredictionPanel({ market }: PredictionPanelProps) {
               <span>{piFee.toFixed(2)} π</span>
             </div>
             <Separator />
-            <div className="flex justify-between font-bold">
+            <div className="flex justify-between font-semibold">
               <span>Total Pi Amount (incl. fee)</span>
               <span>{piTotalAmount.toFixed(2)} π</span>
+            </div>
+            <div className="flex justify-between font-semibold">
+              <span>Potential Profit</span>
+              <span>{potentialProfit.toFixed(2)} π</span>
             </div>
           </div>
 

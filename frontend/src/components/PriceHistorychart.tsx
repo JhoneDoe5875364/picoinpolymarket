@@ -27,7 +27,7 @@ type PriceHistoryPoint = {
   probability: number
 }
 
-const INTERVAL_OPTIONS = ["1H", "1D", "1W", "1M", "MAX"] as const
+const INTERVAL_OPTIONS = ["1H", "1D", "1W", "1M", "1Y", "MAX"] as const
 type ChartInterval = (typeof INTERVAL_OPTIONS)[number]
 
 function normalizeTimestamp(value: unknown): number {
