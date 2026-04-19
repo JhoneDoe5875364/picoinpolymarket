@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { MarketHolder, MarketPosition } from "./types";
 
-const TOP_LIST_LIMIT = 7;
+const TOP_LIST_LIMIT = 20;
 
 export function normalizeNumber(value: string | number | null | undefined): number {
   if (typeof value === "number") return Number.isFinite(value) ? value : 0;
