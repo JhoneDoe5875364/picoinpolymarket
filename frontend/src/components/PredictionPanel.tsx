@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import { apiFetch, apiFetchWithToken } from "@/lib/api";
 import { getPi } from "@/lib/pi";
 import { useToast } from "@/hooks/use-toast";
@@ -30,23 +30,17 @@ export function PredictionPanel({ market }: PredictionPanelProps) {
   const [outcome, setOutcome] = useState<"YES" | "NO">("YES");
   const [busy, setBusy] = useState(false);
   const [shares, setShares] = useState<number>(1);
-  const [yesPrice, setYesPrice] = useState(0.5);
-  const [noPrice, setNoPrice] = useState(0.5);
-  const [piAmount, setPiAmount] = useState(0);
-  const [piFee, setPiFee] = useState(0);
-  const [piTotalAmount, setPiTotalAmount] = useState(0);
+  const yesPrice = market?.yes_price ?? 0.5;
+  const noPrice = market?.no_price ?? 0.5;
 
-  useEffect(() => {
-    setYesPrice(market?.yes_price ?? 0.5);
-    setNoPrice(market?.no_price ?? 0.5);
-  }, [market]);
+  const selectedPrice = useMemo(
+    () => (outcome === "YES" ? yesPrice : noPrice),
+    [outcome, yesPrice, noPrice]
+  );
 
-  useEffect(() => {
-    const price = outcome === "YES" ? yesPrice : noPrice;
-    setPiAmount(price * shares);
-    setPiFee(price * shares * FEE);
-    setPiTotalAmount(price * shares * (1 + FEE));
-  }, [shares, outcome, yesPrice, noPrice]);
+  const piAmount = useMemo(() => selectedPrice * shares, [selectedPrice, shares]);
+  const piFee = useMemo(() => piAmount * FEE, [piAmount]);
+  const piTotalAmount = useMemo(() => piAmount + piFee, [piAmount, piFee]);
 
   const handlePay = async () => {
     if (!authUser) {
@@ -62,29 +56,25 @@ export function PredictionPanel({ market }: PredictionPanelProps) {
 
     try {
       const scopes = ["payments"];
-      const onIncompletePaymentFound = (payment: any) => {
-        (async () => {
-          const res = await apiFetch(`/pi/payments/incomplete`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ payment }),
-          });
+      const onIncompletePaymentFound = async (payment: any) => {
+        const res = await apiFetch(`/pi/payments/incomplete`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ payment }),
+        });
 
-          if (res.status == "handled") {
-            toast({
-              title: "Uncompleted payment found",
-              description: payment,
-              variant: "destructive",
-            });
-          }
-        })();
+        if (res.status == "handled") {
+          toast({
+            title: "Uncompleted payment found",
+            description: payment,
+            variant: "destructive",
+          });
+        }
       };
       const pi = getPi();
       await pi.authenticate(scopes, onIncompletePaymentFound);
-
-      const selectedPrice = outcome === "YES" ? yesPrice : noPrice;
 
       const res = await apiFetchWithToken(`/orders`, {
         method: "POST",
@@ -224,7 +214,7 @@ export function PredictionPanel({ market }: PredictionPanelProps) {
       <CardContent className="space-y-6">
         <RadioGroup
           onValueChange={(value: "YES" | "NO") => setOutcome(value)}
-          defaultValue={outcome}
+          value={outcome}
           className="grid grid-cols-2 gap-3"
         >
           <div>
@@ -261,7 +251,7 @@ export function PredictionPanel({ market }: PredictionPanelProps) {
         <div className="space-y-4">
           <div className="flex justify-between">
             <span className="text-white">Price</span>
-            <span>{outcome === "YES" ? yesPrice.toFixed(2) : noPrice.toFixed(2)} π</span>
+            <span>{selectedPrice.toFixed(2)} π</span>
           </div>
           <div className="flex w-full items-center gap-2">
             <Label htmlFor="amount" className="w-1/2">
@@ -273,7 +263,7 @@ export function PredictionPanel({ market }: PredictionPanelProps) {
               min={1}
               value={shares}
               onChange={(e) => setShares(+e.target.value)}
-              className="w-1/2 text-foreground"
+              className="w-1/2 text-right text-foreground"
             />
           </div>
 
