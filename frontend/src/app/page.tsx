@@ -36,7 +36,7 @@ export default function Page() {
   return (
     <div className="container py-8 px-4 sm:px-8 lg:px-8">
       <section className="mx-auto max-w-[1400px] text-left mb-8 sm:mb-10">
-        <h1 className="font-headline text-3xl sm:text-4xl font-bold tracking-tight">
+        <h1 className="font-headline text-2xl lg:text-3xl xl:text-4xl font-bold tracking-tight">
           Prediction Markets powered by <span className="text-primary">Pi</span>
         </h1>
         <p className="text-white/80 mt-3 sm:mt-4">Browse and forecast on a variety of markets.</p>
@@ -44,7 +44,7 @@ export default function Page() {
         </p>
       </section>
       <section className="mx-auto max-w-[1400px] px-0 sm:px-0">
-        <div className="ppx-markets-grid">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {loading
             ? Array.from({ length: 18 }).map((_, i) => (
                 <div key={i} className="h-64 bg-white/5 rounded-md animate-pulse" />

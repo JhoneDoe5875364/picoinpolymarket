@@ -1,28 +1,36 @@
 "use client";
 
-import { apiFetch, apiFetchWithToken } from "@/lib/api";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
-import { getPi } from "@/lib/pi";
+import { executeBuyTrade } from "@/lib/trade/executeBuyTrade";
+import { FEE } from "@/lib/constants";
 
 type Props = {
   open: boolean;
-  marketId: string;
-  side: "yes" | "no";
+  marketId: number | string;
+  outcome: "YES" | "NO";
+  marketQuestion?: string;
+  price?: number;
   onClose: () => void;
   onDone?: () => void; // optional refresh callback
 };
 
-export default function QuickBuyModal({ open, marketId, side, onClose, onDone }: Props) {
+export default function QuickBuyModal({ open, marketId, outcome, marketQuestion, price = 0.5, onClose, onDone }: Props) {
   const { toast } = useToast();
   const { authUser } = useAuth();
-  const router = useRouter()
 
-  const [amount, setAmount] = useState<string>("");
+  const [sharesInput, setSharesInput] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string>("");
+  const shares = useMemo(() => {
+    const parsed = Number(sharesInput);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+  }, [sharesInput]);
+  const piAmount = useMemo(() => price * shares, [price, shares]);
+  const piFee = useMemo(() => piAmount * FEE, [piAmount]);
+  const piTotalAmount = useMemo(() => piAmount + piFee, [piAmount, piFee]);
+  const potentialProfit = useMemo(() => shares, [shares]);
 
   if (!open) return null;
 
@@ -33,113 +41,28 @@ export default function QuickBuyModal({ open, marketId, side, onClose, onDone }:
       return;
     }
 
-    const gross = Number(amount);
-    if (!Number.isFinite(gross) || gross <= 0) {
-      setMsg("Enter a valid amount.");
+    const enteredShares = Number(sharesInput);
+    if (!Number.isFinite(enteredShares) || enteredShares <= 0) {
+      setMsg("Enter valid shares.");
       return;
     }
 
     setLoading(true);
     try {
-      const scopes = ["payments"];
-      const onIncompletePaymentFound = (payment: any) => {
-        (async () => {
-          const res = await apiFetch(`/pi/payments/incomplete`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ payment })
-          });
-
-          if (res.status == 'handled') {
-            toast({
-              title: "Uncompleted payment found",
-              description: payment,
-              variant: "destructive",
-            });
-          }
-        })()
-      };
-      const pi = getPi();
-      await pi.authenticate(scopes, onIncompletePaymentFound);
-      await pi.createPayment({
-        amount: amount,
-        memo: 'Deposit to Pi Predict',
-        metadata: { userId: authUser.uid }
-      }, {
-        onReadyForServerApproval: async (paymentId) => {
-          await apiFetchWithToken(`/pi/payments/approve`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ paymentId })
-          });
+      await executeBuyTrade({
+        userId: authUser.uid,
+        marketId,
+        outcome,
+        price,
+        shares: enteredShares,
+        toast,
+        onPositionCreated: () => {
+          setSharesInput("");
+          onDone?.();
         },
-        onReadyForServerCompletion: async (paymentId, txid) => {
-          const res = await apiFetchWithToken(`/pi/payments/complete`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ paymentId, txid })
-          });
-
-          if (res.status == 'completed') {
-            const res = await apiFetchWithToken(`/positions`, {
-              method: "POST",
-              body: JSON.stringify({
-                market_id: marketId,
-                // type: 'buy',
-                side: side,
-                amount: amount
-              }),
-            });
-
-            if (res.ok) {
-              toast({
-                title: "Deposit Successful",
-                description: `Successfully deposited ${amount} π from your wallet.`,
-              });
-              setLoading(false);
-              setAmount("");
-              onDone?.();
-              onClose();
-              // auto refresh the page
-              setTimeout(() => {
-                window.location.reload();
-              }, 500);
-            }
-          }
-        },
-        onCancel: async (paymentId) => {
-          const res = await apiFetchWithToken(`/pi/payments/cancel`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ paymentId })
-          });
-          if (res.status == 'cancelled') {
-            setLoading(false);
-            toast({
-              title: "Deposit Failed",
-              description: "The deposit was cancelled or failed. Please try again.",
-              variant: 'destructive'
-            });
-          }
-        },
-        onError: (error) => {
-          console.error(error);
-          setLoading(false);
-          toast({
-            title: "Deposit Failed",
-            description: "An error occurred during the deposit. Please try again.",
-            variant: 'destructive'
-          });
-        }
       });
+
+      onClose();
     } catch (error) {
       console.error(error);
       toast({
@@ -150,29 +73,60 @@ export default function QuickBuyModal({ open, marketId, side, onClose, onDone }:
     } finally {
       setLoading(false);
     }
-  }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 p-3">
       <div className="w-full max-w-sm rounded-2xl bg-[#121212] border border-white/10 shadow-xl">
         <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
-          <h2 className="text-lg font-semibold">Quick Buy — {side.toUpperCase()}</h2>
+          <h2 className="text-lg font-semibold">Quick Buy — {outcome}</h2>
           <button onClick={onClose} className="text-sm opacity-80 hover:opacity-100">✕</button>
         </div>
 
         <div className="p-4 space-y-3">
-          <label className="text-sm opacity-80">Amount (Pi, gross)</label>
-          <input
-            type="number"
-            inputMode="decimal"
-            step="0.01"
-            min={0}
-            className="mt-1 w-full rounded-xl bg-black/40 border border-white/15 px-3 py-2 outline-none"
-            placeholder="e.g., 10"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-          />
-          {msg && <div className="text-xs opacity-80">{msg}</div>}
+          {marketQuestion && (
+            <p className="text-sm text-white/80 leading-snug line-clamp-2">{marketQuestion}</p>
+          )}
+          <div className="flex justify-between items-center">
+            <label className="text-sm opacity-80">Shares</label>
+            <input
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              min={0}
+              className="mt-1 w-[250px] rounded-xl bg-black/40 border border-white/15 px-3 py-2 outline-none"
+              placeholder="e.g., 5"
+              value={sharesInput}
+              onChange={(e) => setSharesInput(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2 rounded-xl border border-white/10 bg-black/20 p-3 text-sm">
+            <div className="flex justify-between">
+              <span className="text-white/70">price</span>
+              <span>{price.toFixed(2)} π</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-white/70">shares</span>
+              <span>{shares.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-white/70">piAmount</span>
+              <span>{piAmount.toFixed(2)} π</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-white/70">piFee</span>
+              <span>{piFee.toFixed(2)} π</span>
+            </div>
+            <div className="flex justify-between font-semibold">
+              <span className="text-white/90">piTotalAmount</span>
+              <span>{piTotalAmount.toFixed(2)} π</span>
+            </div>
+            <div className="flex justify-between font-semibold">
+              <span className="text-white/90">potentialProfit</span>
+              <span>{potentialProfit.toFixed(2)} π</span>
+            </div>
+          </div>
+          {msg && <div className="text-sm opacity-80 text-red-500">{msg}</div>}
         </div>
 
         <div className="px-4 py-3 flex items-center justify-end gap-2 border-t border-white/10">
@@ -184,11 +138,13 @@ export default function QuickBuyModal({ open, marketId, side, onClose, onDone }:
             Cancel
           </button>
           <button
-            className={`px-4 py-2 rounded-xl ${side === "yes" ? "btn-yes" : "btn-no"} glowing-focus`}
+            className={`px-4 py-2 rounded-md text-white ${
+              outcome === "YES" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-red-600 hover:bg-red-700"
+            } glowing-focus`}
             onClick={handlePay}
             disabled={loading}
           >
-            {loading ? "Placing…" : `Buy ${side.toUpperCase()}`}
+            {loading ? "Placing…" : `Buy ${outcome}`}
           </button>
         </div>
       </div>

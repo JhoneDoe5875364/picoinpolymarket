@@ -1,13 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { apiFetch, apiFetchWithToken } from "@/lib/api";
-import { getPi } from "@/lib/pi";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import type { Market } from "@/lib/types";
 import { FEE } from "@/lib/constants";
+import { executeBuyTrade } from "@/lib/trade/executeBuyTrade";
 import { Card, CardContent } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -56,148 +55,15 @@ export function PredictionPanel({ market }: PredictionPanelProps) {
     setBusy(true);
 
     try {
-      const scopes = ["payments"];
-      const onIncompletePaymentFound = async (payment: any) => {
-        const res = await apiFetch(`/pi/payments/incomplete`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ payment }),
-        });
-
-        if (res.status == "handled") {
-          toast({
-            title: "Uncompleted payment found",
-            description: payment,
-            variant: "destructive",
-          });
-        }
-      };
-      const pi = getPi();
-      await pi.authenticate(scopes, onIncompletePaymentFound);
-
-      const res = await apiFetchWithToken(`/orders`, {
-        method: "POST",
-        body: JSON.stringify({
-          user_id: authUser.uid,
-          market_id: market.id,
-          side: "BUY",
-          outcome: outcome,
-          price: selectedPrice,
-          size: shares,
-        }),
+      await executeBuyTrade({
+        userId: authUser.uid,
+        marketId: market.id,
+        outcome,
+        price: selectedPrice,
+        shares,
+        toast,
+        onPositionCreated: () => router.refresh(),
       });
-
-      if (res.ok) {
-        toast({
-          title: "Order created",
-          description: "Order created successfully",
-        });
-      } else {
-        toast({
-          title: "Order creation failed",
-          description: "Failed to create order",
-        });
-      }
-
-      const paymentRes = await apiFetchWithToken(`/pi/payments`, {
-        method: "POST",
-        body: JSON.stringify({
-          amount: shares,
-          memo: "Deposit to Pi Predict",
-          metadata: { userId: authUser.uid },
-        }),
-      });
-
-      if (paymentRes.ok) {
-        toast({
-          title: "Payment created",
-          description: "Payment created successfully",
-        });
-      } else {
-        toast({
-          title: "Payment creation failed",
-          description: "Failed to create payment",
-        });
-      }
-
-      await pi.createPayment(
-        {
-          amount: shares,
-          memo: "Deposit to Pi Predict",
-          metadata: { userId: authUser.uid },
-        },
-        {
-          onReadyForServerApproval: async (paymentId) => {
-            await apiFetchWithToken(`/pi/payments/approve`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({ paymentId }),
-            });
-          },
-          onReadyForServerCompletion: async (paymentId, txid) => {
-            const completeRes = await apiFetchWithToken(`/pi/payments/complete`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({ paymentId, txid }),
-            });
-
-            if (completeRes.status == "completed") {
-              const positionRes = await apiFetchWithToken(`/positions`, {
-                method: "POST",
-                body: JSON.stringify({
-                  market_id: market.id,
-                  side: outcome,
-                  amount: shares,
-                }),
-              });
-
-              if (positionRes.ok) {
-                router.refresh();
-              }
-
-              toast({
-                title: "Deposit Successful",
-                description: `Successfully deposited ${shares} π from your wallet.`,
-              });
-            } else {
-              toast({
-                title: "Deposit Failed",
-                description: `Failed deposited ${shares} π from your wallet.`,
-              });
-            }
-          },
-          onCancel: async (paymentId) => {
-            const cancelRes = await apiFetchWithToken(`/pi/payments/cancel`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({ paymentId }),
-            });
-            if (cancelRes.status == "cancelled") {
-              toast({
-                title: "Deposit Failed",
-                description: "The deposit was cancelled or failed. Please try again.",
-                variant: "destructive",
-              });
-            }
-          },
-          onError: (error) => {
-            console.error(error);
-            toast({
-              title: "Deposit Failed",
-              description: "An error occurred during the deposit. Please try again.",
-              variant: "destructive",
-            });
-          },
-        }
-      );
     } catch (error) {
       console.error(error);
       toast({

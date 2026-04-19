@@ -4,12 +4,11 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import type { Market } from "@/lib/types";
 import { fmtShortDate } from "@/lib/dates";
 import MarketProbability from "@/components/market/MarketProbability";
 import QuickBuyModal from "@/components/trade/QuickBuyModal";
-import { catCls, statusCls } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 // -----------------------------------------------------
 
 function fmtNum(n: unknown, fallback = "0") {
@@ -27,62 +26,73 @@ function inferYesProb(m: any): number | null {
 }
 
 export function MarketCard({ market }: { market: Market | any }) {
-  const status: string = (market?.status as string) ?? "open";
-  const category: string = market?.category ?? "General";
   const volume = market?.total_volume ?? 0;
   const implied = inferYesProb(market);
+  const yesPrice = market?.yes_price ?? implied ?? 0.5;
+  const noPrice = market?.no_price ?? (1 - (implied ?? 0.5));
   const pathname = usePathname();
+  const yesProbability = Math.round((implied ?? 0.5) * 100);
+  const noProbability = Math.round((1 - (implied ?? 0.5)) * 100);
 
-  const [buySide, setBuySide] = React.useState<null | "yes" | "no">(null);
+  const [outcome, setOutcome] = React.useState<null | "YES" | "NO">(null);
   const [modalOpen, setModalOpen] = React.useState(false);
+  const [isYesHovered, setIsYesHovered] = React.useState(false);
+  const [isNoHovered, setIsNoHovered] = React.useState(false);
 
   // If the pathname changes, reset the modal and buy side states
   React.useEffect(() => {
     setModalOpen(false);
-    setBuySide(null);
+    setOutcome(null);
   }, [pathname]);
 
   // When the component unmounts, reset the modal and buy side states
   React.useEffect(() => {
     return () => {
       setModalOpen(false);
-      setBuySide(null);
+      setOutcome(null);
     };
   }, []);
 
-  function onYes(e: React.MouseEvent) { e.preventDefault(); e.stopPropagation(); setBuySide("yes"); setModalOpen(true); }
-  function onNo(e: React.MouseEvent) { e.preventDefault(); e.stopPropagation(); setBuySide("no"); setModalOpen(true); }
+  function onYes(e: React.MouseEvent) { e.preventDefault(); e.stopPropagation(); setOutcome("YES"); setModalOpen(true); }
+  function onNo(e: React.MouseEvent) { e.preventDefault(); e.stopPropagation(); setOutcome("NO"); setModalOpen(true); }
 
   return (
     <>
       <Link href={`/markets/${market.id}`} className="block">
         <Card>
           <CardContent>
-            {/* <div className="flex items-center justify-between">
-              <Badge variant="outline" className={`${catCls(category)} border`}>{category}</Badge>
-              <Badge className={`px-2 py-0.5 rounded-full ${statusCls(status)}`}>{status}</Badge>
-            </div> */}
             <CardTitle className="text-lg line-clamp-2 min-h-16">
               {titleOf(market)}
             </CardTitle>
 
             <MarketProbability implied={implied} />
-            <div className="flex justify-center gap-3 sm:gap-6 mt-5">
+            
+            <div className="grid grid-cols-2 gap-3 mt-3">
               <button
-                className="w-32 sm:w-32 px-4 py-2 rounded-xl btn-yes glowing-focus"
+                className={cn(
+                  "flex h-8 items-center justify-center rounded-md border px-4",
+                  "cursor-pointer text-sm font-semibold",
+                  "bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/50 hover:text-white"
+                )}
                 onClick={onYes}
+                onMouseEnter={() => setIsYesHovered(true)}
+                onMouseLeave={() => setIsYesHovered(false)}
                 aria-label="Buy Yes"
-                disabled={market.status !== "open"}
               >
-                Buy Yes
+                {isYesHovered ? `${yesProbability}%` : "Yes"}
               </button>
               <button
-                className="w-32 sm:w-32 px-4 py-2 rounded-xl btn-no glowing-focus"
+                className={cn(
+                  "flex h-8 items-center justify-center rounded-md border px-4",
+                  "cursor-pointer text-sm font-semibold",
+                  "bg-red-500/20 text-red-300 hover:bg-red-500/50 hover:text-white"
+                )}
                 onClick={onNo}
+                onMouseEnter={() => setIsNoHovered(true)}
+                onMouseLeave={() => setIsNoHovered(false)}
                 aria-label="Buy No"
-                disabled={market.status !== "open"}
               >
-                Buy No
+                {isNoHovered ? `${noProbability}%` : "No"}
               </button>
             </div>
             <div className="flex justify-between text-xs text-white/70 mt-4 md:mt-5">
@@ -93,18 +103,20 @@ export function MarketCard({ market }: { market: Market | any }) {
         </Card>
       </Link>
 
-      {buySide && (
+      {outcome && (
         <QuickBuyModal
           open={modalOpen}
           marketId={market.id}
-          side={buySide}
+          outcome={outcome}
+          marketQuestion={titleOf(market)}
+          price={outcome === "YES" ? yesPrice : noPrice}
           onClose={() => {
             setModalOpen(false);
-            setBuySide(null);
+            setOutcome(null);
           }}
           onDone={() => {
             setModalOpen(false);
-            setBuySide(null);
+            setOutcome(null);
             try { const r = require("next/navigation"); r?.useRouter?.().refresh?.(); } catch (_) { }
           }}
         />

@@ -26,15 +26,15 @@ export default function MarketProbability({
     <div className="w-full">
       {/* Labels with brand colors */}
       <div className="flex justify-between text-[11px] mb-1">
-        <span className="text-cyan-400 font-semibold">Yes: {yesPct}%</span>
-        <span className="text-pink-400 font-semibold">No: {noPct}%</span>
+        <span className="text-emerald-600 font-semibold">Yes: {yesPct}%</span>
+        <span className="text-red-600 font-semibold">No: {noPct}%</span>
       </div>
 
       {/* Split bar: YES (left) cyan→blue, NO (right) pink→purple */}
       <div className="relative h-3 w-full rounded-full overflow-hidden bg-white/10">
         {/* YES side */}
         <div
-          className="absolute left-0 top-0 h-full bg-gradient-to-r from-cyan-400 to-blue-500"
+          className="absolute left-0 top-0 h-full bg-gradient-to-r from-emerald-600/100 to-emerald-600/50"
           style={{ width: `${yesPct}%` }}
           role="progressbar"
           aria-valuemin={0}
@@ -45,7 +45,7 @@ export default function MarketProbability({
         />
         {/* NO side */}
         <div
-          className="absolute right-0 top-0 h-full bg-gradient-to-r from-pink-400 to-purple-500"
+          className="absolute right-0 top-0 h-full bg-gradient-to-r from-red-600/50 to-red-600/100"
           style={{ width: `${noPct}%` }}
           aria-label={noTip}
           title={noTip}
