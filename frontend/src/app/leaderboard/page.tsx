@@ -90,11 +90,12 @@ function getAvatarGradient(seed: string) {
 }
 
 function formatAmount(amount: number) {
-  return `${amount >= 0 ? "+" : "-"}$${Math.abs(amount).toLocaleString()}`;
+  const rounded = Math.round(amount);
+  return `${rounded >= 0 ? "+" : "-"}π${Math.abs(rounded).toLocaleString()}`;
 }
 
 function truncateUsernameForMobile(username: string) {
-  return username.length > 20 ? `${username.slice(0, 20)}...` : username;
+  return username.length > 30 ? `${username.slice(0, 30)}...` : username;
 }
 
 function mapApiLeaderboardEntries(items: ApiLeaderboardEntry[]) {
@@ -384,7 +385,8 @@ export default function LeaderboardPage() {
                         className={cn(
                           "text-right text-muted-foreground text-xs md:text-sm",
                           isPnlSort && "font-semibold text-foreground",
-                          !isPnlSort ? "hidden md:table-cell" : "table-cell"
+                          !isPnlSort ? "hidden md:table-cell" : "table-cell",
+                          entry.profitLoss < 0 ? "text-red-500" : "text-green-500"
                         )}
                       >
                         {formatAmount(entry.profitLoss)}
@@ -396,7 +398,7 @@ export default function LeaderboardPage() {
                           isPnlSort ? "hidden md:table-cell" : "table-cell"
                         )}
                       >
-                        ${Math.abs(entry.volume).toLocaleString()}
+                        π{Math.round(entry.volume).toLocaleString()}
                       </TableCell>
                     </TableRow>
                   ))}

@@ -17,22 +17,14 @@ function fmtNum(n: unknown, fallback = "0") {
   return Number.isFinite(num) ? num.toLocaleString() : fallback;
 }
 function titleOf(m: Market | any) { return m?.question ?? m?.title ?? "Untitled market"; }
-function inferYesProb(m: any): number | null {
-  if (typeof m?.implied === "number") return m.implied;
-  const yes = m?.yes_pct ?? 0;
-  const no = m?.no_pct ?? 0;
-  if (yes + no > 0) return yes / (yes + no);
-  return 0.5;
-}
 
 export function MarketCard({ market }: { market: Market | any }) {
-  const volume = market?.total_volume ?? 0;
-  const implied = inferYesProb(market);
-  const yesPrice = market?.yes_price ?? implied ?? 0.5;
-  const noPrice = market?.no_price ?? (1 - (implied ?? 0.5));
+  const volume = market?.volume ?? 0;
+  const yesPrice = market?.outcome_price_yes ?? 0.5;
+  const noPrice = market?.outcome_price_no ?? 0.5;
   const pathname = usePathname();
-  const yesProbability = Math.round((implied ?? 0.5) * 100);
-  const noProbability = Math.round((1 - (implied ?? 0.5)) * 100);
+  const yesProbability = Math.round(yesPrice * 100);
+  const noProbability = Math.round(noPrice * 100);
 
   const [outcome, setOutcome] = React.useState<null | "YES" | "NO">(null);
   const [modalOpen, setModalOpen] = React.useState(false);
@@ -61,11 +53,11 @@ export function MarketCard({ market }: { market: Market | any }) {
       <Link href={`/markets/${market.id}`} className="block">
         <Card>
           <CardContent>
-            <CardTitle className="text-lg line-clamp-2 min-h-16">
+            <CardTitle className="text-[14px] md:text-[16px] line-clamp-2 md:line-clamp-3 min-h-12 md:min-h-20">
               {titleOf(market)}
             </CardTitle>
 
-            <MarketProbability implied={implied} />
+            <MarketProbability implied={yesPrice} />
             
             <div className="grid grid-cols-2 gap-3 mt-3">
               <button
