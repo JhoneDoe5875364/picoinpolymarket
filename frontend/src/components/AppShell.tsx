@@ -10,6 +10,7 @@ import { PredictPixLogo } from "./PredictPixLogo";
 
 import AppHeader from "./AppHeader";
 import { usePathname } from "next/navigation";
+import { MobileBottomNav } from "./MobileBottomNav";
 
 function AppSkeleton() {
   return (
@@ -64,8 +65,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <>
       {!hideHeaderFooter && <AppHeader currentUser={currentUser} />}
-      <main id="content" className="min-h-[60vh]">{children}</main>
+      <main id="content" className="min-h-[60vh] pb-20 md:pb-0">{children}</main>
       {!hideHeaderFooter && <AppFooter />}
+      {!hideHeaderFooter && <MobileBottomNav />}
     </>
   );
 }

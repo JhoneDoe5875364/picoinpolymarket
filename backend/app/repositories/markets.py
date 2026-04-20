@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.config import Config
+from app.models.tables.category import Category
 from app.models.tables.market import Market
 from app.models.tables.market_position import MarketPosition
 from app.models.tables.market_trades import MarketTrade
@@ -47,6 +48,7 @@ async def list_markets(
     offset: int = 0,
     order: str = "created_at",
     ascending: bool = False,
+    category: str = "all",
     closed: Optional[bool] = None,
     resolved: Optional[bool] = None,
     volume_min: Optional[Union[Decimal, float, int]] = None,
@@ -79,6 +81,9 @@ async def list_markets(
         conditions.append(Market.end_date >= end_date_min)
     if end_date_max is not None:
         conditions.append(Market.end_date <= end_date_max)
+    if category and category.strip().lower() != "all":
+        normalized_category = category.strip().lower()
+        conditions.append(Market.category.has(func.lower(Category.slug) == normalized_category))
 
     if conditions:
         stmt = stmt.where(*conditions)

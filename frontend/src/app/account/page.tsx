@@ -2,7 +2,6 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { supabaseBrowser } from '@/lib/supabase-browser';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { ArrowDownCircle, ArrowUpCircle, Award, Copy, Download, Gift, Lightbulb, Receipt } from 'lucide-react';
@@ -14,7 +13,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Activity, OpenPosition, Transaction, User } from '@/lib/types';
-import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { apiFetchWithToken } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
@@ -67,8 +65,6 @@ function AccountSkeleton() {
 }
 
 export default function AccountPage() {
-  const supa = useMemo(supabaseBrowser, []);
-  const { toast } = useToast();
   const { authUser } = useAuth();
 
   const { accessToken } = useAuth();
@@ -81,25 +77,13 @@ export default function AccountPage() {
   const [openPositions, setOpenPositions] = useState<OpenPosition[]>([]);
   const [recentActivity, setRecentActivity] = useState<Activity[]>([]);
   const [history, setHistory] = useState<Transaction[]>([]);
-  const [historyPage, setHistoryPage] = useState(1);
   const [historyTotal, setHistoryTotal] = useState(0);
-  const [activeTab, setActiveTab] = useState<'open' | 'history'>('open');
   const [isMounted, setIsMounted] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
-
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      const { data } = await supa.auth.getSession();
-      const t = data.session?.access_token ?? null;
-      if (mounted) setToken(t);
-    })();
-    return () => { mounted = false; };
-  }, [supa]);
 
   useEffect(() => {
     if (!accessToken) return;

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { hasPiSDK, isPiBrowserUA } from "@/lib/isPi";
-import { apiFetch, apiFetchWithToken } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 import { Button } from "./ui/button";
 import { Loader2, Wallet } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -11,13 +11,9 @@ import { useAuth } from "@/context/AuthContext";
 
 export default function LoginWithPi() {
   const { toast } = useToast();
-  const { username, authUser, setAuth, logout } = useAuth();
+  const { authUser, setAuth, logout } = useAuth();
 
   const [loading, setLoading] = useState(false);
-
-  const [piLoaded, setPiLoaded] = useState(false);
-  const [piLoggedIn, setPiLoggedIn] = useState(false);
-  const [authResult, setAuthResult] = useState(null);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -29,7 +25,6 @@ export default function LoginWithPi() {
           variant: "success",
           duration: 3000
         });
-        setPiLoaded(true);
 
         clearInterval(interval);
       }
