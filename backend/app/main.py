@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -13,6 +14,7 @@ load_dotenv()
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.core.leaderboard_updater import run_periodic_leaderboard_refresh
 from app.core.logger import get_logger, setup_logger
 from app.db.session import create_engine_and_sessionmaker, dispose_engine
 from app.routes import include_all_routers
@@ -23,16 +25,30 @@ logger = get_logger()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    leaderboard_task: asyncio.Task[None] | None = None
     try:
         engine, session_maker = create_engine_and_sessionmaker()
         app.state.async_engine = engine
         app.state.async_session_maker = session_maker
         logger.info("Database engine initialized")
+        leaderboard_task = asyncio.create_task(
+            run_periodic_leaderboard_refresh(session_maker),
+            name="leaderboard-refresh",
+        )
+        app.state.leaderboard_refresh_task = leaderboard_task
+        logger.info("Leaderboard refresh task started")
     except Exception as e:
         logger.warning("Database not initialized: %s", e)
         app.state.async_engine = None
         app.state.async_session_maker = None
+        app.state.leaderboard_refresh_task = None
     yield
+    if leaderboard_task is not None:
+        leaderboard_task.cancel()
+        try:
+            await leaderboard_task
+        except asyncio.CancelledError:
+            logger.info("Leaderboard refresh task stopped")
     await dispose_engine()
     logger.info("Database engine disposed")
 

@@ -20,6 +20,7 @@ from app.models.tables.market_trades import MarketTrade
 from app.models.tables.market_price_candles import MarketPriceCandle
 from app.models.tables.market_position import MarketPosition
 from app.models.tables.leaderboard import Leaderboard
+from app.core import leaderboard_updater
 
 
 async def _ensure_user(session: AsyncSession, **kwargs: object) -> None:
@@ -46,10 +47,6 @@ async def _ensure_market_position(session: AsyncSession, **kwargs: object) -> No
     session.add(MarketPosition(**kwargs))
 
 
-async def _ensure_leaderboard(session: AsyncSession, **kwargs: object) -> None:
-    session.add(Leaderboard(**kwargs))
-
-
 async def run_seeds(session: AsyncSession) -> None:
     """Insert seed rows if missing."""
     await run_seed_categories(session)
@@ -64,7 +61,8 @@ async def run_seeds(session: AsyncSession) -> None:
     await session.flush()
     await run_seed_market_positions(session)
     await session.flush()
-    await run_seed_leaderboard(session)
+    # Seed path should run leaderboard aggregation once.
+    await leaderboard_updater.rebuild_leaderboards(session)
     await session.flush()
 
 
@@ -147,26 +145,25 @@ async def run_seed_users(session: AsyncSession) -> None:
     await _ensure_user(
         session,
         id=1,
-        pi_username="seed_admin",
-        pi_uid="seed-admin",
+        pi_username="superadmin",
+        pi_uid="superadmin",
+        role_id=1,
+        balance=Decimal("10000"),
+        status="ACTIVE",
+        created_at=now,
+        updated_at=now,
+    )
+    await _ensure_user(
+        session,
+        id=2,
+        pi_username="admin",
+        pi_uid="admin",
         role_id=2,
         balance=Decimal("10000"),
         status="ACTIVE",
         created_at=now,
         updated_at=now,
     )
-    adjective_pool = [
-        "swift",
-        "brave",
-        "calm",
-        "lucky",
-        "sharp",
-        "quiet",
-        "bold",
-        "rapid",
-        "prime",
-        "nova",
-    ]
     noun_pool = [
         "falcon",
         "trader",
@@ -181,14 +178,15 @@ async def run_seed_users(session: AsyncSession) -> None:
     ]
     status_pool = ["ACTIVE", "ACTIVE", "ACTIVE", "SUSPENDED"]
 
-    # Create 99 additional users (+ seed_admin = total 100 users)
-    for user_id in range(2, 101):
-        adjective = random.choice(adjective_pool)
+    # Create 20 additional users
+    users_count = 20
+    for idx in range(users_count):
+        user_id = 3 + idx
         noun = random.choice(noun_pool)
         suffix = random.randint(100, 999)
-        username = f"seed_{adjective}_{noun}_{suffix}"
+        username = f"seed_{noun}_{suffix}"
         uid = f"seed-user-{user_id}-{suffix}"
-        balance = Decimal(str(random.randint(100, 50000)))
+        balance = Decimal("0") # Decimal(str(random.randint(100, 5000)))
 
         await _ensure_user(
             session,
@@ -204,7 +202,7 @@ async def run_seed_users(session: AsyncSession) -> None:
 
 
 async def run_seed_markets(session: AsyncSession) -> None:
-    r = await session.execute(select(User.id).where(User.pi_username == "seed_admin"))
+    r = await session.execute(select(User.id).where(User.role_id == 1))
     admin_id = r.scalar_one_or_none()
     if admin_id is None:
         return
@@ -261,15 +259,16 @@ async def run_seed_markets(session: AsyncSession) -> None:
     ]
     rule_template = (
         "This market resolves to YES only if the exact question condition is met within the specified market window "
-        "based on publicly verifiable data sources selected by moderators.\n\n"
+        "based on publicly verifiable data sources selected by moderators.\n"
         "If no conclusive evidence is available by the end date, the market resolves to NO. "
         "Resolution notes must include source links and timestamp context."
     )
 
-    market_count = 200
+    market_count = 50
+    market_first_id = 100000
     used_slugs: set[str] = set()
     for idx in range(market_count):
-        market_id = 100000 + idx
+        market_id = market_first_id + idx
         subject = random.choice(subjects)
         predicate = random.choice(predicates)
         target = random.choice(targets)
@@ -291,7 +290,7 @@ async def run_seed_markets(session: AsyncSession) -> None:
         yes_price = Decimal(f"{yes_price_float:.4f}")
         no_price = (Decimal("1.0000") - yes_price).quantize(Decimal("0.0001"))
 
-        liquidity = Decimal(str(random.randint(500, 15000)))
+        liquidity = Decimal(str(random.randint(5000, 50000)))
         volume = Decimal(str(random.randint(1000, 500000)))
 
         await _ensure_market(
@@ -330,7 +329,7 @@ async def run_seed_market_trades(session: AsyncSession) -> None:
             Market.token_no_id,
             Market.outcome_price_yes,
             Market.outcome_price_no,
-        ).where(Market.id >= 100000, Market.id < 100200)
+        )
     )
     markets = [
         (
@@ -347,7 +346,7 @@ async def run_seed_market_trades(session: AsyncSession) -> None:
         print("No seeded markets found for trade seeding")
         return
 
-    user_rows = await session.execute(select(User.id).where(User.id >= 2, User.id <= 100))
+    user_rows = await session.execute(select(User.id).where(User.role_id == 3))
     user_ids = [user_id for (user_id,) in user_rows.all()]
     if not user_ids:
         print("No seeded users found for trade seeding")
@@ -359,7 +358,7 @@ async def run_seed_market_trades(session: AsyncSession) -> None:
     max_price = Decimal("0.9900")
     price_step = Decimal("0.0001")
 
-    trade_count = random.randint(10000, 20000)
+    trade_count = random.randint(500, 1000)
     for _ in range(trade_count):
         market_id, token_yes_id, token_no_id, yes_base_price, no_base_price = random.choice(markets)
         outcome = random.choice(["YES", "NO"])
@@ -548,91 +547,4 @@ async def run_seed_market_positions(session: AsyncSession) -> None:
         )
 
 
-async def run_seed_leaderboard(session: AsyncSession) -> None:
-    trades_result = await session.execute(
-        select(
-            MarketTrade.taker_user_id,
-            MarketTrade.market_id,
-            MarketTrade.side,
-            MarketTrade.outcome,
-            MarketTrade.shares,
-            MarketTrade.pi_amount,
-        )
-    )
-    trades = trades_result.all()
-    if not trades:
-        print("No market trades found for leaderboard seeding")
-        return
-
-    market_result = await session.execute(
-        select(Market.id, Market.category_id, Market.outcome_price_yes, Market.outcome_price_no)
-    )
-    market_map = {
-        market_id: {
-            "category_id": category_id,
-            "yes_price": outcome_price_yes or Decimal("0"),
-            "no_price": outcome_price_no or Decimal("0"),
-        }
-        for market_id, category_id, outcome_price_yes, outcome_price_no in market_result.all()
-    }
-
-    user_result = await session.execute(select(User.id, User.pi_uid, User.pi_username))
-    user_map = {user_id: {"pi_uid": pi_uid, "pi_username": pi_username} for user_id, pi_uid, pi_username in user_result.all()}
-
-    vol_by_user_category: dict[tuple[int, int], Decimal] = defaultdict(lambda: Decimal("0"))
-    for user_id, market_id, *_rest, pi_amount in trades:
-        market_info = market_map.get(market_id)
-        if market_info is None or market_info["category_id"] is None:
-            continue
-        category_id = market_info["category_id"]
-        vol_by_user_category[(user_id, category_id)] += pi_amount
-
-    position_stats = _build_position_stats(trades)
-    pnl_by_user_category: dict[tuple[int, int], Decimal] = defaultdict(lambda: Decimal("0"))
-    for (market_id, user_id), stat in position_stats.items():
-        market_info = market_map.get(market_id)
-        if market_info is None or market_info["category_id"] is None:
-            continue
-        category_id = market_info["category_id"]
-        yes_shares = max(stat["yes_shares"], Decimal("0"))
-        no_shares = max(stat["no_shares"], Decimal("0"))
-        yes_pi_amount = max(stat["yes_pi_amount"], Decimal("0"))
-        no_pi_amount = max(stat["no_pi_amount"], Decimal("0"))
-        mark_value = (yes_shares * market_info["yes_price"]) + (no_shares * market_info["no_price"])
-        cost_basis = yes_pi_amount + no_pi_amount
-        pnl_by_user_category[(user_id, category_id)] += mark_value - cost_basis
-
-    now: datetime = datetime.now(timezone.utc)
-    quant = Decimal("0.0001")
-    leaderboard_id = 1
-    time_bucket = "1D"
-
-    all_keys = set(vol_by_user_category.keys()) | set(pnl_by_user_category.keys())
-    sorted_keys = sorted(
-        all_keys,
-        key=lambda key: (vol_by_user_category.get(key, Decimal("0")), pnl_by_user_category.get(key, Decimal("0"))),
-        reverse=True,
-    )
-    for user_id, category_id in sorted_keys:
-        user_info = user_map.get(user_id)
-        if user_info is None:
-            continue
-        vol = vol_by_user_category.get((user_id, category_id), Decimal("0")).quantize(quant)
-        pnl = pnl_by_user_category.get((user_id, category_id), Decimal("0")).quantize(quant)
-        await _ensure_leaderboard(
-            session,
-            id=leaderboard_id,
-            category_id=category_id,
-            time_bucket=time_bucket,
-            user_id=user_id,
-            pi_user_id=user_info["pi_uid"],
-            pi_username=user_info["pi_username"],
-            wallet_address="",
-            vol=vol,
-            pnl=pnl,
-            created_at=now,
-            updated_at=now,
-        )
-        leaderboard_id += 1
-        
 

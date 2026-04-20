@@ -11,14 +11,6 @@ from app.models.tables.leaderboard import Leaderboard
 router = APIRouter(prefix="/leaderboard", tags=["leaderboard"])
 
 
-def _to_float(value: Any) -> float:
-    if value is None:
-        return 0.0
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return 0.0
-
 
 def _leaderboard_to_dict(row: Leaderboard) -> dict[str, Any]:
     return {col.key: getattr(row, col.key) for col in sa_inspect(Leaderboard).mapper.columns}
@@ -35,25 +27,15 @@ async def get_leaderboard(
 ):
     base_stmt = (
         select(Leaderboard)
-        .join(Category, Leaderboard.category_id == Category.id)
-    )
-
-    where_clause = [
-        Leaderboard.time_bucket == time_bucket
-    ]
-    if category != "All":
-        where_clause.append(Category.name == category)
-
-    sort_col = Leaderboard.vol if order_by == "VOL" else Leaderboard.pnl
-    stmt = (
-        base_stmt
-        .where(*where_clause)
-        .order_by(sort_col.desc())
+        .where(Leaderboard.time_bucket == time_bucket, Leaderboard.category == category)
+        .order_by(Leaderboard.vol.desc() if order_by == "VOL" else Leaderboard.pnl.desc())
         .offset(offset)
         .limit(limit)
     )
-    result = await db.execute(stmt)
+
+    result = await db.execute(base_stmt)
     records = result.scalars().all()
-    rows = [{**_leaderboard_to_dict(row), "rank": offset + idx + 1} for idx, row in enumerate(records)]
-    return {"ok": True, "items": jsonable_encoder(rows)}
+
+    rows = [{"rank": offset + idx + 1, **_leaderboard_to_dict(row)} for idx, row in enumerate(records)]
+    return {"ok": True, "data": jsonable_encoder(rows)}
 

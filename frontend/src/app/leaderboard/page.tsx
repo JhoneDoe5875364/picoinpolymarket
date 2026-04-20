@@ -126,7 +126,7 @@ export default function LeaderboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedTime, setSelectedTime] = useState<TimeFilter>("monthly");
+  const [selectedTime, setSelectedTime] = useState<TimeFilter>("today");
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
   const [selectedSort, setSelectedSort] = useState<SortFilter>("pnl");
 
@@ -136,16 +136,23 @@ export default function LeaderboardPage() {
     const loadEntries = async () => {
       try {
         setIsLoading(true);
-        const bucket = TIME_OPTIONS.find((option) => option.key === selectedTime)?.bucket ?? "30d";
-        const response = await apiFetch<{ ok: boolean; items: ApiLeaderboardEntry[] }>(
-          `/leaderboard?category=${encodeURIComponent(
-            selectedCategory
-          )}&time_bucket=${bucket}&order_by=PNL&limit=100`,
+        const bucket = TIME_OPTIONS.find((option) => option.key === selectedTime)?.bucket ?? "1D";
+        const queryParams = new URLSearchParams(
+          {
+            category: selectedCategory,
+            time_bucket: bucket,
+            order_by: selectedSort === "pnl" ? "PNL" : "VOL",
+            limit: "20",
+            offset: "0",
+          }
+        );
+        const response = await apiFetch<{ ok: boolean; data: ApiLeaderboardEntry[] }>(
+          `/leaderboard?${queryParams.toString()}`,
           { method: "GET" }
-        ).catch(() => ({ ok: false, items: [] }));
+        ).catch(() => ({ ok: false, data: [] }));
 
         if (!isActive) return;
-        setEntries(mapApiLeaderboardEntries(response.items ?? []));
+        setEntries(mapApiLeaderboardEntries(response.data ?? []));
       } finally {
         if (isActive) {
           setIsLoading(false);
@@ -157,7 +164,7 @@ export default function LeaderboardPage() {
     return () => {
       isActive = false;
     };
-  }, [selectedCategory, selectedTime]);
+  }, [selectedCategory, selectedTime, selectedSort]);
 
   const filteredEntries = useMemo(
     () => filterAndSortEntries(entries, searchQuery, selectedSort),

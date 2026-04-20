@@ -14,7 +14,7 @@ class Leaderboard(Base):
     __tablename__ = "leaderboards"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    category_id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    category: Mapped[str] = mapped_column(String(50), primary_key=True, index=True)
     time_bucket: Mapped[str] = mapped_column(String(50), primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
     pi_user_id: Mapped[Optional[str]] = mapped_column(String(255))
