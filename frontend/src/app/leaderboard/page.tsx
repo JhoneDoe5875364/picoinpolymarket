@@ -41,7 +41,6 @@ type LeaderboardEntry = {
   username: string;
   profitLoss: number;
   volume: number;
-  category: string;
 };
 
 const TIME_OPTIONS: Array<{ key: TimeFilter; label: string; bucket: string }> = [
@@ -94,6 +93,35 @@ function formatAmount(amount: number) {
   return `${amount >= 0 ? "+" : "-"}$${Math.abs(amount).toLocaleString()}`;
 }
 
+function truncateUsernameForMobile(username: string) {
+  return username.length > 20 ? `${username.slice(0, 20)}...` : username;
+}
+
+function mapApiLeaderboardEntries(items: ApiLeaderboardEntry[]) {
+  return items.map((item, idx) => {
+    const userId = String(item.pi_user_id ?? item.user_id ?? item.wallet_address ?? "unknown");
+    return {
+      entryKey: `${userId}-${idx}`,
+      rank: Number(item.rank ?? idx + 1),
+      userId,
+      username: item.pi_username ?? userId,
+      profitLoss: toNumber(item.pnl),
+      volume: toNumber(item.vol),
+    };
+  });
+}
+
+function filterAndSortEntries(entries: LeaderboardEntry[], searchQuery: string, selectedSort: SortFilter) {
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const filtered = entries.filter((entry) =>
+    entry.username.toLowerCase().includes(normalizedQuery)
+  );
+  const sorted = [...filtered].sort((a, b) =>
+    selectedSort === "pnl" ? b.profitLoss - a.profitLoss : b.volume - a.volume
+  );
+  return sorted.map((entry, idx) => ({ ...entry, rank: idx + 1 }));
+}
+
 export default function LeaderboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
@@ -103,7 +131,9 @@ export default function LeaderboardPage() {
   const [selectedSort, setSelectedSort] = useState<SortFilter>("pnl");
 
   useEffect(() => {
-    (async () => {
+    let isActive = true;
+
+    const loadEntries = async () => {
       try {
         setIsLoading(true);
         const bucket = TIME_OPTIONS.find((option) => option.key === selectedTime)?.bucket ?? "30d";
@@ -114,37 +144,23 @@ export default function LeaderboardPage() {
           { method: "GET" }
         ).catch(() => ({ ok: false, items: [] }));
 
-        const ranked = (response.items ?? []).map((item, idx) => {
-          const userId = String(item.pi_user_id ?? item.user_id ?? item.wallet_address ?? "unknown");
-          return {
-            entryKey: `${userId}-${idx}`,
-            rank: Number(item.rank ?? idx + 1),
-            userId,
-            username: item.pi_username ?? userId,
-            profitLoss: toNumber(item.pnl),
-            volume: toNumber(item.vol),
-            category: selectedCategory,
-          };
-        });
-
-        setEntries(ranked);
+        if (!isActive) return;
+        setEntries(mapApiLeaderboardEntries(response.items ?? []));
       } finally {
-        setIsLoading(false);
+        if (isActive) {
+          setIsLoading(false);
+        }
       }
-    })();
+    };
+
+    loadEntries();
+    return () => {
+      isActive = false;
+    };
   }, [selectedCategory, selectedTime]);
 
   const filteredEntries = useMemo(
-    () => {
-      const normalizedQuery = searchQuery.trim().toLowerCase();
-      const filtered = entries.filter((entry) =>
-        entry.username.toLowerCase().includes(normalizedQuery)
-      );
-      const sorted = [...filtered].sort((a, b) =>
-        selectedSort === "pnl" ? b.profitLoss - a.profitLoss : b.volume - a.volume
-      );
-      return sorted.map((entry, idx) => ({ ...entry, rank: idx + 1 }));
-    },
+    () => filterAndSortEntries(entries, searchQuery, selectedSort),
     [entries, searchQuery, selectedSort]
   );
 
@@ -152,10 +168,11 @@ export default function LeaderboardPage() {
   const selectedTimeLabel = TIME_OPTIONS.find((option) => option.key === selectedTime)?.label ?? "Monthly";
   const selectedCategoryLabel =
     CATEGORY_OPTIONS.find((option) => option.value === selectedCategory)?.label ?? "All Categories";
+  const isPnlSort = selectedSort === "pnl";
 
   return (
     <div className="container mx-auto py-6 px-4 sm:px-6 lg:px-8">
-      <div className="mx-auto w-full max-w-6xl space-y-4">
+      <div className="mx-auto w-full max-w-[1400px] space-y-4">
         <h1 className="text-3xl font-bold text-primary md:text-4xl">Leaderboard</h1>
 
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -238,7 +255,7 @@ export default function LeaderboardPage() {
         </div>
 
         <div className="rounded-xl border border-border bg-card">
-          <div className="flex items-center gap-3 border-b border-border px-2 md:px-4 py-2 md:py-3 md:justify-between md:px-6">
+          <div className="flex items-center gap-3 border-b border-border px-2 py-2 md:justify-between md:px-6 md:py-3">
             <div className="relative min-w-0 flex-1 md:max-w-sm">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -294,7 +311,7 @@ export default function LeaderboardPage() {
                     <TableHead
                       className={cn(
                         "text-right",
-                        selectedSort === "volume" ? "hidden md:table-cell" : "table-cell"
+                        !isPnlSort ? "hidden md:table-cell" : "table-cell"
                       )}
                     >
                       <button
@@ -312,7 +329,7 @@ export default function LeaderboardPage() {
                     <TableHead
                       className={cn(
                         "text-right",
-                        selectedSort === "pnl" ? "hidden md:table-cell" : "table-cell"
+                        isPnlSort ? "hidden md:table-cell" : "table-cell"
                       )}
                     >
                       <button
@@ -349,9 +366,7 @@ export default function LeaderboardPage() {
                             )}
                           </div>
                           <span className="truncate font-semibold text-foreground text-xs md:hidden">
-                            {entry.username.length > 20
-                              ? `${entry.username.slice(0, 20)}...`
-                              : entry.username}
+                            {truncateUsernameForMobile(entry.username)}
                           </span>
                           <span className="hidden truncate font-semibold text-foreground text-sm md:inline">
                             {entry.username}
@@ -361,8 +376,8 @@ export default function LeaderboardPage() {
                       <TableCell
                         className={cn(
                           "text-right text-muted-foreground text-xs md:text-sm",
-                          selectedSort === "pnl" && "font-semibold text-foreground",
-                          selectedSort === "volume" ? "hidden md:table-cell" : "table-cell"
+                          isPnlSort && "font-semibold text-foreground",
+                          !isPnlSort ? "hidden md:table-cell" : "table-cell"
                         )}
                       >
                         {formatAmount(entry.profitLoss)}
@@ -370,8 +385,8 @@ export default function LeaderboardPage() {
                       <TableCell
                         className={cn(
                           "text-right text-muted-foreground text-xs md:text-sm",
-                          selectedSort === "volume" && "font-semibold text-foreground",
-                          selectedSort === "pnl" ? "hidden md:table-cell" : "table-cell"
+                          !isPnlSort && "font-semibold text-foreground",
+                          isPnlSort ? "hidden md:table-cell" : "table-cell"
                         )}
                       >
                         ${Math.abs(entry.volume).toLocaleString()}
