@@ -2,25 +2,13 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, Query
 from fastapi.encoders import jsonable_encoder
+from sqlalchemy import inspect as sa_inspect, select
 
 from app.db.deps import DbSession
-from app.repositories import leaderboard as leaderboard_repo
+from app.models.tables.category import Category
+from app.models.tables.leaderboard import Leaderboard
 
 router = APIRouter(prefix="/leaderboard", tags=["leaderboard"])
-
-CATEGORY_TO_ID: dict[str, int] = {
-    "All": 0,
-    "Politics": 1,
-    "Sports": 2,
-    "Crypto": 3,
-    "Esports": 4,
-    "Finance": 5,
-    "Geopolitics": 6,
-    "Tech": 7,
-    "Culture": 8,
-    "Economy": 9,
-    "Weather": 10,
-}
 
 
 def _to_float(value: Any) -> float:
@@ -32,6 +20,10 @@ def _to_float(value: Any) -> float:
         return 0.0
 
 
+def _leaderboard_to_dict(row: Leaderboard) -> dict[str, Any]:
+    return {col.key: getattr(row, col.key) for col in sa_inspect(Leaderboard).mapper.columns}
+
+
 @router.get("/", summary="List leaderboard")
 async def get_leaderboard(
     db: DbSession,
@@ -41,56 +33,27 @@ async def get_leaderboard(
     limit: int = Query(default=50, ge=1),
     offset: int = Query(default=0, ge=0),
 ):
-    normalized = category.strip().lower()
-    id_by_normalized = {name.lower(): category_id for name, category_id in CATEGORY_TO_ID.items()}
-
-    if normalized == "all":
-        category_ids = list(CATEGORY_TO_ID.values())
-    else:
-        category_id = id_by_normalized.get(normalized)
-        if category_id is None:
-            allowed = "All, " + ", ".join(CATEGORY_TO_ID.keys())
-            return {"ok": False, "items": [], "error": f"Invalid category '{category}'. Allowed: {allowed}"}
-        category_ids = [category_id]
-
-    if len(category_ids) == 1:
-        rows = await leaderboard_repo.list_leaderboard(
-            db,
-            category_id=category_ids[0],
-            time_bucket=time_bucket,
-            order_by=order_by,
-            limit=limit,
-            offset=offset,
-        )
-        return {"ok": True, "items": jsonable_encoder(rows)}
-
-    merged_by_user: dict[Any, dict[str, Any]] = {}
-    for category_id in category_ids:
-        category_rows = await leaderboard_repo.list_leaderboard(
-            db,
-            category_id=category_id,
-            time_bucket=time_bucket,
-            order_by=order_by,
-            limit=None,
-            offset=0,
-        )
-        for row in category_rows:
-            user_id = row.get("user_id")
-            if user_id not in merged_by_user:
-                merged_by_user[user_id] = dict(row)
-                merged_by_user[user_id]["vol"] = _to_float(row.get("vol"))
-                merged_by_user[user_id]["pnl"] = _to_float(row.get("pnl"))
-            else:
-                merged_by_user[user_id]["vol"] += _to_float(row.get("vol"))
-                merged_by_user[user_id]["pnl"] += _to_float(row.get("pnl"))
-
-    score_key = "vol" if order_by == "VOL" else "pnl"
-    ordered_rows = sorted(
-        merged_by_user.values(),
-        key=lambda row: _to_float(row.get(score_key)),
-        reverse=True,
+    base_stmt = (
+        select(Leaderboard)
+        .join(Category, Leaderboard.category_id == Category.id)
     )
-    sliced_rows = ordered_rows[offset : offset + limit]
-    rows = [{**row, "rank": offset + idx + 1} for idx, row in enumerate(sliced_rows)]
 
+    where_clause = [
+        Leaderboard.time_bucket == time_bucket
+    ]
+    if category != "All":
+        where_clause.append(Category.name == category)
+
+    sort_col = Leaderboard.vol if order_by == "VOL" else Leaderboard.pnl
+    stmt = (
+        base_stmt
+        .where(*where_clause)
+        .order_by(sort_col.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    result = await db.execute(stmt)
+    records = result.scalars().all()
+    rows = [{**_leaderboard_to_dict(row), "rank": offset + idx + 1} for idx, row in enumerate(records)]
     return {"ok": True, "items": jsonable_encoder(rows)}
+
