@@ -2,7 +2,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import QuickBuyModal from "@/components/trade/QuickBuyModal";
+import QuickBuyModal from "@/components/market/QuickBuyModal";
 import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 

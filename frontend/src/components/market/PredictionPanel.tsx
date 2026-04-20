@@ -7,12 +7,12 @@ import { useRouter } from "next/navigation";
 import type { Market } from "@/lib/types";
 import { FEE } from "@/lib/constants";
 import { executeBuyTrade } from "@/lib/trade/executeBuyTrade";
-import { Card, CardContent } from "./ui/card";
-import { Button } from "./ui/button";
-import { Input } from "./ui/input";
-import { Label } from "./ui/label";
-import { RadioGroup, RadioGroupItem } from "./ui/radio-group";
-import { Separator } from "./ui/separator";
+import { Card, CardContent } from "../ui/card";
+import { Button } from "../ui/button";
+import { Input } from "../ui/input";
+import { Label } from "../ui/label";
+import { RadioGroup, RadioGroupItem } from "../ui/radio-group";
+import { Separator } from "../ui/separator";
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 

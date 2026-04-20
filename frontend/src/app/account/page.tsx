@@ -6,7 +6,7 @@ import { supabaseBrowser } from '@/lib/supabase-browser';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { ArrowDownCircle, ArrowUpCircle, Award, Copy, Download, Gift, Lightbulb, Receipt } from 'lucide-react';
-import { SuggestMarketForm } from '@/components/SuggestMarketForm';
+import { SuggestMarketForm } from '@/components/market/SuggestMarketForm';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';

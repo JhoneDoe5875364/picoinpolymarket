@@ -48,8 +48,12 @@ function normalizeTimestamp(value: unknown): number {
   return Date.now()
 }
 
-function formatDateTime(timestamp: number): string {
-  return new Date(timestamp).toLocaleString(undefined, {
+function formatDateTime(value: unknown): string {
+  const timestamp = normalizeTimestamp(value)
+  const date = new Date(timestamp)
+  if (!isValid(date)) return "-"
+
+  return date.toLocaleString(undefined, {
     year: "2-digit",
     month: "2-digit",
     day: "2-digit",
@@ -149,12 +153,19 @@ export function PriceHistoryChart({ market }: PriceHistoryChartProps) {
           />
           <Tooltip
             cursor={{ stroke: "hsl(var(--primary))", strokeWidth: 1, strokeDasharray: "3 3" }}
-            content={
-              <ChartTooltipContent
-                labelFormatter={(value) => formatDateTime(Number(value))}
-                formatter={(value: any) => `${(value as number) * 100}%`}
-              />
-            }
+            content={(props) => {
+              const { content: _content, ...tooltipProps } = props
+              return (
+                <ChartTooltipContent
+                  {...tooltipProps}
+                  labelFormatter={(value, payload) => {
+                    const payloadTimestamp = payload?.[0]?.payload?.timestamp
+                    return formatDateTime(payloadTimestamp ?? value)
+                  }}
+                  formatter={(value: any) => `${(value as number) * 100}%`}
+                />
+              )
+            }}
           />
           <Line
             type="monotone"

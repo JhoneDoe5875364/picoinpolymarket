@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Market } from "@/lib/types";
 import { fmtShortDate } from "@/lib/dates";
 import MarketProbability from "@/components/market/MarketProbability";
-import QuickBuyModal from "@/components/trade/QuickBuyModal";
+import QuickBuyModal from "@/components/market/QuickBuyModal";
 import { cn } from "@/lib/utils";
 // -----------------------------------------------------
 

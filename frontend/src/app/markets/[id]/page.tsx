@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs"; // <— IMPORTANT: allow server to reach 127.0.0.1
 
 import { notFound } from "next/navigation";
-import { PredictionPanel } from "@/components/PredictionPanel";
+import { PredictionPanel } from "@/components/market/PredictionPanel";
 import { Market } from "@/lib/types";
 import { PriceHistoryChart } from "@/components/PriceHistorychart";
 import { apiFetch } from "@/lib/api";
