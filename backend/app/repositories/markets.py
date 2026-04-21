@@ -58,7 +58,6 @@ async def list_markets(
     end_date_min: Optional[datetime] = None,
     end_date_max: Optional[datetime] = None,
 ) -> List[dict[str, Any]]:
-    stmt = select(Market).options(selectinload(Market.category))
     conditions: list[Any] = []
 
     if closed is None and resolved is None:
@@ -85,14 +84,15 @@ async def list_markets(
         normalized_category = category.strip().lower()
         conditions.append(Market.category.has(func.lower(Category.slug) == normalized_category))
 
-    if conditions:
-        stmt = stmt.where(*conditions)
-
     sort_col = _ORDER_COLUMNS.get(order, Market.created_at)
-    stmt = stmt.order_by(sort_col.asc() if ascending else sort_col.desc())
-    stmt = stmt.offset(offset)
-    if limit is not None:
-        stmt = stmt.limit(limit)
+    stmt = (
+        select(Market)
+        .options(selectinload(Market.category))
+        .where(*conditions)
+        .order_by(sort_col.asc() if ascending else sort_col.desc())
+        .offset(offset)
+        .limit(limit)
+    )
 
     result = await session.execute(stmt)
     rows = result.scalars().all()

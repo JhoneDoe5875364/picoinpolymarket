@@ -76,7 +76,7 @@ export default function QuickBuyModal({ open, marketId, outcome, marketQuestion,
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 p-3">
+    <div className="fixed inset-0 z-[60] flex items-end md:items-center justify-center bg-black/60 p-3 pb-[calc(env(safe-area-inset-bottom)+4.5rem)] md:pb-3">
       <div className="w-full max-w-sm rounded-2xl bg-[#121212] border border-white/10 shadow-xl">
         <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
           <h2 className="text-lg font-semibold">Quick Buy — {outcome}</h2>

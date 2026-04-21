@@ -67,6 +67,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {!hideHeaderFooter && <AppHeader currentUser={currentUser} />}
       <main id="content" className="min-h-[60vh] pb-20 md:pb-0">{children}</main>
       {!hideHeaderFooter && <AppFooter />}
+      {!hideHeaderFooter && <div className="h-[calc(env(safe-area-inset-bottom)+4.25rem)] md:hidden" aria-hidden />}
       {!hideHeaderFooter && <MobileBottomNav />}
     </>
   );
