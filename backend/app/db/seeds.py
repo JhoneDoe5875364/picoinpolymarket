@@ -15,6 +15,7 @@ from app.utils import generate_bigint_64
 
 from app.models.tables.category import Category
 from app.models.tables.market import Market
+from app.models.tables.market_token import MarketToken
 from app.models.tables.user import User
 from app.models.tables.market_trades import MarketTrade
 from app.models.tables.market_price_candles import MarketPriceCandle
@@ -33,6 +34,10 @@ async def _ensure_category(session: AsyncSession, **kwargs: object) -> None:
 
 async def _ensure_market(session: AsyncSession, **kwargs: object) -> None:
     session.add(Market(**kwargs))
+
+
+async def _ensure_market_token(session: AsyncSession, **kwargs: object) -> None:
+    session.add(MarketToken(**kwargs))
 
 
 async def _ensure_market_trade(session: AsyncSession, **kwargs: object) -> None:
@@ -303,8 +308,6 @@ async def run_seed_markets(session: AsyncSession) -> None:
             category_id=random.randint(1, 10),
             creator_id=admin_id,
             tier="standard",
-            token_yes_id=str(generate_bigint_64()),
-            token_no_id=str(generate_bigint_64()),
             start_date=start_date,
             end_date=end_date,
             liquidity=liquidity,
@@ -314,33 +317,47 @@ async def run_seed_markets(session: AsyncSession) -> None:
             is_archived=False,
             is_resolved=False,
             rules=rule_template,
-            outcome_price_yes=yes_price,
-            outcome_price_no=no_price,
             created_at=now,
             updated_at=now,
+        )
+        await _ensure_market_token(
+            session,
+            market_id=market_id,
+            outcome="YES",
+            token=str(generate_bigint_64()),
+            price=yes_price,
+        )
+        await _ensure_market_token(
+            session,
+            market_id=market_id,
+            outcome="NO",
+            token=str(generate_bigint_64()),
+            price=no_price,
         )
 
 
 async def run_seed_market_trades(session: AsyncSession) -> None:
-    market_rows = await session.execute(
+    token_rows = await session.execute(
         select(
-            Market.id,
-            Market.token_yes_id,
-            Market.token_no_id,
-            Market.outcome_price_yes,
-            Market.outcome_price_no,
+            MarketToken.market_id,
+            MarketToken.outcome,
+            MarketToken.token,
+            MarketToken.price,
         )
     )
+    market_token_map: dict[int, dict[str, tuple[str, Decimal]]] = defaultdict(dict)
+    for market_id, outcome, token, price in token_rows.all():
+        market_token_map[market_id][outcome] = (token, price if price is not None else Decimal("0.5000"))
     markets = [
         (
             market_id,
-            token_yes_id,
-            token_no_id,
-            outcome_price_yes,
-            outcome_price_no,
+            token_map["YES"][0],
+            token_map["NO"][0],
+            token_map["YES"][1],
+            token_map["NO"][1],
         )
-        for market_id, token_yes_id, token_no_id, outcome_price_yes, outcome_price_no in market_rows.all()
-        if token_yes_id and token_no_id
+        for market_id, token_map in market_token_map.items()
+        if "YES" in token_map and "NO" in token_map
     ]
     if not markets:
         print("No seeded markets found for trade seeding")
@@ -360,9 +377,9 @@ async def run_seed_market_trades(session: AsyncSession) -> None:
 
     trade_count = random.randint(500, 1000)
     for _ in range(trade_count):
-        market_id, token_yes_id, token_no_id, yes_base_price, no_base_price = random.choice(markets)
+        market_id, token_yes, token_no, yes_base_price, no_base_price = random.choice(markets)
         outcome = random.choice(["YES", "NO"])
-        token_id = token_yes_id if outcome == "YES" else token_no_id
+        token = token_yes if outcome == "YES" else token_no
         base_price = yes_base_price if outcome == "YES" else no_base_price
         if base_price is None:
             base_price = Decimal("0.5000")
@@ -390,7 +407,7 @@ async def run_seed_market_trades(session: AsyncSession) -> None:
 
         await _ensure_market_trade(
             session,
-            token_id=token_id,
+            token=token,
             market_id=market_id,
             taker_user_id=taker_user_id,
             maker_user_id=maker_user_id,
@@ -422,12 +439,13 @@ async def run_seed_market_price_candles(session: AsyncSession) -> None:
 
     market_ids = sorted({market_id for market_id, *_ in trades})
     market_result = await session.execute(
-        select(Market.id, Market.token_yes_id, Market.token_no_id).where(Market.id.in_(market_ids))
+        select(MarketToken.market_id, MarketToken.outcome, MarketToken.token).where(
+            MarketToken.market_id.in_(market_ids)
+        )
     )
-    market_token_map = {
-        market_id: {"YES": token_yes_id, "NO": token_no_id}
-        for market_id, token_yes_id, token_no_id in market_result.all()
-    }
+    market_token_map: dict[int, dict[str, str]] = defaultdict(dict)
+    for market_id, outcome, token in market_result.all():
+        market_token_map[market_id][outcome] = token
 
     buckets: dict[tuple[int, str, int], list[tuple[datetime, Decimal, Decimal]]] = defaultdict(list)
     for market_id, outcome, price, shares, created_at in trades:
@@ -448,14 +466,14 @@ async def run_seed_market_price_candles(session: AsyncSession) -> None:
         high_price = max(prices).quantize(quant)
         low_price = min(prices).quantize(quant)
         volume = sum((row[2] for row in rows), Decimal("0")).quantize(quant)
-        token_id = market_token_map[market_id][outcome]
-        if token_id is None:
+        token = market_token_map[market_id][outcome]
+        if token is None:
             continue
 
         await _ensure_market_price_candle(
             session,
             market_id=market_id,
-            token_id=token_id,
+            token=token,
             ts=ts,
             open_price=open_price,
             high_price=high_price,
@@ -474,9 +492,9 @@ def _build_position_stats(
             "pi_amount": Decimal("0"),
         }
     )
-    for user_id, market_id, token_id, side, outcome, shares, pi_amount in trades:
+    for user_id, market_id, token, side, outcome, shares, pi_amount in trades:
         key = (market_id, user_id, outcome)
-        stats[key]["token_id"] = token_id
+        stats[key]["token"] = token
         stats[key]["side"] = side
         stats[key]["shares"] += shares
         stats[key]["pi_amount"] += pi_amount
@@ -488,7 +506,7 @@ async def run_seed_market_positions(session: AsyncSession) -> None:
         select(
             MarketTrade.taker_user_id,
             MarketTrade.market_id,
-            MarketTrade.token_id,
+            MarketTrade.token,
             MarketTrade.side,
             MarketTrade.outcome,
             MarketTrade.shares,
@@ -505,7 +523,7 @@ async def run_seed_market_positions(session: AsyncSession) -> None:
     quant = Decimal("0.0001")
 
     for (market_id, user_id, outcome), stat in sorted(position_stats.items()):
-        token_id = stat["token_id"]
+        token = stat["token"]
         side = stat["side"]
         shares = max(stat["shares"], Decimal("0")).quantize(quant)
         pi_amount = max(stat["pi_amount"], Decimal("0")).quantize(quant)
@@ -515,7 +533,7 @@ async def run_seed_market_positions(session: AsyncSession) -> None:
             session,
             market_id=market_id,
             user_id=user_id,
-            token_id=token_id,
+            token=token,
             side=side,
             outcome=outcome,
             shares=shares,

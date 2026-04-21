@@ -21,7 +21,7 @@ class MarketPosition(Base):
     user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     side: Mapped[str] = mapped_column(String(255), nullable=False)
     outcome: Mapped[str] = mapped_column(String(255), nullable=False)
-    token_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    token: Mapped[str] = mapped_column(String(255), nullable=False)
     shares: Mapped[Decimal] = mapped_column(Numeric(24, 4), nullable=False)
     pi_amount: Mapped[Decimal] = mapped_column(Numeric(24, 4), nullable=False)
     avg_price: Mapped[Decimal] = mapped_column(Numeric(24, 4), nullable=False)

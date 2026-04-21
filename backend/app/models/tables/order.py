@@ -15,7 +15,7 @@ class Order(Base):
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=False), primary_key=True)
     user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     market_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    token_id: Mapped[str] = mapped_column(String)
+    token: Mapped[str] = mapped_column(String)
 
     side: Mapped[str] = mapped_column(
         Enum("BUY", "SELL", name="order_side", create_constraint=True),

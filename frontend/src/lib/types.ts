@@ -19,8 +19,8 @@ export interface Market {
   category_id?: number | null;
   creator_id?: number | null;
   tier?: string | null;
-  token_yes_id?: string | null;
-  token_no_id?: string | null;
+  token_yes?: string | null;
+  token_no?: string | null;
   outcome_price_yes?: number | null;
   outcome_price_no?: number | null;
   start_date?: string | null;

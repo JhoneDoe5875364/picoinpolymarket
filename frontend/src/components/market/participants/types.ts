@@ -9,14 +9,14 @@ export interface MarketHolder {
 }
 
 export interface MarketHolderGroup {
-  token_id: string;
+  token: string;
   holders: MarketHolder[];
 }
 
 export interface MarketPosition {
   id: number | string;
   user_id: number | string;
-  token_id: string;
+  token: string;
   shares: number | string;
   pi_amount: number | string;
 }

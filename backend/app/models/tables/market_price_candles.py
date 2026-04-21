@@ -19,14 +19,14 @@ from app.models.base import Base
 
 
 class MarketPriceCandle(Base):
-    """Candle row; PK is ``(token_id, ts)``. Table is RANGE-partitioned on ``ts``."""
+    """Candle row; PK is ``(token, ts)``. Table is RANGE-partitioned on ``ts``."""
 
     __tablename__ = "market_price_candles"
     __table_args__ = {"postgresql_partition_by": "RANGE (ts)"}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     market_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    token_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    token: Mapped[str] = mapped_column(String(255), primary_key=True)
     ts: Mapped[int] = mapped_column(BigInteger, primary_key=True)
 
     open_price: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 4))

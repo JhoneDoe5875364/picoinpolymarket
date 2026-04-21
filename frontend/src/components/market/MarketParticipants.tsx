@@ -54,8 +54,8 @@ export function MarketParticipants({ market }: { market: Market }) {
         if (!mounted) return;
 
         const groups = response?.data ?? [];
-        const yes = groups.find((item) => item.token_id === market.token_yes_id)?.holders ?? [];
-        const no = groups.find((item) => item.token_id === market.token_no_id)?.holders ?? [];
+        const yes = groups.find((item) => item.token === market.token_yes)?.holders ?? [];
+        const no = groups.find((item) => item.token === market.token_no)?.holders ?? [];
         setYesHolders(yes);
         setNoHolders(no);
       } catch (error) {
@@ -71,7 +71,7 @@ export function MarketParticipants({ market }: { market: Market }) {
     return () => {
       mounted = false;
     };
-  }, [market?.id, market?.token_yes_id, market?.token_no_id]);
+  }, [market?.id, market?.token_yes, market?.token_no]);
 
   useEffect(() => {
     if (!market?.id) {
@@ -114,7 +114,7 @@ export function MarketParticipants({ market }: { market: Market }) {
     return () => {
       mounted = false;
     };
-  }, [market?.id, market?.token_yes_id, market?.token_no_id, sortDirection, positionStatus]);
+  }, [market?.id, market?.token_yes, market?.token_no, sortDirection, positionStatus]);
 
   useEffect(() => {
     if (!market?.id) {

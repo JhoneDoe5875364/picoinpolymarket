@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from sqlalchemy import Float, case, func, select, union_all, update
+from sqlalchemy import Float, String, and_, case, cast, func, select, union_all, update
 from typing import Any, List, Optional, Tuple
 
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.models.tables.market import Market
+from app.models.tables.market_token import MarketToken
 from app.models.tables.market_position import MarketPosition
 from app.models.tables.market_trades import MarketTrade
 from app.models.tables.user import User
@@ -193,12 +194,17 @@ async def list_positions(
     if search and search.strip():
         base_conditions.append(Market.question.ilike(f"%{search}%"))
 
+    yes_token = aliased(MarketToken)
+    no_token = aliased(MarketToken)
+    yes_price = func.coalesce(yes_token.price, 0)
+    no_price = func.coalesce(no_token.price, 0)
+
     base_yes_stmt = (
         select(
             MarketPosition.id.label("id"),
             MarketPosition.market_id.label("market_id"),
             MarketPosition.user_id.label("user_id"),
-            MarketPosition.token_id.label("token_id"),
+            MarketPosition.token.label("token"),
             MarketPosition.side.label("side"),
             MarketPosition.outcome.label("outcome"),
             Market.question.label("question"),
@@ -206,12 +212,16 @@ async def list_positions(
             MarketPosition.shares.label("shares"),
             MarketPosition.pi_amount.label("pi_amount"),
             MarketPosition.avg_price.label("avg_price"),
-            Market.outcome_price_yes.label("current_price"),
-            func.cast(MarketPosition.shares * Market.outcome_price_yes - MarketPosition.pi_amount, Float).label("pnl"),
-            func.cast((MarketPosition.shares * Market.outcome_price_yes - MarketPosition.pi_amount) / MarketPosition.pi_amount * 100, Float).label("pnl_percent"),
-            func.cast(MarketPosition.shares * Market.outcome_price_yes, Float).label("current_pi_amount"),
+            yes_price.label("current_price"),
+            func.cast(MarketPosition.shares * yes_price - MarketPosition.pi_amount, Float).label("pnl"),
+            func.cast((MarketPosition.shares * yes_price - MarketPosition.pi_amount) / MarketPosition.pi_amount * 100, Float).label("pnl_percent"),
+            func.cast(MarketPosition.shares * yes_price, Float).label("current_pi_amount"),
         )
         .join(Market, Market.id == MarketPosition.market_id)
+        .outerjoin(
+            yes_token,
+            and_(yes_token.market_id == Market.id, yes_token.outcome == "YES"),
+        )
         .where(*base_conditions, MarketPosition.outcome == "YES")
     )
     base_no_stmt = (
@@ -219,7 +229,7 @@ async def list_positions(
             MarketPosition.id.label("id"),
             MarketPosition.market_id.label("market_id"),
             MarketPosition.user_id.label("user_id"),
-            MarketPosition.token_id.label("token_id"),
+            MarketPosition.token.label("token"),
             MarketPosition.side.label("side"),
             MarketPosition.outcome.label("outcome"),
             Market.question.label("question"),
@@ -227,12 +237,16 @@ async def list_positions(
             MarketPosition.shares.label("shares"),
             MarketPosition.pi_amount.label("pi_amount"),
             MarketPosition.avg_price.label("avg_price"),
-            Market.outcome_price_no.label("current_price"),
-            func.cast(MarketPosition.shares * Market.outcome_price_no - MarketPosition.pi_amount, Float).label("pnl"),
-            func.cast((MarketPosition.shares * Market.outcome_price_no - MarketPosition.pi_amount) / MarketPosition.pi_amount * 100, Float).label("pnl_percent"),
-            func.cast(MarketPosition.shares * Market.outcome_price_no, Float).label("current_pi_amount"),
+            no_price.label("current_price"),
+            func.cast(MarketPosition.shares * no_price - MarketPosition.pi_amount, Float).label("pnl"),
+            func.cast((MarketPosition.shares * no_price - MarketPosition.pi_amount) / MarketPosition.pi_amount * 100, Float).label("pnl_percent"),
+            func.cast(MarketPosition.shares * no_price, Float).label("current_pi_amount"),
         )
         .join(Market, Market.id == MarketPosition.market_id)
+        .outerjoin(
+            no_token,
+            and_(no_token.market_id == Market.id, no_token.outcome == "NO"),
+        )
         .where(*base_conditions, MarketPosition.outcome == "NO")
     )
 
@@ -320,11 +334,7 @@ async def get_total_positions_value(
     *,
     user_id: int,
 ) -> float:
-    current_price = case(
-        (MarketPosition.outcome == "YES", Market.outcome_price_yes),
-        (MarketPosition.outcome == "NO", Market.outcome_price_no),
-        else_=0,
-    )
+    current_price = func.coalesce(MarketToken.price, 0)
     stmt = (
         select(
             func.coalesce(
@@ -333,6 +343,13 @@ async def get_total_positions_value(
             )
         )
         .join(Market, Market.id == MarketPosition.market_id)
+        .outerjoin(
+            MarketToken,
+            and_(
+                MarketToken.market_id == MarketPosition.market_id,
+                cast(MarketToken.outcome, String) == MarketPosition.outcome,
+            ),
+        )
         .where(
             MarketPosition.user_id == user_id,
             Market.is_active == True,
@@ -394,18 +411,21 @@ async def get_profit_loss_by_period(
 
     market_ids = list(position_stats.keys())
     market_stmt = select(
-        Market.id,
-        Market.outcome_price_yes,
-        Market.outcome_price_no,
-    ).where(Market.id.in_(market_ids))
+        MarketToken.market_id,
+        MarketToken.outcome,
+        MarketToken.price,
+    ).where(MarketToken.market_id.in_(market_ids))
     market_result = await session.execute(market_stmt)
-    market_map = {
-        market_id: {
-            "yes_price": _safe_decimal(outcome_price_yes),
-            "no_price": _safe_decimal(outcome_price_no),
-        }
-        for market_id, outcome_price_yes, outcome_price_no in market_result.all()
-    }
+    market_map: dict[int, dict[str, Decimal]] = {}
+    for market_id, outcome, price in market_result.all():
+        bucket = market_map.setdefault(
+            market_id,
+            {"yes_price": Decimal("0"), "no_price": Decimal("0")},
+        )
+        if outcome == "YES":
+            bucket["yes_price"] = _safe_decimal(price)
+        elif outcome == "NO":
+            bucket["no_price"] = _safe_decimal(price)
 
     mark_value = Decimal("0")
     cost_basis = Decimal("0")
@@ -534,18 +554,20 @@ async def get_pnl_history(
     market_map: dict[int, dict[str, Decimal]] = {}
     if market_ids:
         market_stmt = select(
-            Market.id,
-            Market.outcome_price_yes,
-            Market.outcome_price_no,
-        ).where(Market.id.in_(market_ids))
+            MarketToken.market_id,
+            MarketToken.outcome,
+            MarketToken.price,
+        ).where(MarketToken.market_id.in_(market_ids))
         market_result = await session.execute(market_stmt)
-        market_map = {
-            market_id: {
-                "yes_price": _safe_decimal(outcome_price_yes),
-                "no_price": _safe_decimal(outcome_price_no),
-            }
-            for market_id, outcome_price_yes, outcome_price_no in market_result.all()
-        }
+        for market_id, outcome, price in market_result.all():
+            bucket = market_map.setdefault(
+                market_id,
+                {"yes_price": Decimal("0"), "no_price": Decimal("0")},
+            )
+            if outcome == "YES":
+                bucket["yes_price"] = _safe_decimal(price)
+            elif outcome == "NO":
+                bucket["no_price"] = _safe_decimal(price)
 
     position_stats: dict[int, dict[str, Decimal]] = {}
     history: list[dict[str, Any]] = []

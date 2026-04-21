@@ -24,7 +24,7 @@ from app.models.base import Base
 class MarketTrade(Base):
     __tablename__ = "market_trades"
     __table_args__ = (
-        Index("ix_market_trades_token_time", "token_id", "created_at"),
+        Index("ix_market_trades_token_time", "token", "created_at"),
         Index("ix_market_trades_market_time", "market_id", "created_at"),
         Index("ix_market_trades_taker_time", "taker_user_id", "created_at"),
         {"postgresql_partition_by": "RANGE (created_at)"},
@@ -35,7 +35,7 @@ class MarketTrade(Base):
         TIMESTAMP(timezone=True, precision=6), primary_key=True, nullable=False
     )
 
-    token_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    token: Mapped[str] = mapped_column(String(255), nullable=False)
     market_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
 
     taker_user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)

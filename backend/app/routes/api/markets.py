@@ -137,32 +137,32 @@ async def get_market_trades(
 @router.get("/price", summary="Get market price by token id")
 async def get_market_price(
     db: DbSession,
-    token_id: str = Query(..., min_length=1),
+    token: str = Query(..., min_length=1),
     side: Literal["BUY", "SELL"] = Query(...),
 ):
-    row = await markets_repo.get_market_price(db, token_id=token_id, side=side)
+    row = await markets_repo.get_market_price(db, token=token, side=side)
     if not row:
-        raise HTTPException(status_code=404, detail="Market not found for token_id")
+        raise HTTPException(status_code=404, detail="Market not found for token")
     return {"ok": True, "data": jsonable_encoder(row)}
 
 
 @router.get("/prices", summary="Get market prices by token ids")
 async def get_market_prices(
     db: DbSession,
-    token_ids: str = Query(..., min_length=1),
+    tokens: str = Query(..., min_length=1),
     sides: str = Query(..., min_length=1),
 ):
-    token_id_list = [token_id.strip() for token_id in token_ids.split(",") if token_id.strip()]
+    token_list = [token.strip() for token in tokens.split(",") if token.strip()]
     side_list = [side.strip().upper() for side in sides.split(",") if side.strip()]
 
-    if not token_id_list:
-        raise HTTPException(status_code=400, detail="token_ids is required")
+    if not token_list:
+        raise HTTPException(status_code=400, detail="tokens is required")
     if not side_list:
         raise HTTPException(status_code=400, detail="sides is required")
-    if len(token_id_list) != len(side_list):
+    if len(token_list) != len(side_list):
         raise HTTPException(
             status_code=400,
-            detail="token_ids and sides must have the same number of items",
+            detail="tokens and sides must have the same number of items",
         )
     if any(side not in {"BUY", "SELL"} for side in side_list):
         raise HTTPException(
@@ -171,10 +171,10 @@ async def get_market_prices(
         )
 
     rows = await markets_repo.get_market_prices(
-        db, token_ids=token_id_list, sides=side_list
+        db, tokens=token_list, sides=side_list
     )
     if not rows:
-        raise HTTPException(status_code=404, detail="Market not found for token_ids")
+        raise HTTPException(status_code=404, detail="Market not found for tokens")
     return {"ok": True, "data": jsonable_encoder(rows)}
 
 

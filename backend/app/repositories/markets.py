@@ -4,16 +4,16 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any, List, Literal, Optional, Union
 
-from sqlalchemy import func, insert, inspect as sa_inspect, or_, select, text, union_all, update
+from sqlalchemy import func, insert, inspect as sa_inspect, select, text, union_all, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.config import Config
 from app.models.tables.category import Category
 from app.models.tables.market import Market
+from app.models.tables.market_token import MarketToken
 from app.models.tables.market_position import MarketPosition
 from app.models.tables.market_trades import MarketTrade
-from app.models.tables.market_price_candles import MarketPriceCandle
 
 _ORDER_COLUMNS: dict[str, Any] = {
     "created_at": Market.created_at,
@@ -36,6 +36,13 @@ _TRADE_ORDER_COLUMNS: dict[str, Any] = {
 def market_to_dict(m: Market) -> dict[str, Any]:
     """Return mapped ``Market`` columns plus ``category`` slug (when relationship is loaded)."""
     d = {col.key: getattr(m, col.key) for col in sa_inspect(Market).mapper.columns}
+    tokens_by_outcome = {token.outcome: token for token in getattr(m, "market_tokens", [])}
+    yes_token = tokens_by_outcome.get("YES")
+    no_token = tokens_by_outcome.get("NO")
+    d["token_yes"] = yes_token.token if yes_token is not None else None
+    d["token_no"] = no_token.token if no_token is not None else None
+    d["outcome_price_yes"] = yes_token.price if yes_token is not None else None
+    d["outcome_price_no"] = no_token.price if no_token is not None else None
     cr = m.category
     d["category"] = cr.slug if cr is not None else None
     return d
@@ -87,7 +94,7 @@ async def list_markets(
     sort_col = _ORDER_COLUMNS.get(order, Market.created_at)
     stmt = (
         select(Market)
-        .options(selectinload(Market.category))
+        .options(selectinload(Market.category), selectinload(Market.market_tokens))
         .where(*conditions)
         .order_by(sort_col.asc() if ascending else sort_col.desc())
         .offset(offset)
@@ -102,7 +109,7 @@ async def list_markets(
 async def get_market_by_id(session: AsyncSession, market_id: int) -> Optional[dict[str, Any]]:
     stmt = (
         select(Market)
-        .options(selectinload(Market.category))
+        .options(selectinload(Market.category), selectinload(Market.market_tokens))
         .where(Market.id == market_id)
     )
     result = await session.execute(stmt)
@@ -113,7 +120,7 @@ async def get_market_by_id(session: AsyncSession, market_id: int) -> Optional[di
 async def get_market_by_slug(session: AsyncSession, slug: str) -> Optional[dict[str, Any]]:
     stmt = (
         select(Market)
-        .options(selectinload(Market.category))
+        .options(selectinload(Market.category), selectinload(Market.market_tokens))
         .where(Market.slug == slug)
     )
     result = await session.execute(stmt)
@@ -121,29 +128,30 @@ async def get_market_by_slug(session: AsyncSession, slug: str) -> Optional[dict[
     return market_to_dict(row) if row else None
 
 
-async def get_market_token_id(session: AsyncSession, market_id: int, outcome: Literal["YES", "NO"]) -> Optional[str]:
-    stmt = select(Market.token_yes_id if outcome == "YES" else Market.token_no_id).where(Market.id == market_id)
+async def get_market_token(session: AsyncSession, market_id: int, outcome: Literal["YES", "NO"]) -> Optional[str]:
+    stmt = select(MarketToken.token).where(
+        MarketToken.market_id == market_id,
+        MarketToken.outcome == outcome,
+    )
     result = await session.execute(stmt)
-    token_id = result.scalar_one_or_none()
-    if not token_id:
-        raise ValueError("Market not found")
-    return token_id
+    token = result.scalar_one_or_none()
+    if not token:
+        raise ValueError("Market token not found")
+    return token
 
 
 async def get_market_price(
-    session: AsyncSession, *, token_id: str, side: str
+    session: AsyncSession, *, token: str, side: str
 ) -> Optional[dict[str, Any]]:
-    stmt = select(Market).where(
-        or_(Market.token_yes_id == token_id, Market.token_no_id == token_id)
+    stmt = select(MarketToken.market_id, MarketToken.outcome, MarketToken.price).where(
+        MarketToken.token == token
     )
     result = await session.execute(stmt)
-    market = result.scalar_one_or_none()
-    if not market:
+    token_row = result.one_or_none()
+    if token_row is None:
         return None
 
-    is_yes_token = market.token_yes_id == token_id
-    token_side = "YES" if is_yes_token else "NO"
-    base_price = market.outcome_price_yes if is_yes_token else market.outcome_price_no
+    market_id, token_side, base_price = token_row
     if base_price is None:
         base_price = Decimal("0")
 
@@ -153,8 +161,8 @@ async def get_market_price(
         price = base_price * (1 - Decimal(Config.SPREAD))
 
     return {
-        "market_id": market.id,
-        "token_id": token_id,
+        "market_id": market_id,
+        "token": token,
         "token_side": token_side,
         "side": side,
         "price": price,
@@ -162,41 +170,31 @@ async def get_market_price(
 
 
 async def get_market_prices(
-    session: AsyncSession, *, token_ids: list[str], sides: list[str]
+    session: AsyncSession, *, tokens: list[str], sides: list[str]
 ) -> Optional[dict[str, dict[str, Decimal]]]:
-    stmt = select(Market).where(
-        or_(Market.token_yes_id.in_(token_ids), Market.token_no_id.in_(token_ids))
-    )
+    stmt = select(MarketToken.token, MarketToken.price).where(MarketToken.token.in_(tokens))
     result = await session.execute(stmt)
-    markets = result.scalars().all()
-
-    if not markets:
+    token_price_rows = result.all()
+    if not token_price_rows:
         return None
 
-    token_to_market: dict[str, Market] = {}
-    for market in markets:
-        if market.token_yes_id:
-            token_to_market[market.token_yes_id] = market
-        if market.token_no_id:
-            token_to_market[market.token_no_id] = market
+    token_to_price: dict[str, Decimal] = {
+        token: price if price is not None else Decimal("0")
+        for token, price in token_price_rows
+    }
 
     price_map: dict[str, dict[str, Decimal]] = {}
-    for token_id, side in zip(token_ids, sides):
-        market = token_to_market.get(token_id)
-        if not market:
-            return None
-
-        is_yes_token = market.token_yes_id == token_id
-        base_price = market.outcome_price_yes if is_yes_token else market.outcome_price_no
+    for token, side in zip(tokens, sides):
+        base_price = token_to_price.get(token)
         if base_price is None:
-            base_price = Decimal("0")
+            return None
 
         if side == "BUY":
             price = base_price * (1 + Decimal(Config.SPREAD))
         else:
             price = base_price * (1 - Decimal(Config.SPREAD))
 
-        price_map[token_id] = {side: price}
+        price_map[token] = {side: price}
 
     return price_map
 
@@ -219,10 +217,13 @@ async def market_prices_history(
     }
     target_points = 60
 
-    market_stmt = select(Market.token_yes_id).where(Market.id == market_id)
+    market_stmt = select(MarketToken.token).where(
+        MarketToken.market_id == market_id,
+        MarketToken.outcome == "YES",
+    )
     market_result = await session.execute(market_stmt)
-    token_yes_id = market_result.scalar_one_or_none()
-    if not token_yes_id:
+    token_yes = market_result.scalar_one_or_none()
+    if not token_yes:
         return []
 
     has_interval_from_ts = False
@@ -240,7 +241,7 @@ async def market_prices_history(
                 MAX(ts) AS max_ts
             FROM market_price_candles
             WHERE market_id = :market_id
-                AND token_id = :token_id
+                AND token = :token
                 AND (:has_from_ts = FALSE OR ts >= :from_ts)
                 AND ts <= :to_ts
         ),
@@ -261,7 +262,7 @@ async def market_prices_history(
             SELECT c.ts, c.close_price
             FROM market_price_candles c
             WHERE c.market_id = :market_id
-                AND c.token_id = :token_id
+                AND c.token = :token
                 AND c.ts >= t.target_ts
                 AND c.ts <= :to_ts
             ORDER BY c.ts ASC
@@ -274,7 +275,7 @@ async def market_prices_history(
         sampled_stmt,
         {
             "market_id": market_id,
-            "token_id": token_yes_id,
+            "token": token_yes,
             "has_from_ts": has_interval_from_ts,
             "from_ts": start_ts,
             "to_ts": end_ts,
@@ -297,7 +298,7 @@ async def market_holders(
 ) -> List[dict[str, Any]]:
     stmt_yes = (
         select(
-            MarketPosition.token_id.label("token_id"),
+            MarketPosition.token.label("token"),
             MarketPosition.user_id.label("user_id"),
             MarketPosition.shares.label("shares"),
             MarketPosition.avg_price.label("avg_price"),
@@ -313,7 +314,7 @@ async def market_holders(
 
     stmt_no = (
         select(
-            MarketPosition.token_id.label("token_id"),
+            MarketPosition.token.label("token"),
             MarketPosition.user_id.label("user_id"),
             MarketPosition.shares.label("shares"),
             MarketPosition.avg_price.label("avg_price"),
@@ -332,7 +333,7 @@ async def market_holders(
 
     grouped: dict[str, list[dict[str, Any]]] = {}
     for row in rows:
-        token = row["token_id"]
+        token = row["token"]
         grouped.setdefault(token, []).append(
             {
                 "user_id": row["user_id"],
@@ -341,7 +342,7 @@ async def market_holders(
             }
         )
 
-    return [{"token_id": token_id, "holders": holders} for token_id, holders in grouped.items()]
+    return [{"token": token, "holders": holders} for token, holders in grouped.items()]
 
 
 async def list_positions(
@@ -373,7 +374,7 @@ async def list_positions(
             MarketPosition.id.label("id"),
             MarketPosition.market_id.label("market_id"),
             MarketPosition.user_id.label("user_id"),
-            MarketPosition.token_id.label("token_id"),
+            MarketPosition.token.label("token"),
             MarketPosition.side.label("side"),
             MarketPosition.outcome.label("outcome"),
             Market.question.label("question"),
@@ -392,7 +393,7 @@ async def list_positions(
             MarketPosition.id.label("id"),
             MarketPosition.market_id.label("market_id"),
             MarketPosition.user_id.label("user_id"),
-            MarketPosition.token_id.label("token_id"),
+            MarketPosition.token.label("token"),
             MarketPosition.side.label("side"),
             MarketPosition.outcome.label("outcome"),
             Market.question.label("question"),
@@ -442,7 +443,7 @@ async def list_market_trades(
         {
             "id": row.id,
             "created_at": row.created_at,
-            "token_id": row.token_id,
+            "token": row.token,
             "market_id": row.market_id,
             "taker_user_id": row.taker_user_id,
             "maker_user_id": row.maker_user_id,
@@ -462,7 +463,7 @@ async def insert_trade(
     session: AsyncSession,
     *,
     market_id: int,
-    token_id: str,
+    token: str,
     user_id: int,
     side: Literal["BUY", "SELL"],
     outcome: Literal["YES", "NO"],
@@ -474,7 +475,7 @@ async def insert_trade(
     pi_total_amount = pi_amount + pi_fee
     stmt = insert(MarketTrade).values(
         market_id=market_id,
-        token_id=token_id,
+        token=token,
         taker_user_id=user_id,
         side=side,
         outcome=outcome,
@@ -519,9 +520,9 @@ async def update_position(
     market = await get_market_by_id(session, market_id=market_id)
     if not market:
         raise ValueError("Market not found")
-    
-    token_yes_id = market["token_yes_id"]
-    token_no_id = market["token_no_id"]
+
+    token_yes = await get_market_token(session, market_id=market_id, outcome="YES")
+    token_no = await get_market_token(session, market_id=market_id, outcome="NO")
     pi_amount = price * shares
 
     position = await get_position(session, market_id=market_id, user_id=user_id)
@@ -536,8 +537,8 @@ async def update_position(
             session, 
             market_id=market_id, 
             user_id=user_id, 
-            yes_token_id=token_yes_id, 
-            no_token_id=token_no_id, 
+            yes_token=token_yes, 
+            no_token=token_no, 
             yes_shares=Decimal(yes_shares), 
             no_shares=Decimal(no_shares), 
             yes_pi_amount=Decimal(yes_pi_amount), 
@@ -577,8 +578,8 @@ async def insert_position(
     *,
     market_id: int,
     user_id: int,
-    yes_token_id: str,
-    no_token_id: str,
+    yes_token: str,
+    no_token: str,
     yes_shares: float,
     no_shares: float,
     yes_pi_amount: float,
@@ -589,8 +590,8 @@ async def insert_position(
     stmt = insert(MarketPosition).values(
         market_id=market_id,
         user_id=user_id,
-        yes_token_id=yes_token_id,
-        no_token_id=no_token_id,
+        yes_token=yes_token,
+        no_token=no_token,
         yes_shares=Decimal(yes_shares),
         no_shares=Decimal(no_shares),
         yes_pi_amount=Decimal(yes_pi_amount),

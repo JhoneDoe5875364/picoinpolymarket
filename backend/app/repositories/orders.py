@@ -8,7 +8,7 @@ from sqlalchemy import func, insert, inspect as sa_inspect, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.tables.order import Order
-from app.repositories.markets import get_market_token_id
+from app.repositories.markets import get_market_token
 
 _ORDER_COLUMNS: dict[str, Any] = {
     "created_at": Order.created_at,
@@ -56,12 +56,12 @@ async def create_order(
     price: float,
     size: float,
 ) -> dict[str, Any]:
-    token_id = await get_market_token_id(session, market_id, outcome)
+    token = await get_market_token(session, market_id, outcome)
     pi_amount = price * size
     stmt = insert(Order).values(
         user_id=user_id, 
         market_id=market_id, 
-        token_id=token_id,
+        token=token,
         side=side, 
         outcome=outcome, 
         price=Decimal(str(price)), 

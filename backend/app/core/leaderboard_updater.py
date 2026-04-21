@@ -6,13 +6,15 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import delete, select
+from sqlalchemy import and_, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.orm import aliased
 
 from app.core.logger import get_logger
 from app.models.tables.category import Category
 from app.models.tables.leaderboard import Leaderboard
 from app.models.tables.market import Market
+from app.models.tables.market_token import MarketToken
 from app.models.tables.market_trades import MarketTrade
 from app.models.tables.user import User
 
@@ -94,9 +96,18 @@ async def rebuild_leaderboards(session: AsyncSession) -> int:
     now = datetime.now(timezone.utc)
     bucket_starts = _bucket_starts(now)
 
+    yes_token = aliased(MarketToken)
+    no_token = aliased(MarketToken)
     market_result = await session.execute(
-        select(Market.id, Category.name, Market.outcome_price_yes, Market.outcome_price_no).outerjoin(
-            Category, Market.category_id == Category.id
+        select(Market.id, Category.name, yes_token.price, no_token.price)
+        .outerjoin(Category, Market.category_id == Category.id)
+        .outerjoin(
+            yes_token,
+            and_(yes_token.market_id == Market.id, yes_token.outcome == "YES"),
+        )
+        .outerjoin(
+            no_token,
+            and_(no_token.market_id == Market.id, no_token.outcome == "NO"),
         )
     )
     market_map = {

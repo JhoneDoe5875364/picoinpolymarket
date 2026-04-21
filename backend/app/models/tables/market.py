@@ -2,16 +2,16 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, List, Optional
+from typing import TYPE_CHECKING, List, Optional
 
 from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Identity, Integer, Numeric, String, Text
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
 
 if TYPE_CHECKING:
     from app.models.tables.category import Category
+    from app.models.tables.market_token import MarketToken
 
 
 class Market(Base):
@@ -27,10 +27,6 @@ class Market(Base):
         BigInteger, ForeignKey("users.id", ondelete="SET NULL")
     )
     tier: Mapped[Optional[str]] = mapped_column(String)
-    token_yes_id: Mapped[Optional[str]] = mapped_column(String)
-    token_no_id: Mapped[Optional[str]] = mapped_column(String)
-    outcome_price_yes: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 4), default=Decimal("0"))
-    outcome_price_no: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 4), default=Decimal("0"))
     start_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     end_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     liquidity: Mapped[Optional[Decimal]] = mapped_column(Numeric(18, 4))
@@ -49,3 +45,8 @@ class Market(Base):
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     category: Mapped[Optional["Category"]] = relationship("Category", back_populates="markets")
+    market_tokens: Mapped[List["MarketToken"]] = relationship(
+        "MarketToken",
+        back_populates="market",
+        cascade="all, delete-orphan",
+    )
