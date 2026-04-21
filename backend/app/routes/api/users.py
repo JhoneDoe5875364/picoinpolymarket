@@ -100,6 +100,77 @@ async def get_user_trades(
     return {"ok": True, "data": jsonable_encoder(rows)}
 
 
+@router.get("/total-markets-traded", summary="Get total markets a user has traded")
+async def get_total_markets_traded(
+    db: DbSession,
+    user_id: int = Query(..., ge=1),
+):
+    total = await users_repo.get_total_markets_traded(db, user_id=user_id)
+    return {
+        "ok": True,
+        "data": {
+            "user_id": user_id,
+            "total_markets_traded": total,
+        },
+    }
+
+
+@router.get("/total-positions-value", summary="Get total value of a user's positions")
+async def get_total_positions_value(
+    db: DbSession,
+    user_id: int = Query(..., ge=1),
+):
+    total_value = await users_repo.get_total_positions_value(db, user_id=user_id)
+    return {
+        "ok": True,
+        "data": {
+            "user_id": user_id,
+            "total_positions_value": total_value,
+        },
+    }
+
+
+@router.get("/pnl", summary="Get profit/loss in a period")
+async def get_profit_loss_by_period(
+    db: DbSession,
+    user_id: int = Query(..., ge=1),
+    period: str = Query(default="1D"),
+):
+    if period not in ["1D", "1W", "1M", "ALL"]:
+        raise HTTPException(status_code=400, detail="Invalid period")
+    stats = await users_repo.get_profit_loss_by_period(
+        db,
+        user_id=user_id,
+        period=period,
+    )
+    return {"ok": True, "data": jsonable_encoder(stats)}
+
+
+@router.get("/pnl-history", summary="Get profit/loss history in a period")
+async def get_pnl_history(
+    db: DbSession,
+    user_id: int = Query(..., ge=1),
+    period: str = Query(default="1D"),
+):
+    if period not in ["1D", "1W", "1M", "ALL"]:
+        raise HTTPException(status_code=400, detail="Invalid period")
+    history = await users_repo.get_pnl_history(
+        db,
+        user_id=user_id,
+        period=period,
+    )
+    return {"ok": True, "data": jsonable_encoder(history)}
+
+
+@router.get("/biggest-win", summary="Get biggest win from resolved markets")
+async def get_biggest_win(
+    db: DbSession,
+    user_id: int = Query(..., ge=1),
+):
+    biggest_win = await users_repo.get_biggest_win(db, user_id=user_id)
+    return {"ok": True, "data": jsonable_encoder(biggest_win)}
+
+
 @router.get("/balance")
 async def get_balance(db: DbSession, user=Depends(verify_token)):
     pi_uid = user.get("sub", "")
