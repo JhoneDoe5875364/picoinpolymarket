@@ -126,10 +126,10 @@ export default function LoginWithPi() {
   return (
     <div className="space-y-2">
       {!authUser ? <Button
-        variant='outline'
+        variant='ghost'
         onClick={onLogin}
         disabled={loading}
-        className="border-[#E08050]"
+        className="text-primary"
       >
         {loading ? (
           <Loader2 className="mr-2 h-4 w-4 animate-spin" />

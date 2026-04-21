@@ -62,9 +62,9 @@ export function MarketCard({ market }: { market: Market | any }) {
             <div className="grid grid-cols-2 gap-3 mt-3">
               <button
                 className={cn(
-                  "flex h-8 items-center justify-center rounded-md border px-4",
+                  "flex h-8 items-center justify-center rounded-md px-4",
                   "cursor-pointer text-sm font-semibold",
-                  "bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/50 hover:text-white"
+                  "bg-emerald-500/20 text-emerald-600 hover:bg-emerald-500/50 hover:text-white"
                 )}
                 onClick={onYes}
                 onMouseEnter={() => setIsYesHovered(true)}
@@ -75,9 +75,9 @@ export function MarketCard({ market }: { market: Market | any }) {
               </button>
               <button
                 className={cn(
-                  "flex h-8 items-center justify-center rounded-md border px-4",
+                  "flex h-8 items-center justify-center rounded-md px-4",
                   "cursor-pointer text-sm font-semibold",
-                  "bg-red-500/20 text-red-300 hover:bg-red-500/50 hover:text-white"
+                  "bg-red-500/20 text-red-600 hover:bg-red-500/50 hover:text-white"
                 )}
                 onClick={onNo}
                 onMouseEnter={() => setIsNoHovered(true)}

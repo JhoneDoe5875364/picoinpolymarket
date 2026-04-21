@@ -29,8 +29,8 @@ export function PredictionPanel({ market }: PredictionPanelProps) {
   const [outcome, setOutcome] = useState<"YES" | "NO">("YES");
   const [busy, setBusy] = useState(false);
   const [shares, setShares] = useState<number>(1);
-  const yesPrice = market?.yes_price ?? 0.5;
-  const noPrice = market?.no_price ?? 0.5;
+  const yesPrice = market?.outcome_price_yes ?? 0.5;
+  const noPrice = market?.outcome_price_no ?? 0.5;
 
   const selectedPrice = useMemo(
     () => (outcome === "YES" ? yesPrice : noPrice),
@@ -91,7 +91,7 @@ export function PredictionPanel({ market }: PredictionPanelProps) {
               className={cn(
                 "flex h-11 items-center justify-center rounded-md px-4",
                 "cursor-pointer text-sm font-semibold",
-                "bg-slate-800 text-slate-500",
+                "bg-secondary text-muted-foreground",
                 "peer-data-[state=checked]:bg-emerald-600 peer-data-[state=checked]:text-white",
               )}
             >
@@ -106,7 +106,7 @@ export function PredictionPanel({ market }: PredictionPanelProps) {
               className={cn(
                 "flex h-11 items-center justify-center rounded-md px-4",
                 "cursor-pointer text-sm font-semibold",
-                "bg-slate-800 text-slate-500",
+                "bg-secondary text-muted-foreground",
                 "peer-data-[state=checked]:bg-red-600 peer-data-[state=checked]:text-white",
               )}
             >
@@ -159,7 +159,7 @@ export function PredictionPanel({ market }: PredictionPanelProps) {
             onClick={handlePay}
             className={cn(
               "w-full text-lg font-bold tracking-wider",
-              "bg-sky-500 text-white hover:bg-sky-500/90 shadow-none"
+              "bg-primary text-primary-foreground hover:bg-primary/90 shadow-none"
             )}
           >
             {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

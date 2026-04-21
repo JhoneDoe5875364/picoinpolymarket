@@ -1,15 +1,17 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import LoginWithPi from "./LoginWithPi";
 import { Button } from "./ui/button";
-import { CheckCircle, Menu } from "lucide-react";
+import { CheckCircle, Menu, Moon, Sun } from "lucide-react";
 import { User } from "@/lib/types";
 import { AppNavigation } from "./AppNavigation";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 
@@ -21,11 +23,29 @@ const moreMenuItems = [
   { href: "/leaderboard", label: "Leaderboard" },
   { href: "/account", label: "Profile" },
   { href: "/admin", label: "Admin", admin: true },
-  { href: "mailto:support@predictpix.com", label: "Help Center" },
+  { href: "/help", label: "Help Center" },
   { href: "/terms", label: "Terms of Use" },
 ];
 
 export default function AppHeader({ currentUser }: AppHeaderProps) {
+  const [isDarkMode, setIsDarkMode] = useState(true);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const savedTheme = window.localStorage.getItem("theme");
+    const shouldUseDark = savedTheme ? savedTheme === "dark" : root.classList.contains("dark");
+    root.classList.toggle("dark", shouldUseDark);
+    setIsDarkMode(shouldUseDark);
+  }, []);
+
+  const toggleTheme = () => {
+    const root = document.documentElement;
+    const nextIsDark = !root.classList.contains("dark");
+    root.classList.toggle("dark", nextIsDark);
+    window.localStorage.setItem("theme", nextIsDark ? "dark" : "light");
+    setIsDarkMode(nextIsDark);
+  };
+
   const renderAuthButton = () => {
     if (currentUser) {
       return (
@@ -38,40 +58,55 @@ export default function AppHeader({ currentUser }: AppHeaderProps) {
     return <LoginWithPi />;
   }
 
+  const renderMoreMenu = () => {
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 border border-border bg-background text-foreground hover:bg-secondary hover:text-foreground"
+            aria-label="Open more menu"
+          >
+            <Menu className="h-5 w-5" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-48">
+          {moreMenuItems.map((item) => (
+            <DropdownMenuItem key={item.label} asChild>
+              <Link href={item.href}>{item.label}</Link>
+            </DropdownMenuItem>
+          ))}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={toggleTheme}>
+            {isDarkMode ? (
+              <Sun className="h-4 w-4" />
+            ) : (
+              <Moon className="h-4 w-4" />
+            )}
+            {isDarkMode ? "Light mode" : "Dark mode"}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  }
+
   return (
     <header className="sticky top-0 z-40 bg-background/70 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
       <div className="border-b">
         <div className="container h-14 flex items-center justify-between relative">
           <Link href="/" className="flex items-center gap-0 font-bold text-lg">
             <span className="text-xl font-headline font-bold tracking-tight">
-              <span className="text-chart-2">Predict</span>
-              <span className="text-accent">Pix</span>
+              <span className="text-foreground">Predict</span>
+              <span className="text-primary">Pix</span>
             </span>
           </Link>
 
-          <div className="hidden md:flex">
+          <div className="flex">
             <div className="flex items-center gap-2">
               {renderAuthButton()}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-9 w-9 rounded-xl border border-white/20 bg-[#0f1724] text-cyan-400 hover:bg-[#172334] hover:text-cyan-300"
-                    aria-label="Open more menu"
-                  >
-                    <Menu className="h-5 w-5 text-white" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
-                  {moreMenuItems.map((item) => (
-                    <DropdownMenuItem key={item.label} asChild>
-                      <Link href={item.href}>{item.label}</Link>
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <div>{renderMoreMenu()}</div>
             </div>
           </div>
         </div>

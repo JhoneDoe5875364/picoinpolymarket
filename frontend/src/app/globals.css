@@ -4,64 +4,64 @@
 
 @layer base {
   :root {
-    --background: 240 25% 10%;
-    --foreground: 0 0% 98%;
-    --card: 228 48% 8%;
-    --card-foreground: 0 0% 98%;
-    --popover: 228 48% 8%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 312 100% 59%; /* Primary Pink */
-    --primary-foreground: 0 0% 98%;
-    --secondary: 228 48% 12%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 228 48% 10%;
-    --muted-foreground: 225 4% 51%; /* Secondary Text */
-    --accent: 28 100% 55%; /* Accent Orange */
-    --accent-foreground: 20 11% 6%;
-    --destructive: 0 63% 31%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 228 48% 15%;
-    --input: 228 48% 15%;
-    --ring: 28 100% 55%; /* Accent Orange for focus rings */
+    /* Polymarket brand colors: #2E5CFF / #000000 / #FFFFFF */
+    --background: 0 0% 100%; /* #FFFFFF */
+    --foreground: 0 0% 0%; /* #000000 */
+    --card: 0 0% 100%; /* #FFFFFF */
+    --card-foreground: 0 0% 0%; /* #000000 */
+    --popover: 0 0% 100%; /* #FFFFFF */
+    --popover-foreground: 0 0% 0%; /* #000000 */
+    --primary: 226 100% 59%; /* #2E5CFF */
+    --primary-foreground: 0 0% 100%; /* #FFFFFF */
+    --secondary: 0 0% 96%; /* near-white neutral */
+    --secondary-foreground: 0 0% 0%; /* #000000 */
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 40%;
+    --accent: 226 100% 59%; /* #2E5CFF */
+    --accent-foreground: 0 0% 100%; /* #FFFFFF */
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%; /* #FFFFFF */
+    --border: 0 0% 89%;
+    --input: 0 0% 89%;
+    --ring: 226 100% 59%; /* #2E5CFF */
     --radius: 0.5rem;
 
-    --chart-1: 312 100% 59%; /* Primary Pink */
-    --chart-2: 182 100% 50%; /* Primary Blue */
-    --chart-3: 28 100% 55%;  /* Accent Orange */
-    --chart-4: 220 70% 50%;
-    --chart-5: 160 60% 45%;
+    --chart-1: 226 100% 59%; /* #2E5CFF */
+    --chart-2: 0 0% 0%; /* #000000 */
+    --chart-3: 0 0% 25%;
+    --chart-4: 0 0% 45%;
+    --chart-5: 0 0% 65%;
 
-    /* --- Probability + action colors (derived from your palette) --- */
-    --yes: var(--chart-1);   /* YES = your Primary Pink */
-    --no: var(--chart-2);    /* NO  = your Primary Blue */
-    --track: 228 20% 18%;    /* neutral bar track (dark gray) */
+    --yes: var(--primary);
+    --no: 0 0% 0%; /* #000000 */
+    --track: 0 0% 89%;
   }
 
   .dark {
-    --background: 240 25% 10%;
-    --foreground: 0 0% 98%;
-    --card: 228 48% 8%;
-    --card-foreground: 0 0% 98%;
-    --popover: 228 48% 8%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 312 100% 59%; /* Primary Pink */
-    --primary-foreground: 0 0% 98%;
-    --secondary: 228 48% 12%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 228 48% 10%;
-    --muted-foreground: 225 4% 51%; /* Secondary Text */
-    --accent: 28 100% 55%; /* Accent Orange */
-    --accent-foreground: 20 11% 6%;
-    --destructive: 0 63% 31%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 228 48% 15%;
-    --input: 228 48% 15%;
-    --ring: 28 100% 55%; /* Accent Orange for focus rings */
+    /* Polymarket-like dark mode surface */
+    --background: 230 10% 8%; /* #0d1320 */
+    --foreground: 0 0% 98%; /* #FAFAFA */
+    --card: 224 29% 12%; /* #161d2a */
+    --card-foreground: 0 0% 98%; /* #FAFAFA */
+    --popover: 224 29% 12%; /* #161d2a */
+    --popover-foreground: 0 0% 98%; /* #FAFAFA */
+    --primary: 226 100% 59%; /* #2E5CFF */
+    --primary-foreground: 0 0% 100%; /* #FFFFFF */
+    --secondary: 223 23% 18%; /* #252f38 */
+    --secondary-foreground: 0 0% 98%; /* #FAFAFA */
+    --muted: 223 23% 16%;
+    --muted-foreground: 220 11% 72%;
+    --accent: 226 100% 59%; /* #2E5CFF */
+    --accent-foreground: 0 0% 100%; /* #FFFFFF */
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%; /* #FFFFFF */
+    --border: 223 20% 24%;
+    --input: 223 20% 24%;
+    --ring: 226 100% 59%; /* #2E5CFF */
 
-    /* keep probability vars consistent in dark mode */
-    --yes: var(--chart-1);
-    --no: var(--chart-2);
-    --track: 228 20% 18%;
+    --yes: var(--primary);
+    --no: 0 0% 98%; /* invert in dark mode for contrast */
+    --track: 223 20% 24%;
   }
 }
 
@@ -83,11 +83,11 @@
 
 @layer components {
   .btn-yes {
-    background-image: linear-gradient(30deg, #00F5FF, #FF2ECF);
+    background-color: #2e5cff;
     @apply text-white font-bold hover:opacity-90 transition-opacity;
   }
   .btn-no {
-    background-image: linear-gradient(30deg, #FF2ECF, #00F5FF);
+    background-color: #000000;
     @apply text-white font-bold hover:opacity-90 transition-opacity;
   }
   .glowing-focus {

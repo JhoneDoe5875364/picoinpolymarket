@@ -14,9 +14,18 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <head>
         <script src="https://sdk.minepi.com/pi-sdk.js"></script>
+        <Script id="theme-init" strategy="beforeInteractive">
+          {`
+            try {
+              var savedTheme = localStorage.getItem('theme');
+              var useDark = savedTheme ? savedTheme === 'dark' : true;
+              document.documentElement.classList.toggle('dark', useDark);
+            } catch (_) {}
+          `}
+        </Script>
 
         {/* <script>
           {`Pi.init({ version: "2.0", sandbox: true });`}

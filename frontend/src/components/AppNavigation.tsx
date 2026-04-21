@@ -33,7 +33,7 @@ export function AppNavigation({ currentUser: _currentUser }: AppNavigationProps)
               href={href}
               className={cn(
                 "flex items-center text-sm font-medium transition-colors hover:text-primary px-3 py-2 rounded-md whitespace-nowrap",
-                isActive ? "text-primary bg-secondary" : "text-white/80"
+                isActive ? "text-primary bg-secondary" : "text-foreground/70"
               )}
             >
               {category}
