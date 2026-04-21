@@ -470,36 +470,25 @@ def _build_position_stats(
 ) -> dict[tuple[int, int], dict[str, Decimal]]:
     stats: dict[tuple[int, int], dict[str, Decimal]] = defaultdict(
         lambda: {
-            "yes_shares": Decimal("0"),
-            "no_shares": Decimal("0"),
-            "yes_pi_amount": Decimal("0"),
-            "no_pi_amount": Decimal("0"),
+            "shares": Decimal("0"),
+            "pi_amount": Decimal("0"),
         }
     )
-    for user_id, market_id, side, outcome, shares, pi_amount in trades:
-        key = (market_id, user_id)
-        share_sign = Decimal("1") if side == "BUY" else Decimal("-1")
-        amount_sign = Decimal("1") if side == "BUY" else Decimal("-1")
-        if outcome == "YES":
-            stats[key]["yes_shares"] += shares * share_sign
-            stats[key]["yes_pi_amount"] += pi_amount * amount_sign
-        elif outcome == "NO":
-            stats[key]["no_shares"] += shares * share_sign
-            stats[key]["no_pi_amount"] += pi_amount * amount_sign
+    for user_id, market_id, token_id, side, outcome, shares, pi_amount in trades:
+        key = (market_id, user_id, outcome)
+        stats[key]["token_id"] = token_id
+        stats[key]["side"] = side
+        stats[key]["shares"] += shares
+        stats[key]["pi_amount"] += pi_amount
     return stats
 
 
 async def run_seed_market_positions(session: AsyncSession) -> None:
-    market_result = await session.execute(select(Market.id, Market.token_yes_id, Market.token_no_id))
-    market_map = {
-        market_id: (token_yes_id, token_no_id)
-        for market_id, token_yes_id, token_no_id in market_result.all()
-    }
-
     trades_result = await session.execute(
         select(
             MarketTrade.taker_user_id,
             MarketTrade.market_id,
+            MarketTrade.token_id,
             MarketTrade.side,
             MarketTrade.outcome,
             MarketTrade.shares,
@@ -515,33 +504,23 @@ async def run_seed_market_positions(session: AsyncSession) -> None:
     now: datetime = datetime.now(timezone.utc)
     quant = Decimal("0.0001")
 
-    for (market_id, user_id), stat in sorted(position_stats.items()):
-        token_ids = market_map.get(market_id)
-        if token_ids is None:
-            continue
-        yes_token_id, no_token_id = token_ids
-        if not yes_token_id or not no_token_id:
-            continue
-
-        yes_shares = max(stat["yes_shares"], Decimal("0")).quantize(quant)
-        no_shares = max(stat["no_shares"], Decimal("0")).quantize(quant)
-        yes_pi_amount = max(stat["yes_pi_amount"], Decimal("0")).quantize(quant)
-        no_pi_amount = max(stat["no_pi_amount"], Decimal("0")).quantize(quant)
-        avg_price_yes = (yes_pi_amount / yes_shares).quantize(quant) if yes_shares > 0 else Decimal("0.0000")
-        avg_price_no = (no_pi_amount / no_shares).quantize(quant) if no_shares > 0 else Decimal("0.0000")
+    for (market_id, user_id, outcome), stat in sorted(position_stats.items()):
+        token_id = stat["token_id"]
+        side = stat["side"]
+        shares = max(stat["shares"], Decimal("0")).quantize(quant)
+        pi_amount = max(stat["pi_amount"], Decimal("0")).quantize(quant)
+        avg_price = (pi_amount / shares).quantize(quant) if shares > 0 else Decimal("0.0000")
 
         await _ensure_market_position(
             session,
             market_id=market_id,
             user_id=user_id,
-            yes_token_id=yes_token_id,
-            no_token_id=no_token_id,
-            yes_shares=yes_shares,
-            no_shares=no_shares,
-            yes_pi_amount=yes_pi_amount,
-            no_pi_amount=no_pi_amount,
-            avg_price_yes=avg_price_yes,
-            avg_price_no=avg_price_no,
+            token_id=token_id,
+            side=side,
+            outcome=outcome,
+            shares=shares,
+            pi_amount=pi_amount,
+            avg_price=avg_price,
             created_at=now,
             updated_at=now,
         )

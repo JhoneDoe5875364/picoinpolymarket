@@ -93,12 +93,12 @@ export function MarketParticipants({ market }: { market: Market }) {
           order: "shares",
           ascending: String(sortDirection === "ASC"),
         });
-        const response = await apiFetch<{ data?: MarketPositionGroup[] }>(`/markets/positions?${params.toString()}`);
+        const response = await apiFetch<{ data?: MarketPositionGroup }>(`/markets/positions?${params.toString()}`);
         if (!mounted) return;
 
-        const groups = response?.data ?? [];
-        const yes = groups.find((item) => item.token_id === market.token_yes_id)?.positions ?? [];
-        const no = groups.find((item) => item.token_id === market.token_no_id)?.positions ?? [];
+        const groups: MarketPositionGroup = response?.data ?? { YES: [], NO: [] };
+        const yes = groups.YES;
+        const no = groups.NO;
         setYesPositions(yes);
         setNoPositions(no);
       } catch (error) {

@@ -297,31 +297,33 @@ async def market_holders(
 ) -> List[dict[str, Any]]:
     stmt_yes = (
         select(
-            MarketPosition.yes_token_id.label("token_id"),
+            MarketPosition.token_id.label("token_id"),
             MarketPosition.user_id.label("user_id"),
-            MarketPosition.yes_shares.label("shares"),
-            MarketPosition.avg_price_yes.label("avg_price"),
+            MarketPosition.shares.label("shares"),
+            MarketPosition.avg_price.label("avg_price"),
         )
         .where(
             MarketPosition.market_id == market_id,
-            MarketPosition.yes_shares >= min_balance,
+            MarketPosition.outcome == "YES",
+            MarketPosition.shares >= min_balance,
         )
-        .order_by(MarketPosition.yes_shares.desc())
+        .order_by(MarketPosition.shares.desc())
         .limit(limit)
     )
 
     stmt_no = (
         select(
-            MarketPosition.no_token_id.label("token_id"),
+            MarketPosition.token_id.label("token_id"),
             MarketPosition.user_id.label("user_id"),
-            MarketPosition.no_shares.label("shares"),
-            MarketPosition.avg_price_no.label("avg_price"),
+            MarketPosition.shares.label("shares"),
+            MarketPosition.avg_price.label("avg_price"),
         )
         .where(
             MarketPosition.market_id == market_id,
-            MarketPosition.no_shares >= min_balance,
+            MarketPosition.outcome == "NO",
+            MarketPosition.shares >= min_balance,
         )
-        .order_by(MarketPosition.no_shares.desc())
+        .order_by(MarketPosition.shares.desc())
         .limit(limit)
     )
 
@@ -352,7 +354,7 @@ async def list_positions(
     order: Optional[str] = "shares",
     ascending: bool = False,
 ) -> List[dict[str, Any]]:
-    if order not in ["shares"]:
+    if order not in ["pnl", "shares", "username", "avg_price", "pi_amount", "created_at"]:
         raise ValueError("Invalid order")
     if status not in ["ALL", "OPEN", "CLOSED"]:
         raise ValueError("Invalid status")
@@ -371,14 +373,16 @@ async def list_positions(
             MarketPosition.id.label("id"),
             MarketPosition.market_id.label("market_id"),
             MarketPosition.user_id.label("user_id"),
-            MarketPosition.yes_token_id.label("token_id"),
+            MarketPosition.token_id.label("token_id"),
+            MarketPosition.side.label("side"),
+            MarketPosition.outcome.label("outcome"),
             Market.question.label("question"),
-            MarketPosition.yes_shares.label("shares"),
-            MarketPosition.yes_pi_amount.label("pi_amount"),
+            MarketPosition.shares.label("shares"),
+            MarketPosition.pi_amount.label("pi_amount"),
         )
         .join(Market, Market.id == MarketPosition.market_id)
-        .where(*base_conditions, MarketPosition.yes_shares > 0)
-        .order_by(MarketPosition.yes_shares.asc() if ascending else MarketPosition.yes_shares.desc())
+        .where(*base_conditions, MarketPosition.outcome == "YES")
+        .order_by(MarketPosition.shares.asc() if ascending else MarketPosition.shares.desc())
         .limit(limit)
         .offset(offset)
     )
@@ -388,27 +392,29 @@ async def list_positions(
             MarketPosition.id.label("id"),
             MarketPosition.market_id.label("market_id"),
             MarketPosition.user_id.label("user_id"),
-            MarketPosition.no_token_id.label("token_id"),
+            MarketPosition.token_id.label("token_id"),
+            MarketPosition.side.label("side"),
+            MarketPosition.outcome.label("outcome"),
             Market.question.label("question"),
-            MarketPosition.no_shares.label("shares"),
-            MarketPosition.no_pi_amount.label("pi_amount"),
+            MarketPosition.shares.label("shares"),
+            MarketPosition.pi_amount.label("pi_amount"),
         )
         .join(Market, Market.id == MarketPosition.market_id)
-        .where(*base_conditions, MarketPosition.no_shares > 0)
-        .order_by(MarketPosition.no_shares.asc() if ascending else MarketPosition.no_shares.desc())
+        .where(*base_conditions, MarketPosition.outcome == "NO")
+        .order_by(MarketPosition.shares.asc() if ascending else MarketPosition.shares.desc())
         .limit(limit)
         .offset(offset)
     )
 
-    result = await session.execute(union_all(yes_stmt, no_stmt))
-    rows = result.mappings().all()
+    yes_result = await session.execute(yes_stmt)
+    no_result = await session.execute(no_stmt)
+    yes_rows = yes_result.mappings().all()
+    no_rows = no_result.mappings().all()
 
-    grouped: dict[str, list[dict[str, Any]]] = {}
-    for row in rows:
-        token = row["token_id"]
-        grouped.setdefault(token, []).append(row)
-
-    return [{"token_id": token_id, "positions": positions} for token_id, positions in grouped.items()]
+    return {
+        "YES": yes_rows,
+        "NO": no_rows,
+    }
 
 
 async def list_market_trades(
@@ -489,10 +495,12 @@ async def get_position(
     *,
     market_id: int,
     user_id: int,
+    outcome: Literal["YES", "NO"],
 ) -> Optional[dict[str, Any]]:
     stmt = select(MarketPosition).where(
         MarketPosition.market_id == market_id,
         MarketPosition.user_id == user_id,
+        MarketPosition.outcome == outcome,
     )
     result = await session.execute(stmt)
     row = result.scalar_one_or_none()

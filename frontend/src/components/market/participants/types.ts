@@ -22,8 +22,8 @@ export interface MarketPosition {
 }
 
 export interface MarketPositionGroup {
-  token_id: string;
-  positions: MarketPosition[];
+  YES: MarketPosition[];
+  NO: MarketPosition[];
 }
 
 export interface MarketTradeActivity {

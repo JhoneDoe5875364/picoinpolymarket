@@ -53,20 +53,47 @@ async def get_open_positions(
     db: DbSession,
     user_id: int = Query(..., ge=1),
     status: Optional[str] = Query(default='ALL'),
+    search: str = Query(default=""),
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
-    sort_by: str = Query(default="shares"),
-    sort_direction: str = Query(default="DESC"),
+    order: str = Query(default="shares"),
+    ascending: bool = Query(default=False),
 ):
     try:
         rows = await users_repo.list_positions(
             db,
             user_id=user_id,
             status=status,
+            search=search,
             limit=limit,
             offset=offset,
-            sort_by=sort_by,
-            sort_direction=sort_direction,
+            order=order,
+            ascending=ascending,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True, "data": jsonable_encoder(rows)}
+
+
+@router.get("/trades", summary="Get trades by user")
+async def get_user_trades(
+    db: DbSession,
+    user_id: int = Query(..., ge=1),
+    search: str = Query(default=""),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    order: str = Query(default="created_at"),
+    ascending: bool = Query(default=False),
+):
+    try:
+        rows = await users_repo.list_trades(
+            db,
+            user_id=user_id,
+            search=search,
+            limit=limit,
+            offset=offset,
+            order=order,
+            ascending=ascending,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

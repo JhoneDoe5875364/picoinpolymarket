@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import func, select, union_all, update
+from sqlalchemy import Float, func, select, union_all, update
 from typing import Any, List, Optional, Tuple
 
 from sqlalchemy import text
@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.tables.market import Market
 from app.models.tables.market_position import MarketPosition
+from app.models.tables.market_trades import MarketTrade
 from app.models.tables.user import User
 
 
@@ -94,15 +95,22 @@ async def list_positions(
     *,
     user_id: int,
     status: Optional[str] = "ALL",
+    search: str = "",
     limit: int = 20,
     offset: int = 0,
-    sort_by: Optional[str] = "shares",
-    sort_direction: Optional[str] = "DESC",
+    order: Optional[str] = "shares",
+    ascending: bool = False,
 ) -> List[dict[str, Any]]:
-    if sort_by not in ["shares"]:
-        raise ValueError("Invalid sort_by")
-    if sort_direction not in ["ASC", "DESC"]:
-        raise ValueError("Invalid sort_direction")
+    order_columns = {
+        "pnl": "pnl",
+        "shares": "shares",
+        "market_title": "question",
+        "avg_price": "avg_price",
+        "current_price": "current_price",
+        "pi_amount": "pi_amount",
+    }
+    if order not in order_columns:
+        raise ValueError("Invalid order")
     if status not in ["ALL", "OPEN", "CLOSED"]:
         raise ValueError("Invalid status")
 
@@ -114,50 +122,115 @@ async def list_positions(
         base_conditions.append(Market.is_closed == False)
     elif status == "CLOSED":
         base_conditions.append(Market.is_closed == True)
+    if search and search.strip():
+        base_conditions.append(Market.question.ilike(f"%{search}%"))
 
-    yes_stmt = (
+    base_yes_stmt = (
         select(
-            MarketPosition.market_id.label("id"),
-            MarketPosition.id.label("position_id"),
+            MarketPosition.id.label("id"),
             MarketPosition.market_id.label("market_id"),
             MarketPosition.user_id.label("user_id"),
-            MarketPosition.yes_token_id.label("token_id"),
+            MarketPosition.token_id.label("token_id"),
+            MarketPosition.side.label("side"),
+            MarketPosition.outcome.label("outcome"),
             Market.question.label("question"),
-            MarketPosition.yes_shares.label("shares"),
-            MarketPosition.yes_pi_amount.label("pi_amount"),
+            Market.icon.label("icon"),
+            MarketPosition.shares.label("shares"),
+            MarketPosition.pi_amount.label("pi_amount"),
+            MarketPosition.avg_price.label("avg_price"),
+            Market.outcome_price_yes.label("current_price"),
+            func.cast(MarketPosition.shares * Market.outcome_price_yes - MarketPosition.pi_amount, Float).label("pnl"),
+            func.cast((MarketPosition.shares * Market.outcome_price_yes - MarketPosition.pi_amount) / MarketPosition.pi_amount * 100, Float).label("pnl_percent"),
+            func.cast(MarketPosition.shares * Market.outcome_price_yes, Float).label("current_pi_amount"),
         )
         .join(Market, Market.id == MarketPosition.market_id)
-        .where(*base_conditions, MarketPosition.yes_shares > 0)
-        .order_by(MarketPosition.yes_shares.asc() if sort_direction == "asc" else MarketPosition.yes_shares.desc())
+        .where(*base_conditions, MarketPosition.outcome == "YES")
+    )
+    base_no_stmt = (
+        select(
+            MarketPosition.id.label("id"),
+            MarketPosition.market_id.label("market_id"),
+            MarketPosition.user_id.label("user_id"),
+            MarketPosition.token_id.label("token_id"),
+            MarketPosition.side.label("side"),
+            MarketPosition.outcome.label("outcome"),
+            Market.question.label("question"),
+            Market.icon.label("icon"),
+            MarketPosition.shares.label("shares"),
+            MarketPosition.pi_amount.label("pi_amount"),
+            MarketPosition.avg_price.label("avg_price"),
+            Market.outcome_price_no.label("current_price"),
+            func.cast(MarketPosition.shares * Market.outcome_price_no - MarketPosition.pi_amount, Float).label("pnl"),
+            func.cast((MarketPosition.shares * Market.outcome_price_no - MarketPosition.pi_amount) / MarketPosition.pi_amount * 100, Float).label("pnl_percent"),
+            func.cast(MarketPosition.shares * Market.outcome_price_no, Float).label("current_pi_amount"),
+        )
+        .join(Market, Market.id == MarketPosition.market_id)
+        .where(*base_conditions, MarketPosition.outcome == "NO")
+    )
+
+    union_subquery = union_all(base_yes_stmt, base_no_stmt).subquery()
+    order_column = union_subquery.c[order_columns[order]]
+    order_expr = order_column.asc() if ascending else order_column.desc()
+
+    stmt = (
+        select(union_subquery)
+        .order_by(order_expr)
         .limit(limit)
         .offset(offset)
     )
 
-    no_stmt = (
-        select(
-            MarketPosition.market_id.label("id"),
-            MarketPosition.id.label("position_id"),
-            MarketPosition.market_id.label("market_id"),
-            MarketPosition.user_id.label("user_id"),
-            MarketPosition.no_token_id.label("token_id"),
-            Market.question.label("question"),
-            MarketPosition.no_shares.label("shares"),
-            MarketPosition.no_pi_amount.label("pi_amount"),
-        )
-        .join(Market, Market.id == MarketPosition.market_id)
-        .where(*base_conditions, MarketPosition.no_shares > 0)
-        .order_by(MarketPosition.no_shares.asc() if sort_direction == "asc" else MarketPosition.no_shares.desc())
-        .limit(limit)
-        .offset(offset)
-    )
-
-    result = await session.execute(union_all(yes_stmt, no_stmt))
+    result = await session.execute(stmt)
     rows = result.mappings().all()
 
-    grouped: dict[str, list[dict[str, Any]]] = {}
-    for row in rows:
-        token = row["token_id"]
-        grouped.setdefault(token, []).append(row)
+    return rows
 
-    return [{"token_id": token_id, "positions": positions} for token_id, positions in grouped.items()]
+
+async def list_trades(
+    session: AsyncSession,
+    *,
+    user_id: int,
+    search: str = "",
+    limit: int = 20,
+    offset: int = 0,
+    order: Optional[str] = "created_at",
+    ascending: bool = False,
+) -> List[dict[str, Any]]:
+    order_columns = {
+        "created_at": MarketTrade.created_at,
+        "shares": MarketTrade.shares,
+        "price": MarketTrade.price,
+        "pi_amount": MarketTrade.pi_amount,
+    }
+    if order not in order_columns:
+        raise ValueError("Invalid order")
+
+    base_conditions: list[Any] = [MarketTrade.taker_user_id == user_id]
+    if search and search.strip():
+        base_conditions.append(Market.question.ilike(f"%{search}%"))
+
+    order_column = order_columns[order]
+    order_expr = order_column.asc() if ascending else order_column.desc()
+
+    stmt = (
+        select(
+            MarketTrade.id.label("id"),
+            MarketTrade.created_at.label("created_at"),
+            MarketTrade.market_id.label("market_id"),
+            Market.question.label("question"),
+            Market.icon.label("icon"),
+            MarketTrade.side.label("side"),
+            MarketTrade.outcome.label("outcome"),
+            MarketTrade.price.label("price"),
+            MarketTrade.shares.label("shares"),
+            MarketTrade.pi_amount.label("pi_amount"),
+        )
+        .join(Market, Market.id == MarketTrade.market_id)
+        .where(*base_conditions)
+        .order_by(order_expr)
+        .limit(limit)
+        .offset(offset)
+    )
+
+    result = await session.execute(stmt)
+    return result.mappings().all()
 
