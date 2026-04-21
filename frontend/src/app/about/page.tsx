@@ -5,7 +5,7 @@ import { PredictPixLogo } from "@/components/PredictPixLogo";
 export default function AboutPage() {
   return (
     <div className="container mx-auto py-12 px-4 sm:px-6 lg:px-8">
-      <Card className="max-w-4xl mx-auto">
+      <Card className="max-w-[1400px] mx-auto">
         <CardHeader className="text-center">
           <div className="mx-auto bg-primary/10 rounded-full p-4 w-fit">
             <PredictPixLogo className="h-12 w-12 text-primary" />

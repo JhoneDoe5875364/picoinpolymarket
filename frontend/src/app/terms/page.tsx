@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 export default function TermsPage() {
   return (
     <div className="container mx-auto py-12 px-4 sm:px-6 lg:px-8">
-      <Card className="max-w-4xl mx-auto">
+      <Card className="max-w-[1400px] mx-auto">
         <CardHeader>
           <CardTitle className="text-3xl font-bold font-headline">Terms of Service</CardTitle>
           <p className="text-muted-foreground">Last updated: {new Date().toLocaleDateString()}</p>
