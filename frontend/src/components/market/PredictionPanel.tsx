@@ -89,7 +89,7 @@ export function PredictionPanel({ market }: PredictionPanelProps) {
             <Label
               htmlFor="yes"
               className={cn(
-                "flex h-11 items-center justify-center rounded-md px-4",
+                "flex h-10 items-center justify-center rounded-md px-4",
                 "cursor-pointer text-sm font-semibold",
                 "bg-secondary text-muted-foreground",
                 "peer-data-[state=checked]:bg-emerald-600 peer-data-[state=checked]:text-white",
@@ -104,7 +104,7 @@ export function PredictionPanel({ market }: PredictionPanelProps) {
             <Label
               htmlFor="no"
               className={cn(
-                "flex h-11 items-center justify-center rounded-md px-4",
+                "flex h-10 items-center justify-center rounded-md px-4",
                 "cursor-pointer text-sm font-semibold",
                 "bg-secondary text-muted-foreground",
                 "peer-data-[state=checked]:bg-red-600 peer-data-[state=checked]:text-white",
@@ -116,22 +116,24 @@ export function PredictionPanel({ market }: PredictionPanelProps) {
         </RadioGroup>
 
         <div className="space-y-4">
-          <div className="flex justify-between">
-            <span className="text-white">Price</span>
-            <span>{selectedPrice.toFixed(2)} π</span>
-          </div>
-          <div className="flex w-full items-center gap-2">
-            <Label htmlFor="amount" className="w-1/2">
-              Shares
-            </Label>
-            <Input
-              id="amount"
-              type="number"
-              min={1}
-              value={shares}
-              onChange={(e) => setShares(+e.target.value)}
-              className="w-1/2 text-right text-foreground"
-            />
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-foreground">Price</span>
+              <span>{selectedPrice.toFixed(2)} π</span>
+            </div>
+            <div className="flex w-full items-center gap-2">
+              <Label htmlFor="amount" className="w-1/2">
+                Shares
+              </Label>
+              <Input
+                id="amount"
+                type="number"
+                min={1}
+                value={shares}
+                onChange={(e) => setShares(+e.target.value)}
+                className="h-8 w-1/2 text-right text-foreground"
+              />
+            </div>
           </div>
 
           <div className="space-y-2 text-sm">
@@ -144,6 +146,9 @@ export function PredictionPanel({ market }: PredictionPanelProps) {
               <span className="text-muted-foreground">Transaction Fee ({(FEE * 100).toFixed(0)}%)</span>
               <span>{piFee.toFixed(2)} π</span>
             </div>
+          </div>
+
+          <div className="space-y-2 text-sm">
             <Separator />
             <div className="flex justify-between font-semibold">
               <span>Total Pi Amount (incl. fee)</span>

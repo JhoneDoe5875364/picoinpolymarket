@@ -87,7 +87,7 @@ export function MarketCard({ market }: { market: Market | any }) {
                 {isNoHovered ? `${noProbability}%` : "No"}
               </button>
             </div>
-            <div className="flex justify-between text-xs text-white/70 mt-2 md:mt-4">
+            <div className="mt-2 flex justify-between text-xs text-muted-foreground md:mt-4">
               <span>Volume: <span className="font-semibold">{fmtNum(volume)} π</span></span>
               <span>End Date: {fmtShortDate(market?.end_date)}</span>
             </div>

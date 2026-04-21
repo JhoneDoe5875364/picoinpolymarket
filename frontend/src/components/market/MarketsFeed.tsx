@@ -157,15 +157,15 @@ export default function MarketsFeed({ selectedCategory = "All" }: MarketsFeedPro
   }, [hasMore, loading, loadingMore, selectedCategory]);
 
   return (
-    <div className="container py-8 px-4 sm:px-8 lg:px-8">
-      <section className="mx-auto max-w-[1400px] text-left mb-8 sm:mb-10">
+    <div className="container py-4 px-4 sm:px-8 lg:px-8">
+      <section className="mx-auto max-w-[1400px] text-left mb-2 sm:mb-4">
         {/* <h1 className="font-headline text-2xl lg:text-3xl xl:text-4xl font-bold tracking-tight">
           Prediction Markets powered by <span className="text-primary">Pi</span>
         </h1>
-        <p className="text-white/80 mt-3 sm:mt-4">Browse and forecast on a variety of markets.</p>
-        <p className="text-sm text-white/60 mt-2">
-          Category: <span className="text-white">{selectedCategory}</span>
-        </p> */}
+        <p className="text-white/80 mt-3 sm:mt-4">Browse and forecast on a variety of markets.</p>*/}
+        <p className="text-md text-muted-foreground mt-2">
+          <span className="text-foreground font-semibold">{selectedCategory === "All" ? "All Markets" : selectedCategory}</span>
+        </p>
       </section>
       <section className="mx-auto max-w-[1400px] px-0 sm:px-0">
         <div className={MARKETS_GRID_CLASS}>

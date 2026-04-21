@@ -178,10 +178,10 @@ export function PriceHistoryChart({ market }: PriceHistoryChartProps) {
       </ChartContainer>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-sm">
         <div className="flex items-center gap-3">
-          <div className="text-white">π {(market.volume ?? 0).toLocaleString()} Vol.</div>
+          <div className="text-foreground">π {(market.volume ?? 0).toLocaleString()} Vol.</div>
           <div className="hidden md:flex items-center gap-1">
-            <Clock className="h-3 w-3 text-gray-400" />
-            <div className="text-gray-400">{formatDate(market.end_date, "PP")}</div>
+            <Clock className="h-3 w-3 text-muted-foreground" />
+            <div className="text-muted-foreground">{formatDate(market.end_date, "PP")}</div>
           </div>
         </div>
 
