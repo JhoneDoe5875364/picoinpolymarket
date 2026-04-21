@@ -21,7 +21,7 @@ interface AppHeaderProps {
 
 const moreMenuItems = [
   { href: "/leaderboard", label: "Leaderboard" },
-  { href: "/account", label: "Profile" },
+  { href: "/profile", label: "Profile" },
   { href: "/admin", label: "Admin", admin: true },
   { href: "/help", label: "Help Center" },
   { href: "/terms", label: "Terms of Use" },

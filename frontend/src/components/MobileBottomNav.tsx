@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 const menuItems = [
   { href: "/", label: "Home", icon: House },
   { href: "/leaderboard", label: "Leaderboard", icon: Trophy },
-  { href: "/account", label: "Profile", icon: UserRound },
+  { href: "/profile", label: "Profile", icon: UserRound },
 ];
 
 export function MobileBottomNav() {
