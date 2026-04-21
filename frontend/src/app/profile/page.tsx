@@ -2,9 +2,10 @@
 
 import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ProfileOverview } from '@/components/profile/profile-overview';
-import { ProfilePositionsTab } from '@/components/profile/profile-positions-tab';
-import { ProfileActivityTab } from '@/components/profile/profile-activity-tab';
+import { ProfileOverview } from '@/components/profile/ProfileOverview';
+import { ProfilePositionsTab } from '@/components/profile/ProfilePositionsTab';
+import { ProfileActivityTab } from '@/components/profile/ProfileActivityTab';
+import StatusTabs from '@/components/profile/StatusTabs';
 
 export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState<'positions' | 'activity'>('positions');

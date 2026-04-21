@@ -213,8 +213,8 @@ export function ProfileActivityTab({
                     </TableCell>
                   </TableRow>
                 ) : (
-                  trades.map((trade) => (
-                    <TableRow key={`trade-desktop-${trade.id}-${trade.createdAt}`}>
+                  trades.map((trade, rowIndex) => (
+                    <TableRow key={`trade-desktop-${trade.id}-${trade.createdAt}-${rowIndex}`}>
                       <TableCell className="hidden md:block text-sm font-semibold">{trade.side === 'BUY' ? 'Buy' : 'Sell'}</TableCell>
                       <TableCell>
                         <div className="flex min-w-0 items-center gap-3">

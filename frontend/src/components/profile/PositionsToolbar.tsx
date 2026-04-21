@@ -4,52 +4,17 @@ import { Search, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
-import { cn } from '@/lib/utils';
+import StatusTabs from './StatusTabs';
 
 type PositionsToolbarProps = {
-  positionFilter: 'active' | 'closed';
-  onPositionFilterChange: (value: 'active' | 'closed') => void;
+  status: 'active' | 'closed';
+  onStatusChange: (value: 'active' | 'closed') => void;
   sortBy: string;
   sortOptions: readonly string[];
   onSortChange: (value: string) => void;
   searchTerm: string;
   onSearchTermChange: (value: string) => void;
 };
-
-function PositionFilterToggle({
-  positionFilter,
-  onPositionFilterChange,
-  activeClassName,
-}: {
-  positionFilter: 'active' | 'closed';
-  onPositionFilterChange: (value: 'active' | 'closed') => void;
-  activeClassName: string;
-}) {
-  return (
-    <div className="flex rounded-lg border border-border p-1">
-      <button
-        type="button"
-        onClick={() => onPositionFilterChange('active')}
-        className={cn(
-          'rounded-md px-4 py-1.5 text-sm font-semibold transition-colors',
-          positionFilter === 'active' ? activeClassName : 'text-muted-foreground hover:text-foreground'
-        )}
-      >
-        Active
-      </button>
-      <button
-        type="button"
-        onClick={() => onPositionFilterChange('closed')}
-        className={cn(
-          'rounded-md px-4 py-1.5 text-sm font-semibold transition-colors',
-          positionFilter === 'closed' ? activeClassName : 'text-muted-foreground hover:text-foreground'
-        )}
-      >
-        Closed
-      </button>
-    </div>
-  );
-}
 
 function SortDropdown({
   sortBy,
@@ -101,8 +66,8 @@ function SearchField({ searchTerm, onSearchTermChange }: { searchTerm: string; o
 }
 
 export function PositionsToolbar({
-  positionFilter,
-  onPositionFilterChange,
+  status,
+  onStatusChange,
   sortBy,
   sortOptions,
   onSortChange,
@@ -113,22 +78,14 @@ export function PositionsToolbar({
     <>
       <div className="space-y-3 md:hidden">
         <div className="flex items-center justify-between gap-2">
-          <PositionFilterToggle
-            positionFilter={positionFilter}
-            onPositionFilterChange={onPositionFilterChange}
-            activeClassName="bg-secondary text-foreground shadow-sm"
-          />
+          <StatusTabs activeTab={status} setActiveTab={onStatusChange} />
           <SortDropdown sortBy={sortBy} sortOptions={sortOptions} onSortChange={onSortChange} />
         </div>
         <SearchField searchTerm={searchTerm} onSearchTermChange={onSearchTermChange} />
       </div>
 
       <div className="hidden items-center gap-2 md:flex">
-        <PositionFilterToggle
-          positionFilter={positionFilter}
-          onPositionFilterChange={onPositionFilterChange}
-          activeClassName="bg-background text-foreground shadow-sm"
-        />
+        <StatusTabs activeTab={status} setActiveTab={onStatusChange} />
         <SearchField searchTerm={searchTerm} onSearchTermChange={onSearchTermChange} />
         <SortDropdown sortBy={sortBy} sortOptions={sortOptions} onSortChange={onSortChange} />
       </div>

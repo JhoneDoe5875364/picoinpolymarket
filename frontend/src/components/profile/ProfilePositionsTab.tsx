@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
-import { PositionsToolbar } from '@/components/profile/positions-toolbar';
+import { PositionsToolbar } from '@/components/profile/PositionsToolbar';
 import { apiFetchWithToken } from '@/lib/api';
 
 export type PositionRow = {
@@ -145,7 +145,7 @@ export function ProfilePositionsTab({
   isActive,
 }: ProfilePositionsTabProps) {
   const { authUser } = useAuth();
-  const [positionFilter, setPositionFilter] = useState<'active' | 'closed'>('active');
+  const [status, setStatus] = useState<'active' | 'closed'>('active');
   const [sortBy, setSortBy] = useState<(typeof SORT_OPTIONS)[number]>('Profit/Loss');
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -181,7 +181,7 @@ export function ProfilePositionsTab({
         const userId = authUser?.id?.toString() ?? '3';
         const rows = await fetchPositionPage({
           userId,
-          positionFilter,
+          positionFilter: status,
           search: debouncedSearch,
           offset: 0,
           sortBy,
@@ -208,7 +208,7 @@ export function ProfilePositionsTab({
     return () => {
       cancelled = true;
     };
-  }, [authUser?.id, debouncedSearch, isActive, positionFilter, sortBy]);
+  }, [authUser?.id, debouncedSearch, isActive, status, sortBy]);
 
   useEffect(() => {
     if (!isActive || positionsLoading || positionsLoadingMore || !hasMorePositions) return;
@@ -228,7 +228,7 @@ export function ProfilePositionsTab({
           const currentOffset = nextOffsetRef.current;
           const rows = await fetchPositionPage({
             userId,
-            positionFilter,
+            positionFilter: status,
             search: debouncedSearch,
             offset: currentOffset,
             sortBy,
@@ -250,13 +250,13 @@ export function ProfilePositionsTab({
 
     observerRef.current.observe(sentinel);
     return () => observerRef.current?.disconnect();
-  }, [authUser?.id, debouncedSearch, hasMorePositions, isActive, positionFilter, positionsLoading, positionsLoadingMore, sortBy]);
+  }, [authUser?.id, debouncedSearch, hasMorePositions, isActive, status, positionsLoading, positionsLoadingMore, sortBy]);
 
   return (
     <div className="space-y-3">
       <PositionsToolbar
-        positionFilter={positionFilter}
-        onPositionFilterChange={setPositionFilter}
+        status={status}
+        onStatusChange={setStatus}
         sortBy={sortBy}
         sortOptions={SORT_OPTIONS}
         onSortChange={(value) => setSortBy(value as (typeof SORT_OPTIONS)[number])}
