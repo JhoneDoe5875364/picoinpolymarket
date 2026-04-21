@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { cn } from '@/lib/utils';
+import { cn, toPercentLabel, toPriceLabel, toSignedMoney } from '@/lib/utils';
 import { PositionsToolbar } from '@/components/profile/PositionsToolbar';
 import { apiFetchWithToken } from '@/lib/api';
 
@@ -125,20 +125,6 @@ async function fetchPositionPage(args: {
 
 function normalizePositionPage(rows: any[], startIndex: number): PositionRow[] {
   return rows.map((row, index) => normalizePositionRow(row, startIndex + index));
-}
-
-function toPercentLabel(value: number): string {
-  const normalized = value <= 1 && value >= -1 ? value * 100 : value;
-  return `${normalized.toFixed(1)}%`;
-}
-
-function toSignedMoney(value: number): string {
-  const sign = value > 0 ? '+' : value < 0 ? '-' : '';
-  return `${sign}${Math.abs(value).toFixed(2)}π`;
-}
-
-function toPriceLabel(value: number): string {
-  return `${value.toFixed(2)}π`;
 }
 
 export function ProfilePositionsTab({

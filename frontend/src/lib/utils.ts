@@ -25,3 +25,17 @@ export function statusCls(st?: string) {
   const k = (st || "open").toLowerCase();
   return STATUS_CLS[k] || STATUS_CLS.open;
 }
+
+export function toPercentLabel(value: number): string {
+  const normalized = value <= 1 && value >= -1 ? value * 100 : value;
+  return `${normalized.toFixed(1)}%`;
+}
+
+export function toSignedMoney(value: number): string {
+  const sign = value > 0 ? "+" : value < 0 ? "-" : "";
+  return `${sign}${Math.abs(value).toFixed(2)}π`;
+}
+
+export function toPriceLabel(value: number): string {
+  return `${value.toFixed(2)}π`;
+}

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { cn } from '@/lib/utils';
+import { cn, toPriceLabel } from '@/lib/utils';
 import { apiFetchWithToken } from '@/lib/api';
 
 export type TradeRow = {
@@ -71,10 +71,6 @@ async function fetchTradePage(userId: string, offset: number): Promise<any[]> {
 
 function normalizeTradePage(rows: any[], startIndex: number): TradeRow[] {
   return rows.map((row, index) => normalizeTradeRow(row, startIndex + index));
-}
-
-function toPriceLabel(value: number): string {
-  return `${value.toFixed(2)}π`;
 }
 
 function toRelativeTimeLabel(value: string): string {
@@ -244,7 +240,7 @@ export function ProfileActivityTab({
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        <p className="text-sm font-bold leading-none">${trade.piAmount.toFixed(2)}</p>
+                        <p className="text-sm font-bold leading-none">{trade.piAmount.toFixed(2)} π</p>
                         <p className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground">
                           {toRelativeTimeLabel(trade.createdAt)}
                         </p>
