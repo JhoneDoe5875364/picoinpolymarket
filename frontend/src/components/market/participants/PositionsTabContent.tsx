@@ -28,12 +28,12 @@ function PositionColumn({
   withDivider?: boolean;
 }) {
   return (
-    <div className={`space-y-3 ${withDivider ? "border-l border-border pl-4" : ""}`}>
+    <div className={`${withDivider ? "border-l border-border pl-4" : ""}`}>
       <h4 className="border-b border-border pb-3 text-sm font-semibold tracking-tight text-foreground/90">{title}</h4>
       {rows.length === 0 ? (
         <p className="text-sm text-muted-foreground">No positions found.</p>
       ) : (
-        <ul className="space-y-2 pt-2">
+        <ul>
           {rows.map((position, idx) => {
             const username = position.pi_username || "";
             const piAmount = normalizeNumber(position.pi_amount);
@@ -41,15 +41,22 @@ function PositionColumn({
             const avgPrice = piAmount / Math.max(shares, 1);
 
             return (
-              <li key={`${position.id}-${keyPrefix}-${idx}`} className="flex items-start gap-1">
+              <li key={`${position.id}-${keyPrefix}-${idx}`} className="flex items-start gap-1 border-b border-border py-2">
                 <RankedAvatar name={username} rank={idx + 1} size="sm" />
-                <div className="min-w-0">
+                <div className="md:hidden">
                   <div className="flex items-baseline gap-1">
                     <p className="truncate text-[12px] font-medium">{username}</p>
                     <p className="shrink-0 text-[10px] text-muted-foreground">avg {toUnsignedMoney(avgPrice)}</p>
                   </div>
                   <p className={`text-[12px] font-semibold ${valueClassName}`}>{toUnsignedMoney(piAmount)}</p>
                   <p className="text-[11px] text-muted-foreground">{shares.toLocaleString()} shares</p>
+                </div>
+                <div className="hidden md:flex w-full items-center justify-between">
+                  <div className="flex items-baseline gap-1">
+                    <p className="truncate text-[12px] font-medium">{username}</p>
+                    <p className="shrink-0 text-[10px] text-muted-foreground">avg {toUnsignedMoney(avgPrice)}</p>
+                  </div>
+                  <p className={`text-[12px] font-semibold ${valueClassName}`}>{toUnsignedMoney(piAmount)}</p>
                 </div>
               </li>
             );

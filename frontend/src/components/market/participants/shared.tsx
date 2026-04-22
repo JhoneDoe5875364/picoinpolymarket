@@ -72,7 +72,7 @@ export function RankedAvatar({ name, rank, size = "md" }: { name: string; rank: 
       <InitialAvatar name={name} size={size} />
       <Badge
         variant="secondary"
-        className={`absolute -left-2 -top-2 h-5 min-w-5 rounded-full border border-border bg-background px-1 text-[10px] font-bold leading-none ${rankColor(rank)}`}
+        className={`absolute -left-1 -top-1 h-5 min-w-5 rounded-full border border-border bg-background px-1 text-[12px] font-bold leading-none ${rankColor(rank)}`}
       >
         {rank}
       </Badge>
