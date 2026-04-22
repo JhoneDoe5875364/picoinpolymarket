@@ -19,7 +19,7 @@ from app.models.tables.market_trades import MarketTrade
 from app.models.tables.user import User
 
 logger = get_logger()
-LEADERBOARD_REFRESH_INTERVAL_SECONDS = 60 * 60
+LEADERBOARD_REFRESH_INTERVAL_SECONDS = 1 * 60
 _QUANT = Decimal("0.0001")
 
 

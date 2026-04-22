@@ -21,7 +21,7 @@ from app.models.tables.market_trades import MarketTrade
 from app.models.tables.market_price_candles import MarketPriceCandle
 from app.models.tables.market_position import MarketPosition
 from app.models.tables.leaderboard import Leaderboard
-from app.core import leaderboard_updater
+from app.updator import leaderboard_updater
 
 
 async def _ensure_user(session: AsyncSession, **kwargs: object) -> None:
@@ -288,8 +288,12 @@ async def run_seed_markets(session: AsyncSession) -> None:
             dedupe_seq += 1
         used_slugs.add(slug)
 
-        start_date = now - timedelta(days=random.randint(1, 30))
-        end_date = now + timedelta(days=random.randint(3, 120))
+        start_date = (now - timedelta(days=random.randint(1, 30))).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        end_date = (now + timedelta(days=random.randint(3, 120))).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
 
         yes_price_float = round(random.uniform(0.05, 0.95), 4)
         yes_price = Decimal(f"{yes_price_float:.4f}")
