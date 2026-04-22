@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
 import { apiFetchWithToken } from '@/lib/api';
-import { cn, toSignedMoney } from '@/lib/utils';
+import { cn, toSignedMoney, toUnsignedMoney } from '@/lib/utils';
 
 type PnlPeriod = '1D' | '1W' | '1M' | 'ALL';
 
@@ -208,15 +208,15 @@ export function ProfileOverview() {
 
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <p className="text-xl sm:text-2xl font-bold leading-none">π {stats.positionsValue.toFixed(2)}</p>
+              <p className="text-xl sm:text-2xl font-bold leading-none">{toUnsignedMoney(stats.positionsValue)}</p>
               <p className="text-xs text-muted-foreground sm:text-sm">Positions Value</p>
             </div>
             <div>
-              <p className="text-xl sm:text-2xl font-bold leading-none">π {stats.biggestWin.toFixed(2)}</p>
+              <p className="text-xl sm:text-2xl font-bold leading-none">{toUnsignedMoney(stats.biggestWin)}</p>
               <p className="text-xs text-muted-foreground sm:text-sm">Biggest Win</p>
             </div>
             <div>
-              <p className="text-xl sm:text-2xl font-bold leading-none">{stats.predictions.toFixed(0)}</p>
+              <p className="text-xl sm:text-2xl font-bold leading-none">{stats.predictions}</p>
               <p className="text-xs text-muted-foreground sm:text-sm">Predictions</p>
             </div>
           </div>

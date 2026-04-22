@@ -1,9 +1,7 @@
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { MarketHolder, MarketPosition } from "./types";
 
-const TOP_LIST_LIMIT = 20;
 
 export function normalizeNumber(value: string | number | null | undefined): number {
   if (typeof value === "number") return Number.isFinite(value) ? value : 0;
@@ -31,24 +29,6 @@ function rankColor(rank: number): string {
   if (rank === 2) return "text-slate-300";
   if (rank === 3) return "text-amber-500";
   return "text-muted-foreground";
-}
-
-export function formatRelativeTime(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-
-  const diffMs = Date.now() - date.getTime();
-  const sec = Math.max(Math.floor(diffMs / 1000), 0);
-  if (sec < 60) return `${sec}s ago`;
-
-  const min = Math.floor(sec / 60);
-  if (min < 60) return `${min}m ago`;
-
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr}h ago`;
-
-  const day = Math.floor(hr / 24);
-  return `${day}d ago`;
 }
 
 export function outcomeColor(outcome?: string): string {
@@ -86,7 +66,7 @@ export function ListSkeleton() {
   );
 }
 
-function RankedAvatar({ name, rank, size = "md" }: { name: string; rank: number; size?: "sm" | "md" }) {
+export function RankedAvatar({ name, rank, size = "md" }: { name: string; rank: number; size?: "sm" | "md" }) {
   return (
     <div className="relative">
       <InitialAvatar name={name} size={size} />
@@ -96,92 +76,6 @@ function RankedAvatar({ name, rank, size = "md" }: { name: string; rank: number;
       >
         {rank}
       </Badge>
-    </div>
-  );
-}
-
-export function HolderColumn({
-  title,
-  rows,
-  valueClassName,
-  withDivider = false,
-}: {
-  title: string;
-  rows: MarketHolder[];
-  valueClassName: string;
-  withDivider?: boolean;
-}) {
-  return (
-    <div className={`space-y-3 ${withDivider ? "border-l border-border pl-6" : ""}`}>
-      <h4 className="border-b border-border pb-3 text-sm font-semibold tracking-tight text-foreground/90">{title}</h4>
-      {rows.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No holders</p>
-      ) : (
-        <ul className="space-y-2 pt-2">
-          {rows.slice(0, TOP_LIST_LIMIT).map((holder, idx) => {
-            const name = getDisplayName(holder.user_id);
-            return (
-              <li key={`${holder.user_id}-${idx}`} className="flex items-start gap-2">
-                <RankedAvatar name={name} rank={idx + 1} />
-                <div className="min-w-0">
-                  <p className="truncate text-[12px] font-medium">{name}</p>
-                  <p className={`text-[12px] font-semibold ${valueClassName}`}>
-                    {normalizeNumber(holder.shares).toLocaleString()} shares
-                  </p>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-export function PositionColumn({
-  title,
-  rows,
-  valueClassName,
-  keyPrefix,
-  withDivider = false,
-}: {
-  title: string;
-  rows: MarketPosition[];
-  valueClassName: string;
-  keyPrefix: string;
-  withDivider?: boolean;
-}) {
-  return (
-    <div className={`space-y-3 ${withDivider ? "border-l border-border pl-6" : ""}`}>
-      <h4 className="border-b border-border pb-3 text-sm font-semibold tracking-tight text-foreground/90">{title}</h4>
-      {rows.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No positions found.</p>
-      ) : (
-        <ul className="space-y-2 pt-2">
-          {rows.slice(0, TOP_LIST_LIMIT).map((position, idx) => {
-            const name = getDisplayName(position.user_id);
-            const amount = normalizeNumber(position.pi_amount);
-            const shares = normalizeNumber(position.shares);
-            const avgPrice = amount / Math.max(shares, 1);
-
-            return (
-              <li key={`${position.id}-${keyPrefix}-${idx}`} className="flex items-start gap-2">
-                <RankedAvatar name={name} rank={idx + 1} size="sm" />
-                <div className="min-w-0">
-                  <div className="flex items-baseline gap-2">
-                    <p className="truncate text-[12px] font-medium">{name}</p>
-                    <p className="shrink-0 text-[11px] text-muted-foreground">avg {avgPrice.toFixed(2)}</p>
-                  </div>
-                  <p className={`text-[12px] font-semibold ${valueClassName}`}>
-                    π{amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                  </p>
-                  <p className="text-[11px] text-muted-foreground">{shares.toLocaleString()} shares</p>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      )}
     </div>
   );
 }

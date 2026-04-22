@@ -14,6 +14,7 @@ from app.models.tables.market import Market
 from app.models.tables.market_token import MarketToken
 from app.models.tables.market_position import MarketPosition
 from app.models.tables.market_trades import MarketTrade
+from app.models.tables.user import User
 
 _ORDER_COLUMNS: dict[str, Any] = {
     "created_at": Market.created_at,
@@ -299,7 +300,9 @@ async def market_holders(
     stmt_yes = (
         select(
             MarketPosition.token.label("token"),
+            MarketPosition.outcome.label("outcome"),
             MarketPosition.user_id.label("user_id"),
+            User.pi_username.label("pi_username"),
             MarketPosition.shares.label("shares"),
             MarketPosition.avg_price.label("avg_price"),
         )
@@ -308,6 +311,7 @@ async def market_holders(
             MarketPosition.outcome == "YES",
             MarketPosition.shares >= min_balance,
         )
+        .join(User, User.id == MarketPosition.user_id)
         .order_by(MarketPosition.shares.desc())
         .limit(limit)
     )
@@ -315,7 +319,9 @@ async def market_holders(
     stmt_no = (
         select(
             MarketPosition.token.label("token"),
+            MarketPosition.outcome.label("outcome"),
             MarketPosition.user_id.label("user_id"),
+            User.pi_username.label("pi_username"),
             MarketPosition.shares.label("shares"),
             MarketPosition.avg_price.label("avg_price"),
         )
@@ -324,6 +330,7 @@ async def market_holders(
             MarketPosition.outcome == "NO",
             MarketPosition.shares >= min_balance,
         )
+        .join(User, User.id == MarketPosition.user_id)
         .order_by(MarketPosition.shares.desc())
         .limit(limit)
     )
@@ -331,18 +338,24 @@ async def market_holders(
     result = await session.execute(union_all(stmt_yes, stmt_no))
     rows = result.mappings().all()
 
-    grouped: dict[str, list[dict[str, Any]]] = {}
+    grouped: dict[str, dict[str, list[dict[str, Any]]]] = {}
     for row in rows:
         token = row["token"]
-        grouped.setdefault(token, []).append(
+        outcome = row["outcome"]
+        grouped.setdefault(token, {}).setdefault(outcome, []).append(
             {
                 "user_id": row["user_id"],
+                "pi_username": row["pi_username"],
                 "shares": row["shares"],
                 "avg_price": row["avg_price"],
             }
         )
 
-    return [{"token": token, "holders": holders} for token, holders in grouped.items()]
+    return [
+        {"token": token, "outcome": outcome, "holders": holders}
+        for token, outcomes in grouped.items()
+        for outcome, holders in outcomes.items()
+    ]
 
 
 async def list_positions(
@@ -374,6 +387,7 @@ async def list_positions(
             MarketPosition.id.label("id"),
             MarketPosition.market_id.label("market_id"),
             MarketPosition.user_id.label("user_id"),
+            User.pi_username.label("pi_username"),
             MarketPosition.token.label("token"),
             MarketPosition.side.label("side"),
             MarketPosition.outcome.label("outcome"),
@@ -382,6 +396,7 @@ async def list_positions(
             MarketPosition.pi_amount.label("pi_amount"),
         )
         .join(Market, Market.id == MarketPosition.market_id)
+        .join(User, User.id == MarketPosition.user_id)
         .where(*base_conditions, MarketPosition.outcome == "YES")
         .order_by(MarketPosition.shares.asc() if ascending else MarketPosition.shares.desc())
         .limit(limit)
@@ -393,6 +408,7 @@ async def list_positions(
             MarketPosition.id.label("id"),
             MarketPosition.market_id.label("market_id"),
             MarketPosition.user_id.label("user_id"),
+            User.pi_username.label("pi_username"),
             MarketPosition.token.label("token"),
             MarketPosition.side.label("side"),
             MarketPosition.outcome.label("outcome"),
@@ -401,6 +417,7 @@ async def list_positions(
             MarketPosition.pi_amount.label("pi_amount"),
         )
         .join(Market, Market.id == MarketPosition.market_id)
+        .join(User, User.id == MarketPosition.user_id)
         .where(*base_conditions, MarketPosition.outcome == "NO")
         .order_by(MarketPosition.shares.asc() if ascending else MarketPosition.shares.desc())
         .limit(limit)
@@ -429,31 +446,48 @@ async def list_market_trades(
 ) -> List[dict[str, Any]]:
     sort_col = _TRADE_ORDER_COLUMNS.get(order, MarketTrade.created_at)
     stmt = (
-        select(MarketTrade)
+        select(
+            MarketTrade.id.label("id"),
+            MarketTrade.created_at.label("created_at"),
+            MarketTrade.token.label("token"),
+            MarketTrade.market_id.label("market_id"),
+            MarketTrade.taker_user_id.label("taker_user_id"),
+            User.pi_username.label("taker_pi_username"),
+            MarketTrade.maker_user_id.label("maker_user_id"),
+            MarketTrade.side.label("side"),
+            MarketTrade.outcome.label("outcome"),
+            MarketTrade.price.label("price"),
+            MarketTrade.shares.label("shares"),
+            MarketTrade.pi_amount.label("pi_amount"),
+            MarketTrade.pi_fee.label("pi_fee"),
+            MarketTrade.pi_total_amount.label("pi_total_amount"),
+        )
         .where(MarketTrade.market_id == market_id)
+        .join(User, User.id == MarketTrade.taker_user_id)
         .order_by(sort_col.asc() if ascending else sort_col.desc())
         .offset(offset)
         .limit(limit)
     )
 
     result = await session.execute(stmt)
-    rows = result.scalars().all()
+    rows = result.mappings().all()
 
     return [
         {
-            "id": row.id,
-            "created_at": row.created_at,
-            "token": row.token,
-            "market_id": row.market_id,
-            "taker_user_id": row.taker_user_id,
-            "maker_user_id": row.maker_user_id,
-            "side": row.side,
-            "outcome": row.outcome,
-            "price": row.price,
-            "shares": row.shares,
-            "pi_amount": row.pi_amount,
-            "pi_fee": row.pi_fee,
-            "pi_total_amount": row.pi_total_amount,
+            "id": row["id"],
+            "created_at": row["created_at"],
+            "token": row["token"],
+            "market_id": row["market_id"],
+            "taker_user_id": row["taker_user_id"],
+            "taker_pi_username": row["taker_pi_username"],
+            "maker_user_id": row["maker_user_id"],
+            "side": row["side"],
+            "outcome": row["outcome"],
+            "price": row["price"],
+            "shares": row["shares"],
+            "pi_amount": row["pi_amount"],
+            "pi_fee": row["pi_fee"],
+            "pi_total_amount": row["pi_total_amount"],
         }
         for row in rows
     ]

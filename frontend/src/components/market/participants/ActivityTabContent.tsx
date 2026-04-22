@@ -2,13 +2,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   InitialAvatar,
   ListSkeleton,
-  formatRelativeTime,
   getDisplayName,
   normalizeNumber,
   outcomeColor,
   outcomeText,
 } from "./shared";
 import type { MarketTradeActivity, MinAmountFilter } from "./types";
+import { formatRelativeTime, toUnsignedMoney } from "@/lib/utils";
 
 interface ActivityTabContentProps {
   activityLoading: boolean;
@@ -32,11 +32,11 @@ export function ActivityTabContent({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="NONE">None</SelectItem>
-            <SelectItem value="10">π10</SelectItem>
-            <SelectItem value="100">π100</SelectItem>
-            <SelectItem value="1000">π1,000</SelectItem>
-            <SelectItem value="10000">π10,000</SelectItem>
-            <SelectItem value="100000">π100,000</SelectItem>
+            <SelectItem value="10">10π</SelectItem>
+            <SelectItem value="100">100π</SelectItem>
+            <SelectItem value="1000">1,000π</SelectItem>
+            <SelectItem value="10000">10,000π</SelectItem>
+            <SelectItem value="100000">100,000π</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -48,7 +48,7 @@ export function ActivityTabContent({
       ) : (
         <ul className="divide-y divide-border">
           {filteredActivityRows.map((row, idx) => {
-            const name = row.pi_username || getDisplayName(row.taker_user_id ?? "unknown");
+            const name = row.taker_pi_username || "";
             const shares = normalizeNumber(row.shares);
             const price = normalizeNumber(row.price);
             const piAmount = normalizeNumber(row.pi_amount);
@@ -60,14 +60,10 @@ export function ActivityTabContent({
                   <p className="truncate text-[12px] text-foreground/90">
                     <span className="font-semibold">{name}</span>{" "}
                     <span className="text-muted-foreground">{outcomeText(row.outcome)}</span>{" "}
-                    <span className={outcomeColor(row.outcome)}>
-                      {shares.toLocaleString()} {outcome}
-                    </span>{" "}
+                    <span className={outcomeColor(row.outcome)}>{shares.toLocaleString()} {outcome}</span>{" "}
                     <span className="text-muted-foreground">at</span>{" "}
-                    <span className="font-semibold">π{price.toFixed(2)}</span>{" "}
-                    <span className="text-muted-foreground">
-                      (π{piAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })})
-                    </span>
+                    <span className="font-semibold">{toUnsignedMoney(price)}</span>{" "}
+                    <span className="text-muted-foreground">({toUnsignedMoney(piAmount)})</span>
                   </p>
                 </div>
                 <p className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
