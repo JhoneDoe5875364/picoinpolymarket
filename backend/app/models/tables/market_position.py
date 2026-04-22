@@ -4,7 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import BigInteger, DateTime, Identity, Index, Numeric, String
+from sqlalchemy import BigInteger, Boolean, DateTime, Identity, Index, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -25,5 +25,8 @@ class MarketPosition(Base):
     shares: Mapped[Decimal] = mapped_column(Numeric(24, 4), nullable=False)
     pi_amount: Mapped[Decimal] = mapped_column(Numeric(24, 4), nullable=False)
     avg_price: Mapped[Decimal] = mapped_column(Numeric(24, 4), nullable=False)
+    final_price: Mapped[Optional[Decimal]] = mapped_column(Numeric(24, 4))
+    is_claimed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_closed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))

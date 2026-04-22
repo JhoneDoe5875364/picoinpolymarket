@@ -52,7 +52,7 @@ async def get_users(
 async def get_open_positions(
     db: DbSession,
     user_id: int = Query(..., ge=1),
-    status: Optional[str] = Query(default='ALL'),
+    is_closed: Optional[bool] = Query(default=None),
     search: str = Query(default=""),
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
@@ -63,7 +63,7 @@ async def get_open_positions(
         rows = await users_repo.list_positions(
             db,
             user_id=user_id,
-            status=status,
+            is_closed=is_closed,
             search=search,
             limit=limit,
             offset=offset,

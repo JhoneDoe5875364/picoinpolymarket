@@ -368,7 +368,7 @@ async def run_seed_market_trades(session: AsyncSession) -> None:
         print("No seeded markets found for trade seeding")
         return
 
-    user_rows = await session.execute(select(User.id).where(User.role_id == 3))
+    user_rows = await session.execute(select(User.id))
     user_ids = [user_id for (user_id,) in user_rows.all()]
     if not user_ids:
         print("No seeded users found for trade seeding")
@@ -544,6 +544,8 @@ async def run_seed_market_positions(session: AsyncSession) -> None:
             shares=shares,
             pi_amount=pi_amount,
             avg_price=avg_price,
+            final_price=None,
+            is_claimed=False,
             created_at=now,
             updated_at=now,
         )

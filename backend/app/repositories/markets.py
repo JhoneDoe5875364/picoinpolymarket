@@ -4,7 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any, List, Literal, Optional, Union
 
-from sqlalchemy import func, insert, inspect as sa_inspect, select, text, union_all, update
+from sqlalchemy import case, func, insert, inspect as sa_inspect, select, text, union_all, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -649,3 +649,115 @@ async def insert_position(
     result = await session.execute(stmt)
     await session.commit()
     return result.scalar_one_or_none()
+
+
+async def close_market(
+    session: AsyncSession,
+    *,
+    market_id: int,
+) -> dict[str, Any]:
+    update_stmt = (
+        update(Market)
+        .where(
+            Market.id == market_id,
+            func.coalesce(Market.is_resolved, False) == False,
+        )
+        .values(
+            is_closed=True,
+            status=case(
+                (Market.status == "open", "pending"),
+                else_=Market.status,
+            ),
+            updated_at=datetime.now(),
+        )
+        .returning(
+            Market.id,
+            Market.question,
+            Market.status,
+            Market.is_closed,
+            Market.is_resolved,
+            Market.updated_at,
+        )
+    )
+    updated = await session.execute(update_stmt)
+    updated_row = updated.mappings().first()
+    if updated_row:
+        return dict(updated_row)
+
+    exists_stmt = select(
+        Market.id,
+        func.coalesce(Market.is_resolved, False).label("is_resolved"),
+    ).where(Market.id == market_id)
+    exists_result = await session.execute(exists_stmt)
+    existing_row = exists_result.mappings().first()
+    if not existing_row:
+        raise LookupError("Market not found")
+    if existing_row["is_resolved"]:
+        raise ValueError("Resolved market cannot be closed")
+    raise ValueError("Market cannot be closed")
+
+
+async def resolve_market(
+    session: AsyncSession,
+    *,
+    market_id: int,
+    outcome: str,
+    user_id: str,
+    username: str,
+) -> dict[str, Any]:
+    final_price_value = Decimal("1") if outcome == "YES" else Decimal("0")
+    loser_price_value = Decimal("0") if outcome == "YES" else Decimal("1")
+    update_stmt = (
+        update(Market)
+        .where(Market.id == market_id)
+        .values(
+            resolved_outcome=outcome,
+            resolved_at=datetime.now(),
+            is_resolved=True,
+            is_closed=True,
+            resolved_by_user_id=user_id,
+            resolved_by_username=username,
+            status="resolved",
+            updated_at=datetime.now(),
+        )
+        .returning(
+            Market.id,
+            Market.question,
+            Market.status,
+            Market.is_closed,
+            Market.is_resolved,
+            Market.resolved_outcome,
+            Market.resolved_at,
+        )
+    )
+    updated = await session.execute(update_stmt)
+    updated_row = updated.mappings().first()
+    if not updated_row:
+        raise LookupError("Market not found")
+
+    await session.execute(
+        update(MarketPosition)
+        .where(
+            MarketPosition.market_id == market_id,
+            MarketPosition.final_price.is_(None),
+        )
+        .values(
+            is_closed=True,
+            final_price=case(
+                (MarketPosition.outcome == outcome, final_price_value),
+                else_=loser_price_value,
+            )
+        )
+    )
+    await session.execute(
+        update(MarketToken)
+        .where(MarketToken.market_id == market_id)
+        .values(
+            price=case(
+                (MarketToken.outcome == outcome, final_price_value),
+                else_=loser_price_value,
+            )
+        )
+    )
+
+    return dict(updated_row)

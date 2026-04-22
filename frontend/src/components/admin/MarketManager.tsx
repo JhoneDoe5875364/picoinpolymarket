@@ -16,7 +16,7 @@ import { roundLocale, roundLocalePi } from "@/lib/utils";
 import { format } from "date-fns";
 import { Market } from "@/lib/types";
 
-type Status = "open" | "pending_resolution" | "resolved";
+type Status = "open" | "pending" | "resolved";
 
 
 export function MarketManager() {
@@ -25,15 +25,16 @@ export function MarketManager() {
   const [rows, setRows] = useState<Market[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [limit] = useState(25);
+  const [limit] = useState(100);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<"all" | Status>("all");
   const [sortBy, setSortBy] = useState<string>("created_at");
   const [order, setOrder] = useState<"asc" | "desc">("desc");
   const [loading, setLoading] = useState(false);
 
-  const [resolveId, setResolveId] = useState<string | null>(null);
-  const [cancelId, setCancelId] = useState<string | null>(null);
+  const [resolveDialogOpen, setResolveDialogOpen] = useState(false);
+  const [closeDialogOpen, setCloseDialogOpen] = useState(false);
+  const [selectedMarketId, setSelectedMarketId] = useState<string | null>(null);
 
   const qs = useMemo(() => {
     const params = new URLSearchParams();
@@ -81,9 +82,9 @@ export function MarketManager() {
 
   useEffect(() => { load(); }, [qs]);
 
-  async function resolve(outcome: "yes" | "no") {
-    if (!resolveId) return;
-    const res = await apiFetchWithToken(`/admin/markets/${resolveId}/resolve/${outcome}`, {
+  async function resolve(outcome: "YES" | "NO") {
+    if (!selectedMarketId) return;
+    const res = await apiFetchWithToken(`/markets/resolve?outcome=${outcome}&market_id=${selectedMarketId}`, {
       method: "POST",
     });
     if (!res.ok) {
@@ -92,19 +93,19 @@ export function MarketManager() {
       toast({ title: "Resolved", description: outcome.toUpperCase() });
       load();
     }
-    setResolveId(null);
+    setSelectedMarketId(null);
   }
 
-  async function cancel() {
-    if (!cancelId) return;
-    const res = await apiFetchWithToken(`/admin/markets/${cancelId}/cancel`, { method: "POST" });
+  async function close() {
+    if (!selectedMarketId) return;
+    const res = await apiFetchWithToken(`/markets/close?market_id=${selectedMarketId}`, { method: "POST" });
     if (!res.ok) {
-      toast({ title: "Cancel failed", description: res.error || "Unknown error", variant: "destructive" });
+      toast({ title: "Close failed", description: res.error || "Unknown error", variant: "destructive" });
     } else {
-      toast({ title: "Cancelled", description: "Market cancelled" });
+      toast({ title: "Closed", description: "Market closed" });
       load();
     }
-    setCancelId(null);
+    setSelectedMarketId(null);
   }
 
   return (
@@ -112,7 +113,7 @@ export function MarketManager() {
       <Card>
         <CardHeader>
           <CardTitle>Manage Markets</CardTitle>
-          <CardDescription>View, edit, resolve, and cancel prediction markets.</CardDescription>
+          <CardDescription>View, edit, resolve, and close prediction markets.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
@@ -124,7 +125,7 @@ export function MarketManager() {
             />
             <Button variant="outline" onClick={() => setStatus("all")}>All</Button>
             <Button variant="outline" onClick={() => setStatus("open")}>Open</Button>
-            <Button variant="outline" onClick={() => setStatus("pending_resolution")}>Pending</Button>
+            <Button variant="outline" onClick={() => setStatus("pending")}>Pending</Button>
             <Button variant="outline" onClick={() => setStatus("resolved")}>Resolved</Button>
             <div className="ml-auto text-sm opacity-70">
               {loading ? "Loading…" : `${rows.length} / ${total}`}
@@ -201,11 +202,26 @@ export function MarketManager() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <Link href={`/markets/${m.id}`}>
-                          <DropdownMenuItem>View Market</DropdownMenuItem>
-                        </Link>
-                        <DropdownMenuItem className="text-green-500" onClick={() => setResolveId(m.id.toString())}>Resolve Market</DropdownMenuItem>
-                        <DropdownMenuItem className="text-red-500" onClick={() => setCancelId(m.id.toString())}>Cancel Market</DropdownMenuItem>
+                        <DropdownMenuItem><Link href={`/markets/${m.id}`}>View Market</Link></DropdownMenuItem>
+                        <DropdownMenuItem><Link href={`/admin/markets/${m.id}`}>Edit Market</Link></DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="text-green-500"
+                          onClick={() => {
+                            setSelectedMarketId(m.id.toString());
+                            setResolveDialogOpen(true);
+                          }}
+                        >
+                          Resolve Market
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="text-red-500"
+                          onClick={() => {
+                            setSelectedMarketId(m.id.toString());
+                            setCloseDialogOpen(true);
+                          }}
+                        >
+                          Close Market
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
@@ -229,8 +245,8 @@ export function MarketManager() {
       </Card>
 
       {/* Resolve dialog */}
-      {resolveId && (
-        <AlertDialog open onOpenChange={() => setResolveId(null)}>
+      {resolveDialogOpen && (
+        <AlertDialog open={resolveDialogOpen} onOpenChange={() => setResolveDialogOpen(false)}>
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Resolve Market</AlertDialogTitle>
@@ -238,10 +254,10 @@ export function MarketManager() {
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Close</AlertDialogCancel>
-              <AlertDialogAction onClick={() => resolve("no")} className="bg-red-600 hover:bg-red-700">
+              <AlertDialogAction onClick={() => resolve("NO")} className="bg-red-600 hover:bg-red-700">
                 Resolve NO
               </AlertDialogAction>
-              <AlertDialogAction onClick={() => resolve("yes")} className="bg-green-600 hover:bg-green-700">
+              <AlertDialogAction onClick={() => resolve("YES")} className="bg-green-600 hover:bg-green-700">
                 Resolve YES
               </AlertDialogAction>
             </AlertDialogFooter>
@@ -249,18 +265,18 @@ export function MarketManager() {
         </AlertDialog>
       )}
 
-      {/* Cancel dialog */}
-      {cancelId && (
-        <AlertDialog open onOpenChange={() => setCancelId(null)}>
+      {/* Close dialog */}
+      {closeDialogOpen && (
+        <AlertDialog open={closeDialogOpen} onOpenChange={() => setCloseDialogOpen(false)}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Cancel market?</AlertDialogTitle>
-              <AlertDialogDescription>This will refund all participants.</AlertDialogDescription>
+              <AlertDialogTitle>Close market?</AlertDialogTitle>
+              <AlertDialogDescription>This will refund all participants and close the market.</AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>Keep Open</AlertDialogCancel>
-              <AlertDialogAction onClick={cancel} className="bg-red-600 hover:bg-red-700">
-                Cancel Market
+              <AlertDialogCancel>Close</AlertDialogCancel>
+              <AlertDialogAction onClick={close} className="bg-red-600 hover:bg-red-700">
+                Close Market
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

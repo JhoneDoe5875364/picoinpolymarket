@@ -96,7 +96,7 @@ function buildPositionsParams(args: {
 }): URLSearchParams {
   const params = new URLSearchParams({
     user_id: args.userId,
-    status: args.positionFilter === 'active' ? 'OPEN' : 'CLOSED',
+    is_closed: args.positionFilter === 'active' ? 'false' : 'true',
     search: args.search,
     limit: String(PAGE_SIZE),
     offset: String(args.offset),

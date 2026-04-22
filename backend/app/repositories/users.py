@@ -163,7 +163,7 @@ async def list_positions(
     session: AsyncSession,
     *,
     user_id: int,
-    status: Optional[str] = "ALL",
+    is_closed: Optional[bool] = None,
     search: str = "",
     limit: int = 20,
     offset: int = 0,
@@ -180,17 +180,16 @@ async def list_positions(
     }
     if order not in order_columns:
         raise ValueError("Invalid order")
-    if status not in ["ALL", "OPEN", "CLOSED"]:
-        raise ValueError("Invalid status")
 
     base_conditions: list[Any] = [
         MarketPosition.user_id == user_id,
         Market.is_active == True,
     ]
-    if status == "OPEN":
-        base_conditions.append(Market.is_closed == False)
-    elif status == "CLOSED":
-        base_conditions.append(Market.is_closed == True)
+    if is_closed:
+        base_conditions.append(MarketPosition.is_closed == True)
+    else:
+        base_conditions.append(MarketPosition.is_closed == False)
+
     if search and search.strip():
         base_conditions.append(Market.question.ilike(f"%{search}%"))
 
