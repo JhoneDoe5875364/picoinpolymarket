@@ -30,9 +30,9 @@ PI_ME_URL = f"{PI_API_BASE}/v2/me"
 async def verify_token(request: Request):
     if Config.ENVIRONMENT == "development":
         return {
-            "sub": "3",
-            "username": "dev_user",
-            "role": "user",
+            "sub": "1", # "3"
+            "username": "superadmin", # "dev_user"
+            "role": "superadmin", # "user"
         }
     
     auth_header = request.headers.get("authorization")

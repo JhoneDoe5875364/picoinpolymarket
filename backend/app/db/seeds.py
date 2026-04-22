@@ -316,6 +316,7 @@ async def run_seed_markets(session: AsyncSession) -> None:
             end_date=end_date,
             liquidity=liquidity,
             volume=volume,
+            status="open",
             is_active=True,
             is_closed=False,
             is_archived=False,

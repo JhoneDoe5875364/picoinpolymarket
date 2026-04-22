@@ -13,31 +13,17 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetchWithToken } from "@/lib/api";
-import { catCls, statusCls } from "@/lib/utils";
+import { catCls, roundLocale, roundLocalePi, statusCls, toSignedMoney, toUnsignedMoney } from "@/lib/utils";
 import { format } from "date-fns";
+import { Market } from "@/lib/types";
 
 type Status = "open" | "pending_resolution" | "resolved";
 
-type Row = {
-  id: string;
-  title: string;
-  description: string;
-  category: string;
-  resolves_at: string | null;
-  resolved: boolean;
-  outcome: string | null;
-  created_at: string;
-  end_date: string;
-  status: Status;
-  total_participants: number;
-  total_pi: number;
-  total_volume: number;
-};
 
 export function MarketManager() {
   const { toast } = useToast();
 
-  const [rows, setRows] = useState<Row[]>([]);
+  const [rows, setRows] = useState<Market[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [limit] = useState(25);
@@ -52,10 +38,10 @@ export function MarketManager() {
 
   const qs = useMemo(() => {
     const params = new URLSearchParams();
-    params.set("page", String(page));
     params.set("limit", String(limit));
-    params.set("sort_by", sortBy);
-    params.set("order", order);
+    params.set("offset", String((page - 1) * limit));
+    params.set("order", sortBy);
+    params.set("ascending", order === "asc" ? "true" : "false");
     if (search) params.set("search", search);
     if (status) params.set("status", status);
     return params.toString();
@@ -82,7 +68,7 @@ export function MarketManager() {
   async function load() {
     setLoading(true);
     try {
-      const res = await apiFetchWithToken(`/admin/markets?${qs}`, { method: "GET" });
+      const res = await apiFetchWithToken(`/markets?${qs}`, { method: "GET" });
       if (res.ok) {
         setRows(res.data || []);
         setTotal(res.total || 0);
@@ -94,7 +80,7 @@ export function MarketManager() {
     }
   }
 
-  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [qs]);
+  useEffect(() => { load(); }, [qs]);
 
   async function resolve(outcome: "yes" | "no") {
     if (!resolveId) return;
@@ -150,45 +136,45 @@ export function MarketManager() {
             <TableHeader>
               <TableRow>
                 <TableHead>
-                  <Button variant="ghost" onClick={() => handleSort("title")}>
+                  <Button variant="ghost" className="p-2" onClick={() => handleSort("title")}>
                     Question
                     {getSortIcon("title")}
                   </Button>
                 </TableHead>
                 <TableHead>
-                  <Button variant="ghost" onClick={() => handleSort("status")}>
+                  <Button variant="ghost" className="p-2" onClick={() => handleSort("status")}>
                     Status
                     {getSortIcon("status")}
                   </Button>
                 </TableHead>
                 <TableHead>
-                  <Button variant="ghost" onClick={() => handleSort("category")}>
+                  <Button variant="ghost" className="p-2" onClick={() => handleSort("category")}>
                     Category
                     {getSortIcon("category")}
                   </Button>
                 </TableHead>
                 <TableHead>
-                  <Button variant="ghost" onClick={() => handleSort("created_at")}>
+                  <Button variant="ghost" className="p-2" onClick={() => handleSort("created_at")}>
                     Created Date
                     {getSortIcon("created_at")}
                   </Button>
                 </TableHead>
                 <TableHead>
-                  <Button variant="ghost" onClick={() => handleSort("end_date")}>
-                    End Time
+                  <Button variant="ghost" className="p-2" onClick={() => handleSort("end_date")}>
+                    End Date
                     {getSortIcon("end_date")}
                   </Button>
                 </TableHead>
                 <TableHead>
-                  <Button variant="ghost" onClick={() => handleSort("total_participants")}>
-                    Total Participants
-                    {getSortIcon("total_participants")}
+                  <Button variant="ghost" className="p-2" onClick={() => handleSort("traders")}>
+                    Traders
+                    {getSortIcon("traders")}
                   </Button>
                 </TableHead>
                 <TableHead>
-                  <Button variant="ghost" onClick={() => handleSort("total_pi")}>
-                    Total PI Forecast
-                    {getSortIcon("total_pi")}
+                  <Button variant="ghost" className="p-2" onClick={() => handleSort("total_pi")}>
+                    Volume (PI)
+                    {getSortIcon("volume")}
                   </Button>
                 </TableHead>
                 <TableHead>Actions</TableHead>
@@ -197,17 +183,17 @@ export function MarketManager() {
             <TableBody>
               {rows.map((m) => (
                 <TableRow key={m.id}>
-                  <TableCell>{m.title}</TableCell>
-                  <TableCell>
-                    <Badge className={`px-2 py-0.5 rounded-full ${statusCls(m.status)}`}>{m.status}</Badge>
+                  <TableCell className="min-w-60 line-clamp-2">{m.question}</TableCell>
+                  <TableCell className="text-center">
+                    <Badge className={`px-2 py-0.5 rounded-full`}>{m.status}</Badge>
                   </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className={`${catCls(m.category)} border`}>{m.category}</Badge>
+                  <TableCell className="text-center">
+                    <Badge variant="outline" className={`border`}>{m.category}</Badge>
                   </TableCell>
-                  <TableCell>{format(new Date(m.created_at), "MM/dd/yyyy")}</TableCell>
-                  <TableCell>{format(new Date(m.end_date), "MM/dd/yyyy HH:mm")}</TableCell>
-                  <TableCell>{Math.round(m.total_participants).toLocaleString()}</TableCell>
-                  <TableCell>{Math.round(m.total_pi).toLocaleString()} π</TableCell>
+                  <TableCell className="text-center">{format(new Date(m.start_date ?? ""), "MM/dd/yyyy")}</TableCell>
+                  <TableCell className="text-center">{format(new Date(m.end_date ?? ""), "MM/dd/yyyy")}</TableCell>
+                  <TableCell className="text-center">{roundLocale(m.traders ?? 0)}</TableCell>
+                  <TableCell className="text-center">{roundLocalePi(m.volume ?? 0)}</TableCell>
                   <TableCell>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -216,12 +202,11 @@ export function MarketManager() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
                         <Link href={`/markets/${m.id}`}>
                           <DropdownMenuItem>View Market</DropdownMenuItem>
                         </Link>
-                        <DropdownMenuItem onClick={() => setResolveId(m.id)}>Resolve Market</DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => setCancelId(m.id)}>Cancel Market</DropdownMenuItem>
+                        <DropdownMenuItem className="text-green-500" onClick={() => setResolveId(m.id.toString())}>Resolve Market</DropdownMenuItem>
+                        <DropdownMenuItem className="text-red-500" onClick={() => setCancelId(m.id.toString())}>Cancel Market</DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>

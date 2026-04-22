@@ -27,6 +27,7 @@ export interface Market {
   end_date?: string | null;
   liquidity?: number | null;
   volume?: number;
+  status?: string;
   is_active?: boolean;
   is_closed?: boolean;
   is_archived?: boolean;

@@ -34,6 +34,13 @@ export default function LoginWithPi() {
 
   async function onLogin() {
     try {
+      if (process.env.NEXT_PUBLIC_ENVIRONMENT === "development") {
+        setPpxToken("test_token");
+        setPpxUser({ id: "1", username: "superadmin", role: "superadmin" });
+        // _ppxUser = { id: "3", username: "dev_user", role: "user" };
+        return;
+      }
+
       if (!window?.Pi) {
         alert("Pi SDK NOT LOADED!");
         toast({

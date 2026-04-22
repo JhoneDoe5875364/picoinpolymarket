@@ -2,20 +2,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import type { User } from '@/lib/types';
-import { ShieldAlert, Loader2, Database } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useToast } from '@/hooks/use-toast';
+import { ShieldAlert, Loader2 } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MarketCreator } from '@/components/admin/MarketCreator';
 import { MarketManager } from '@/components/admin/MarketManager';
 import { MarketViewer } from '@/components/admin/MarketViewer';
 import { UserManager } from '@/components/admin/UserManager';
 import { SuggestionManager } from '@/components/admin/SuggestionManager';
-import { FraudReport } from '@/components/admin/FraudReport';
-import SeedButton from '@/components/admin/SeedButton';
 import { useAuth } from '@/context/AuthContext';
-import { apiFetchWithToken } from '@/lib/api';
 import { ResolutionsManager } from '@/components/admin/ResolutionsManager';
 import { BasicPlatformState } from '@/components/admin/BasicPlatformState';
 
@@ -43,57 +38,19 @@ function AccessDenied() {
   )
 }
 
-function SystemTools() {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2"><Database /> System Tools</CardTitle>
-        <CardDescription>
-          Use these tools to perform administrative actions.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <section>
-          <h3 className="text-lg font-semibold mb-2">Seed Database</h3>
-          <p className="opacity-80 mb-3 text-sm">Creates a single test market via Cloud Function.</p>
-          <SeedButton />
-        </section>
-      </CardContent>
-    </Card>
-  )
-}
-
 export default function AdminPage() {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const { ppxUser } = useAuth();
   const [isMounted, setIsMounted] = useState(false);
-  const [loading, setLoading] = useState(false);
-
-  const { ppxToken } = useAuth();
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
-  useEffect(() => {
-    if (!ppxToken) return;
-    (async () => {
-      setLoading(true);
-      await Promise.all([loadCurrentUser()]);
-      setLoading(false);
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ppxToken]);
-
-  async function loadCurrentUser() {
-    const res = await apiFetchWithToken('/account/info', { method: "GET" });
-    setCurrentUser(res?.info ?? {});
-  }
-
   if (!isMounted) {
     return <AdminPageSkeleton />;
   }
 
-  if (currentUser?.role != "superadmin" && currentUser?.role != "admin") {
+  if (ppxUser?.role != "superadmin" && ppxUser?.role != "admin") {
     return <AccessDenied />;
   }
 
@@ -106,7 +63,7 @@ export default function AdminPage() {
 
       <Tabs defaultValue="system" className="w-full">
         <TabsList className="flex justify-start w-full overflow-x-auto whitespace-nowrap gap-1 px-1">
-          {currentUser?.role == "superadmin" && (
+          {ppxUser?.role == "superadmin" && (
             <>
               {/* <TabsTrigger value="system" className="flex-shrink-0">System</TabsTrigger> */}
               <TabsTrigger value="create" className="flex-shrink-0">Create Market</TabsTrigger>
@@ -117,7 +74,7 @@ export default function AdminPage() {
               {/* <TabsTrigger value="fraud" className="flex-shrink-0">Fraud Report</TabsTrigger> */}
             </>
           )}
-          {currentUser?.role == "admin" && (
+          {ppxUser?.role == "admin" && (
             <>
               <TabsTrigger value="view" className="flex-shrink-0">Markets</TabsTrigger>
               <TabsTrigger value="resolutions" className="flex-shrink-0">Resolutions</TabsTrigger>
@@ -126,7 +83,7 @@ export default function AdminPage() {
           )}
         </TabsList>
 
-        {currentUser?.role == "superadmin" && (
+        {ppxUser?.role == "superadmin" && (
           <>
             {/* <TabsContent value="system" className="mt-6"><SystemTools /></TabsContent> */}
             <TabsContent value="create" className="mt-6"><MarketCreator /></TabsContent>
@@ -137,7 +94,7 @@ export default function AdminPage() {
             {/* <TabsContent value="fraud" className="mt-6"><FraudReport /></TabsContent> */}
           </>
         )}
-        {currentUser?.role == "admin" && (
+        {ppxUser?.role == "admin" && (
           <>
             <TabsContent value="view" className="mt-6"><MarketViewer /></TabsContent>
             <TabsContent value="resolutions" className="mt-6"><ResolutionsManager /></TabsContent>

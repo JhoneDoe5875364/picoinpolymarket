@@ -3,6 +3,7 @@ import { apiFetch } from "@/lib/api";
 import type { Market } from "@/lib/types";
 import { ListSkeleton, normalizeNumber, RankedAvatar } from "./shared";
 import type { MarketHolder, MarketHolderGroup } from "./types";
+import { roundLocale } from "@/lib/utils";
 
 const PAGE_SIZE = 20;
 const inFlightHoldersRequests = new Map<string, Promise<MarketHolderGroup[]>>();
@@ -38,13 +39,13 @@ function HolderColumn({
                 <div className="md:hidden">
                   <p className="truncate text-[12px] font-medium">{username}</p>
                   <p className={`text-[12px] font-semibold ${valueClassName}`}>
-                    {normalizeNumber(holder.shares).toLocaleString()} shares
+                    {roundLocale(normalizeNumber(holder.shares))} shares
                   </p>
                 </div>
                 <div className="hidden md:flex w-full justify-between">
                   <p className="truncate text-[12px] font-medium">{username}</p>
                   <p className={`text-[12px] font-semibold ${valueClassName}`}>
-                    {normalizeNumber(holder.shares).toLocaleString()} shares
+                    {roundLocale(normalizeNumber(holder.shares))} shares
                   </p>
                 </div>
               </li>

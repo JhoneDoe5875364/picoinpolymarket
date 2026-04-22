@@ -22,6 +22,8 @@ function buildMarketsQuery(limit: number, offset: number, selectedCategory: stri
     order: "volume",
     ascending: "false",
     category: selectedCategory.toLowerCase(),
+    closed: "false",
+    resolved: "false",
   });
   return query.toString();
 }

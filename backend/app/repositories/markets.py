@@ -57,6 +57,7 @@ async def list_markets(
     order: str = "created_at",
     ascending: bool = False,
     category: str = "all",
+    status: Optional[str] = None,
     closed: Optional[bool] = None,
     resolved: Optional[bool] = None,
     volume_min: Optional[Union[Decimal, float, int]] = None,
@@ -68,6 +69,8 @@ async def list_markets(
 ) -> List[dict[str, Any]]:
     conditions: list[Any] = []
 
+    if status is not None and status.strip().lower() != "all":
+        conditions.append(Market.status == status)
     if closed is None and resolved is None:
         conditions.append(Market.is_closed == False)
         conditions.append(Market.is_resolved == False)

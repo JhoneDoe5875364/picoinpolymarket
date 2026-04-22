@@ -31,6 +31,7 @@ class Market(Base):
     end_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     liquidity: Mapped[Optional[Decimal]] = mapped_column(Numeric(18, 4))
     volume: Mapped[Decimal] = mapped_column(Numeric(24, 4), default=Decimal("0"))
+    status: Mapped[str] = mapped_column(String, default="open")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_closed: Mapped[bool] = mapped_column(Boolean, default=False)
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False)

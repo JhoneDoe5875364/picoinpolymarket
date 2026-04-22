@@ -109,11 +109,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         _ppxToken = localStorage.getItem(PPX_TOKEN_KEY);
         _ppxUserRaw = localStorage.getItem(PPX_USER_KEY);
       }
-
-      if (process.env.NEXT_PUBLIC_ENVIRONMENT === "development") {
-        _ppxToken = "test_token";
-        _ppxUser = { id: "3", username: "dev_user", role: "user" };
-      }
     } catch (error) {
       console.warn("Failed to access localStorage:", error);
       setIsVerifying(false);

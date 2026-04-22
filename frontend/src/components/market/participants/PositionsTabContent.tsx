@@ -4,7 +4,7 @@ import type { Market } from "@/lib/types";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ListSkeleton, normalizeNumber, RankedAvatar } from "./shared";
 import type { MarketPosition, MarketPositionGroup, PositionStatus, SortDirection } from "./types";
-import { toUnsignedMoney } from "@/lib/utils";
+import { roundLocale, roundLocalePi, toUnsignedMoney } from "@/lib/utils";
 
 const PAGE_SIZE = 20;
 const inFlightPositionsRequests = new Map<string, Promise<MarketPositionGroup>>();
@@ -48,15 +48,15 @@ function PositionColumn({
                     <p className="truncate text-[12px] font-medium">{username}</p>
                     <p className="shrink-0 text-[10px] text-muted-foreground">avg {toUnsignedMoney(avgPrice)}</p>
                   </div>
-                  <p className={`text-[12px] font-semibold ${valueClassName}`}>{toUnsignedMoney(piAmount)}</p>
-                  <p className="text-[11px] text-muted-foreground">{shares.toLocaleString()} shares</p>
+                  <p className={`text-[12px] font-semibold ${valueClassName}`}>{roundLocalePi(piAmount)}</p>
+                  <p className="text-[11px] text-muted-foreground">{roundLocale(shares)} shares</p>
                 </div>
                 <div className="hidden md:flex w-full items-center justify-between">
                   <div className="flex items-baseline gap-1">
                     <p className="truncate text-[12px] font-medium">{username}</p>
                     <p className="shrink-0 text-[10px] text-muted-foreground">avg {toUnsignedMoney(avgPrice)}</p>
                   </div>
-                  <p className={`text-[12px] font-semibold ${valueClassName}`}>{toUnsignedMoney(piAmount)}</p>
+                  <p className={`text-[12px] font-semibold ${valueClassName}`}>{roundLocalePi(piAmount)}</p>
                 </div>
               </li>
             );

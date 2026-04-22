@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import LoginWithPi from "./LoginWithPi";
 import { Button } from "./ui/button";
 import { CheckCircle, Menu, Moon, Sun } from "lucide-react";
 import { User } from "@/lib/types";
 import { AppNavigation } from "./AppNavigation";
+import { useAuth } from "@/context/AuthContext";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,14 +23,21 @@ interface AppHeaderProps {
 
 const moreMenuItems = [
   { href: "/leaderboard", label: "Leaderboard" },
-  { href: "/profile", label: "Profile" },
-  { href: "/admin", label: "Admin", admin: true },
+  { href: "/profile", label: "Profile", requiresAuth: true },
+  { href: "/admin", label: "Admin", requiresAdmin: true },
   { href: "/help", label: "Help Center" },
   { href: "/terms", label: "Terms of Use" },
 ];
 
 export default function AppHeader({ currentUser }: AppHeaderProps) {
   const [isDarkMode, setIsDarkMode] = useState(true);
+  const pathname = usePathname();
+  const { ppxUser } = useAuth();
+  const hideCategoryMenu = ["/profile", "/leaderboard", "/admin"].some(
+    (basePath) => pathname === basePath || pathname.startsWith(`${basePath}/`)
+  );
+  const isLoggedIn = Boolean(ppxUser);
+  const isAdminUser = ppxUser?.role === "admin" || ppxUser?.role === "superadmin";
 
   useEffect(() => {
     const root = document.documentElement;
@@ -59,6 +68,16 @@ export default function AppHeader({ currentUser }: AppHeaderProps) {
   }
 
   const renderMoreMenu = () => {
+    const visibleMenuItems = moreMenuItems.filter((item) => {
+      if (item.requiresAdmin) {
+        return isAdminUser;
+      }
+      if (item.requiresAuth) {
+        return isLoggedIn;
+      }
+      return true;
+    });
+
     return (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -73,7 +92,7 @@ export default function AppHeader({ currentUser }: AppHeaderProps) {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48">
-          {moreMenuItems.map((item) => (
+          {visibleMenuItems.map((item) => (
             <DropdownMenuItem key={item.label} asChild>
               <Link href={item.href}>{item.label}</Link>
             </DropdownMenuItem>
@@ -112,11 +131,13 @@ export default function AppHeader({ currentUser }: AppHeaderProps) {
         </div>
       </div>
 
-      <div className="border-b">
-        <div className="container flex h-12 items-center overflow-x-auto">
-          <AppNavigation currentUser={currentUser} />
+      {!hideCategoryMenu && (
+        <div className="border-b">
+          <div className="container flex h-12 items-center overflow-x-auto">
+            <AppNavigation currentUser={currentUser} />
+          </div>
         </div>
-      </div>
+      )}
     </header>
   );
 }
