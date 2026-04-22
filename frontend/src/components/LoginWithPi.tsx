@@ -6,7 +6,7 @@ import { apiFetch } from "@/lib/api";
 import { Button } from "./ui/button";
 import { Loader2, Wallet } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/context/AuthContext";
+import { savePpxToken, savePpxUser, useAuth } from "@/context/AuthContext";
 
 export default function LoginWithPi() {
   const { toast } = useToast();
@@ -36,7 +36,9 @@ export default function LoginWithPi() {
     try {
       if (process.env.NEXT_PUBLIC_ENVIRONMENT === "development") {
         setPpxToken("test_token");
+        savePpxToken("test_token");
         setPpxUser({ id: "1", username: "superadmin", role: "superadmin" });
+        savePpxUser({ id: "1", username: "superadmin", role: "superadmin" });
         // _ppxUser = { id: "3", username: "dev_user", role: "user" };
         return;
       }
@@ -105,7 +107,9 @@ export default function LoginWithPi() {
       });
 
       setPpxToken(ppx_token);
+      savePpxToken(ppx_token);
       setPpxUser(ppx_user);
+      savePpxUser(ppx_user);
 
       toast({
         title: "Login Successful!",

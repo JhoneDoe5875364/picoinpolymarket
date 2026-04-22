@@ -22,7 +22,8 @@ const PPX_USER_KEY = "ppx_user";
 
 const hasLocalStorage = () => typeof window !== "undefined" && !!window.localStorage;
 
-const savePpxToken = (token: string) => {
+export const savePpxToken = (token: string | null) => {
+  console.log("Saving ppx token:", token);
   try {
     if (!hasLocalStorage()) {
       return;
@@ -39,7 +40,7 @@ const savePpxToken = (token: string) => {
   }
 };
 
-const savePpxUser = (user: PpxUser | null) => {
+export const savePpxUser = (user: PpxUser | null) => {
   try {
     if (!hasLocalStorage()) {
       return;
@@ -63,6 +64,17 @@ export function getPpxToken(): string | null {
   return window.localStorage.getItem(PPX_TOKEN_KEY);
 }
 
+export function getPpxUser(): PpxUser | null {
+  if (!hasLocalStorage()) {
+    return null;
+  }
+  const userRaw = window.localStorage.getItem(PPX_USER_KEY);
+  if (!userRaw) {
+    return null;
+  }
+  return JSON.parse(userRaw) as PpxUser | null;
+}
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
@@ -81,13 +93,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     setPpxToken(null);
+    savePpxToken(null);
     setPpxUser(null);
+    savePpxUser(null);
   }, []);
-
-  useEffect(() => {
-    savePpxToken(ppxToken || "");
-    savePpxUser(ppxUser || null);
-  }, [ppxToken, ppxUser]);
 
   // Register logout callback for automatic logout on token expiration
   useEffect(() => {
@@ -125,38 +134,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     setPpxToken(_ppxToken);
+    savePpxToken(_ppxToken);
     setPpxUser(_ppxUser);
+    savePpxUser(_ppxUser);
     setIsVerifying(false);
   }, []);
 
-  // Periodically check token validity
   useEffect(() => {
     if (!ppxToken) {
-      return; // Don't check if not logged in
+      return;
     }
 
-    // Get token check interval from environment variable (in minutes), default to 10 minutes
     const checkIntervalMinutes = parseInt(process.env.NEXT_PUBLIC_TOKEN_CHECK_INTERVAL_MINUTES || "10", 10);
     const checkIntervalMs = checkIntervalMinutes * 60 * 1000;
 
     const checkTokenValidity = async () => {
       try {
         await apiFetchWithToken("/auth/pi/me");
-        // Token is valid, continue
       } catch (error) {
-        // Token is invalid, logout automatically
         console.warn("Token validation failed during periodic check:", error);
-        // Only logout if it's a 401 error (unauthorized), not network errors
         if (error instanceof Error && error.message.includes("401")) {
           logout();
         }
       }
     };
 
-    // Check immediately on mount if token exists
     checkTokenValidity();
 
-    // Set up interval to check periodically
     const intervalId = setInterval(checkTokenValidity, checkIntervalMs);
 
     return () => {
