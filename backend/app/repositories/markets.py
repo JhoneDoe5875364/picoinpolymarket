@@ -295,6 +295,7 @@ async def market_holders(
     *,
     market_id: int,
     limit: int = 20,
+    offset: int = 0,
     min_balance: int = 1,
 ) -> List[dict[str, Any]]:
     stmt_yes = (
@@ -314,6 +315,7 @@ async def market_holders(
         .join(User, User.id == MarketPosition.user_id)
         .order_by(MarketPosition.shares.desc())
         .limit(limit)
+        .offset(offset)
     )
 
     stmt_no = (
@@ -333,6 +335,7 @@ async def market_holders(
         .join(User, User.id == MarketPosition.user_id)
         .order_by(MarketPosition.shares.desc())
         .limit(limit)
+        .offset(offset)
     )
 
     result = await session.execute(union_all(stmt_yes, stmt_no))
@@ -439,12 +442,17 @@ async def list_market_trades(
     session: AsyncSession,
     *,
     market_id: int,
+    min_amount: Optional[Union[Decimal, float]] = None,
     limit: int = 20,
     offset: int = 0,
     order: str = "created_at",
     ascending: bool = False,
 ) -> List[dict[str, Any]]:
     sort_col = _TRADE_ORDER_COLUMNS.get(order, MarketTrade.created_at)
+    conditions: list[Any] = [MarketTrade.market_id == market_id]
+    if min_amount is not None:
+        conditions.append(MarketTrade.pi_amount >= min_amount)
+
     stmt = (
         select(
             MarketTrade.id.label("id"),
@@ -462,7 +470,7 @@ async def list_market_trades(
             MarketTrade.pi_fee.label("pi_fee"),
             MarketTrade.pi_total_amount.label("pi_total_amount"),
         )
-        .where(MarketTrade.market_id == market_id)
+        .where(*conditions)
         .join(User, User.id == MarketTrade.taker_user_id)
         .order_by(sort_col.asc() if ascending else sort_col.desc())
         .offset(offset)

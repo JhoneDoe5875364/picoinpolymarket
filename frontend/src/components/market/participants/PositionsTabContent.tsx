@@ -1,18 +1,16 @@
+import { useEffect, useRef, useState } from "react";
+import { apiFetch } from "@/lib/api";
+import type { Market } from "@/lib/types";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { getDisplayName, ListSkeleton, normalizeNumber, RankedAvatar } from "./shared";
-import type { MarketPosition, PositionStatus, SortDirection } from "./types";
+import { ListSkeleton, normalizeNumber, RankedAvatar } from "./shared";
+import type { MarketPosition, MarketPositionGroup, PositionStatus, SortDirection } from "./types";
 import { toUnsignedMoney } from "@/lib/utils";
 
-const TOP_LIST_LIMIT = 20;
+const PAGE_SIZE = 20;
 
 interface PositionsTabContentProps {
-  positionsLoading: boolean;
-  yesPositions: MarketPosition[];
-  noPositions: MarketPosition[];
-  positionStatus: PositionStatus;
-  sortDirection: SortDirection;
-  onPositionStatusChange: (value: PositionStatus) => void;
-  onSortDirectionChange: (value: SortDirection) => void;
+  market: Market;
+  isActive: boolean;
 }
 
 function PositionColumn({
@@ -35,7 +33,7 @@ function PositionColumn({
         <p className="text-sm text-muted-foreground">No positions found.</p>
       ) : (
         <ul className="space-y-2 pt-2">
-          {rows.slice(0, TOP_LIST_LIMIT).map((position, idx) => {
+          {rows.map((position, idx) => {
             const username = position.pi_username || "";
             const piAmount = normalizeNumber(position.pi_amount);
             const shares = normalizeNumber(position.shares);
@@ -61,19 +59,131 @@ function PositionColumn({
   );
 }
 
+function mergeUniquePositions(existing: MarketPosition[], incoming: MarketPosition[]): MarketPosition[] {
+  const seen = new Set(existing.map((row) => `${row.id}`));
+  const uniqueIncoming = incoming.filter((row) => !seen.has(`${row.id}`));
+  return [...existing, ...uniqueIncoming];
+}
+
 export function PositionsTabContent({
-  positionsLoading,
-  yesPositions,
-  noPositions,
-  positionStatus,
-  sortDirection,
-  onPositionStatusChange,
-  onSortDirectionChange,
+  market,
+  isActive,
 }: PositionsTabContentProps) {
+  const [positionsLoading, setPositionsLoading] = useState(false);
+  const [positionsLoadingMore, setPositionsLoadingMore] = useState(false);
+  const [hasMorePositions, setHasMorePositions] = useState(true);
+  const [yesPositions, setYesPositions] = useState<MarketPosition[]>([]);
+  const [noPositions, setNoPositions] = useState<MarketPosition[]>([]);
+  const [positionStatus, setPositionStatus] = useState<PositionStatus>("ALL");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("DESC");
+  const nextOffsetRef = useRef(0);
+  const loadMoreInFlightRef = useRef(false);
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!isActive) return;
+    if (!market?.id) {
+      setPositionsLoading(false);
+      setHasMorePositions(false);
+      setYesPositions([]);
+      setNoPositions([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadInitialPositions() {
+      setPositionsLoading(true);
+      setPositionsLoadingMore(false);
+      setHasMorePositions(true);
+      setYesPositions([]);
+      setNoPositions([]);
+      nextOffsetRef.current = 0;
+
+      try {
+        const params = new URLSearchParams({
+          market_id: String(market.id),
+          status: positionStatus,
+          limit: String(PAGE_SIZE),
+          offset: "0",
+          order: "shares",
+          ascending: String(sortDirection === "ASC"),
+        });
+        const response = await apiFetch<{ data?: MarketPositionGroup }>(`/markets/positions?${params.toString()}`);
+        if (cancelled) return;
+
+        const groups: MarketPositionGroup = response?.data ?? { YES: [], NO: [] };
+        setYesPositions(groups.YES ?? []);
+        setNoPositions(groups.NO ?? []);
+        nextOffsetRef.current = PAGE_SIZE;
+        setHasMorePositions((groups.YES?.length ?? 0) === PAGE_SIZE || (groups.NO?.length ?? 0) === PAGE_SIZE);
+      } catch {
+        if (cancelled) return;
+        setYesPositions([]);
+        setNoPositions([]);
+        setHasMorePositions(false);
+      } finally {
+        if (!cancelled) setPositionsLoading(false);
+      }
+    }
+
+    loadInitialPositions();
+    return () => {
+      cancelled = true;
+    };
+  }, [isActive, market.id, positionStatus, sortDirection]);
+
+  useEffect(() => {
+    if (!isActive || positionsLoading || positionsLoadingMore || !hasMorePositions) return;
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    observerRef.current?.disconnect();
+    observerRef.current = new IntersectionObserver(
+      async (entries) => {
+        const entry = entries[0];
+        if (!entry?.isIntersecting || loadMoreInFlightRef.current) return;
+
+        loadMoreInFlightRef.current = true;
+        setPositionsLoadingMore(true);
+        try {
+          const currentOffset = nextOffsetRef.current;
+          const params = new URLSearchParams({
+            market_id: String(market.id),
+            status: positionStatus,
+            limit: String(PAGE_SIZE),
+            offset: String(currentOffset),
+            order: "shares",
+            ascending: String(sortDirection === "ASC"),
+          });
+          const response = await apiFetch<{ data?: MarketPositionGroup }>(`/markets/positions?${params.toString()}`);
+          const groups: MarketPositionGroup = response?.data ?? { YES: [], NO: [] };
+          const nextYes = groups.YES ?? [];
+          const nextNo = groups.NO ?? [];
+
+          setYesPositions((prev) => mergeUniquePositions(prev, nextYes));
+          setNoPositions((prev) => mergeUniquePositions(prev, nextNo));
+          nextOffsetRef.current += PAGE_SIZE;
+          setHasMorePositions(nextYes.length === PAGE_SIZE || nextNo.length === PAGE_SIZE);
+        } catch {
+          setHasMorePositions(false);
+        } finally {
+          loadMoreInFlightRef.current = false;
+          setPositionsLoadingMore(false);
+        }
+      },
+      { root: null, rootMargin: "200px", threshold: 0 }
+    );
+
+    observerRef.current.observe(sentinel);
+    return () => observerRef.current?.disconnect();
+  }, [hasMorePositions, isActive, market.id, positionStatus, positionsLoading, positionsLoadingMore, sortDirection]);
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-end gap-2">
-        <Select value={positionStatus} onValueChange={(value) => onPositionStatusChange(value as PositionStatus)}>
+        <Select value={positionStatus} onValueChange={(value) => setPositionStatus(value as PositionStatus)}>
           <SelectTrigger className="h-9 w-[100px]">
             <SelectValue />
           </SelectTrigger>
@@ -84,7 +194,7 @@ export function PositionsTabContent({
           </SelectContent>
         </Select>
 
-        <Select value={sortDirection} onValueChange={(value) => onSortDirectionChange(value as SortDirection)}>
+        <Select value={sortDirection} onValueChange={(value) => setSortDirection(value as SortDirection)}>
           <SelectTrigger className="h-9 w-[80px]">
             <SelectValue />
           </SelectTrigger>
@@ -106,6 +216,8 @@ export function PositionsTabContent({
           <PositionColumn title="No" rows={noPositions} valueClassName="text-rose-400" keyPrefix="NO" withDivider />
         </div>
       )}
+      {hasMorePositions && !positionsLoading ? <div ref={sentinelRef} className="h-6" aria-hidden="true" /> : null}
+      {positionsLoadingMore ? <p className="text-center text-sm text-muted-foreground">Loading more positions...</p> : null}
     </div>
   );
 }

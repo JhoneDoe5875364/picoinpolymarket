@@ -74,7 +74,8 @@ async def get_market_by_slug(slug: str, db: DbSession):
 async def get_market_holders(
     db: DbSession,
     market_id: int = Query(..., ge=1),
-    limit: int = Query(default=20, ge=0, le=20),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     min_balance: int = Query(default=1, ge=0, le=999999),
 ):
     try:
@@ -82,6 +83,7 @@ async def get_market_holders(
             db,
             market_id=market_id,
             limit=limit,
+            offset=offset,
             min_balance=min_balance,
         )
     except RuntimeError as exc:
@@ -118,6 +120,7 @@ async def get_market_prices_history(
 async def get_market_trades(
     db: DbSession,
     market_id: int = Query(..., ge=1),
+    min_amount: Optional[Union[Decimal, float]] = Query(default=None, ge=0),
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=20, ge=1, le=100),
     order: str = Query(default="created_at"),
@@ -126,6 +129,7 @@ async def get_market_trades(
     rows = await markets_repo.list_market_trades(
         db,
         market_id=market_id,
+        min_amount=min_amount,
         offset=offset,
         limit=limit,
         order=order,

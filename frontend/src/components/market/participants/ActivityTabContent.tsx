@@ -1,8 +1,10 @@
+import { useEffect, useRef, useState } from "react";
+import { apiFetch } from "@/lib/api";
+import type { Market } from "@/lib/types";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   InitialAvatar,
   ListSkeleton,
-  getDisplayName,
   normalizeNumber,
   outcomeColor,
   outcomeText,
@@ -10,23 +12,122 @@ import {
 import type { MarketTradeActivity, MinAmountFilter } from "./types";
 import { formatRelativeTime, toUnsignedMoney } from "@/lib/utils";
 
+const PAGE_SIZE = 20;
+
 interface ActivityTabContentProps {
-  activityLoading: boolean;
-  minAmount: MinAmountFilter;
-  filteredActivityRows: MarketTradeActivity[];
-  onMinAmountChange: (value: MinAmountFilter) => void;
+  market: Market;
+  isActive: boolean;
 }
 
 export function ActivityTabContent({
-  activityLoading,
-  minAmount,
-  filteredActivityRows,
-  onMinAmountChange,
+  market,
+  isActive,
 }: ActivityTabContentProps) {
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [activityLoadingMore, setActivityLoadingMore] = useState(false);
+  const [minAmount, setMinAmount] = useState<MinAmountFilter>("NONE");
+  const [activityRows, setActivityRows] = useState<MarketTradeActivity[]>([]);
+  const [hasMoreActivity, setHasMoreActivity] = useState(true);
+  const nextOffsetRef = useRef(0);
+  const loadMoreInFlightRef = useRef(false);
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  function buildTradesParams(offset: number): URLSearchParams {
+    const params = new URLSearchParams({
+      market_id: String(market.id),
+      offset: String(offset),
+      limit: String(PAGE_SIZE),
+      order: "created_at",
+      ascending: "false",
+    });
+    if (minAmount !== "NONE") {
+      params.set("min_amount", minAmount);
+    }
+    return params;
+  }
+
+  useEffect(() => {
+    if (!isActive) return;
+    if (!market?.id) {
+      setActivityRows([]);
+      setActivityLoading(false);
+      setHasMoreActivity(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadInitialActivity() {
+      setActivityLoading(true);
+      setActivityLoadingMore(false);
+      setHasMoreActivity(true);
+      setActivityRows([]);
+      nextOffsetRef.current = 0;
+
+      try {
+        const params = buildTradesParams(0);
+        const response = await apiFetch<{ data?: MarketTradeActivity[] }>(`/markets/trades?${params.toString()}`);
+        if (cancelled) return;
+
+        const rows = response?.data ?? [];
+        setActivityRows(rows);
+        setHasMoreActivity(rows.length === PAGE_SIZE);
+        nextOffsetRef.current = PAGE_SIZE;
+      } catch {
+        if (cancelled) return;
+        setActivityRows([]);
+        setHasMoreActivity(false);
+      } finally {
+        if (!cancelled) setActivityLoading(false);
+      }
+    }
+
+    loadInitialActivity();
+    return () => {
+      cancelled = true;
+    };
+  }, [isActive, market.id, minAmount]);
+
+  useEffect(() => {
+    if (!isActive || activityLoading || activityLoadingMore || !hasMoreActivity) return;
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    observerRef.current?.disconnect();
+    observerRef.current = new IntersectionObserver(
+      async (entries) => {
+        const entry = entries[0];
+        if (!entry?.isIntersecting || loadMoreInFlightRef.current) return;
+
+        loadMoreInFlightRef.current = true;
+        setActivityLoadingMore(true);
+        try {
+          const currentOffset = nextOffsetRef.current;
+          const params = buildTradesParams(currentOffset);
+          const response = await apiFetch<{ data?: MarketTradeActivity[] }>(`/markets/trades?${params.toString()}`);
+          const rows = response?.data ?? [];
+          setActivityRows((prev) => [...prev, ...rows]);
+          nextOffsetRef.current += PAGE_SIZE;
+          setHasMoreActivity(rows.length === PAGE_SIZE);
+        } catch {
+          setHasMoreActivity(false);
+        } finally {
+          loadMoreInFlightRef.current = false;
+          setActivityLoadingMore(false);
+        }
+      },
+      { root: null, rootMargin: "200px", threshold: 0 }
+    );
+
+    observerRef.current.observe(sentinel);
+    return () => observerRef.current?.disconnect();
+  }, [activityLoading, activityLoadingMore, hasMoreActivity, isActive, market.id, minAmount]);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
-        <Select value={minAmount} onValueChange={(value) => onMinAmountChange(value as MinAmountFilter)}>
+        <Select value={minAmount} onValueChange={(value) => setMinAmount(value as MinAmountFilter)}>
           <SelectTrigger className="h-9 w-[140px] rounded-full">
             <SelectValue />
           </SelectTrigger>
@@ -43,11 +144,11 @@ export function ActivityTabContent({
 
       {activityLoading ? (
         <ListSkeleton />
-      ) : filteredActivityRows.length === 0 ? (
+      ) : activityRows.length === 0 ? (
         <p className="text-sm text-muted-foreground">No activity yet.</p>
       ) : (
         <ul className="divide-y divide-border">
-          {filteredActivityRows.map((row, idx) => {
+          {activityRows.map((row, idx) => {
             const name = row.taker_pi_username || "";
             const shares = normalizeNumber(row.shares);
             const price = normalizeNumber(row.price);
@@ -74,6 +175,8 @@ export function ActivityTabContent({
           })}
         </ul>
       )}
+      {hasMoreActivity && !activityLoading ? <div ref={sentinelRef} className="h-6" aria-hidden="true" /> : null}
+      {activityLoadingMore ? <p className="text-center text-sm text-muted-foreground">Loading more activity...</p> : null}
     </div>
   );
 }

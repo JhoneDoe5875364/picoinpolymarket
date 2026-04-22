@@ -11,6 +11,7 @@ export interface MarketHolder {
 
 export interface MarketHolderGroup {
   token: string;
+  outcome?: "YES" | "NO";
   holders: MarketHolder[];
 }
 
