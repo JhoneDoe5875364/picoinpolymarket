@@ -13,10 +13,49 @@ import type { MarketTradeActivity, MinAmountFilter } from "./types";
 import { formatRelativeTime, toUnsignedMoney } from "@/lib/utils";
 
 const PAGE_SIZE = 20;
+const inFlightTradesRequests = new Map<string, Promise<MarketTradeActivity[]>>();
 
 interface ActivityTabContentProps {
   market: Market;
   isActive: boolean;
+}
+
+function buildTradesParams(args: {
+  marketId: number | string;
+  offset: number;
+  minAmount: MinAmountFilter;
+}): URLSearchParams {
+  const params = new URLSearchParams({
+    market_id: String(args.marketId),
+    offset: String(args.offset),
+    limit: String(PAGE_SIZE),
+    order: "created_at",
+    ascending: "false",
+  });
+  if (args.minAmount !== "NONE") {
+    params.set("min_amount", args.minAmount);
+  }
+  return params;
+}
+
+async function fetchTradesPage(args: {
+  marketId: number | string;
+  offset: number;
+  minAmount: MinAmountFilter;
+}): Promise<MarketTradeActivity[]> {
+  const params = buildTradesParams(args);
+  const requestKey = params.toString();
+  const existingRequest = inFlightTradesRequests.get(requestKey);
+  if (existingRequest) return existingRequest;
+
+  const request = apiFetch<{ data?: MarketTradeActivity[] }>(`/markets/trades?${requestKey}`)
+    .then((response) => response?.data ?? [])
+    .finally(() => {
+      inFlightTradesRequests.delete(requestKey);
+    });
+
+  inFlightTradesRequests.set(requestKey, request);
+  return request;
 }
 
 export function ActivityTabContent({
@@ -32,20 +71,6 @@ export function ActivityTabContent({
   const loadMoreInFlightRef = useRef(false);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
-
-  function buildTradesParams(offset: number): URLSearchParams {
-    const params = new URLSearchParams({
-      market_id: String(market.id),
-      offset: String(offset),
-      limit: String(PAGE_SIZE),
-      order: "created_at",
-      ascending: "false",
-    });
-    if (minAmount !== "NONE") {
-      params.set("min_amount", minAmount);
-    }
-    return params;
-  }
 
   useEffect(() => {
     if (!isActive) return;
@@ -66,11 +91,13 @@ export function ActivityTabContent({
       nextOffsetRef.current = 0;
 
       try {
-        const params = buildTradesParams(0);
-        const response = await apiFetch<{ data?: MarketTradeActivity[] }>(`/markets/trades?${params.toString()}`);
+        const rows = await fetchTradesPage({
+          marketId: market.id,
+          offset: 0,
+          minAmount,
+        });
         if (cancelled) return;
 
-        const rows = response?.data ?? [];
         setActivityRows(rows);
         setHasMoreActivity(rows.length === PAGE_SIZE);
         nextOffsetRef.current = PAGE_SIZE;
@@ -104,9 +131,11 @@ export function ActivityTabContent({
         setActivityLoadingMore(true);
         try {
           const currentOffset = nextOffsetRef.current;
-          const params = buildTradesParams(currentOffset);
-          const response = await apiFetch<{ data?: MarketTradeActivity[] }>(`/markets/trades?${params.toString()}`);
-          const rows = response?.data ?? [];
+          const rows = await fetchTradesPage({
+            marketId: market.id,
+            offset: currentOffset,
+            minAmount,
+          });
           setActivityRows((prev) => [...prev, ...rows]);
           nextOffsetRef.current += PAGE_SIZE;
           setHasMoreActivity(rows.length === PAGE_SIZE);

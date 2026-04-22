@@ -5,6 +5,7 @@ import { ListSkeleton, normalizeNumber, RankedAvatar } from "./shared";
 import type { MarketHolder, MarketHolderGroup } from "./types";
 
 const PAGE_SIZE = 20;
+const inFlightHoldersRequests = new Map<string, Promise<MarketHolderGroup[]>>();
 
 interface TopHoldersTabContentProps {
   market: Market;
@@ -63,6 +64,31 @@ function getHoldersByOutcome(groups: MarketHolderGroup[], market: Market, outcom
   return byToken?.holders ?? [];
 }
 
+function buildHoldersParams(args: { marketId: number | string; offset: number }): URLSearchParams {
+  return new URLSearchParams({
+    market_id: String(args.marketId),
+    limit: String(PAGE_SIZE),
+    offset: String(args.offset),
+    min_balance: "1",
+  });
+}
+
+async function fetchHoldersPage(args: { marketId: number | string; offset: number }): Promise<MarketHolderGroup[]> {
+  const params = buildHoldersParams(args);
+  const requestKey = params.toString();
+  const existingRequest = inFlightHoldersRequests.get(requestKey);
+  if (existingRequest) return existingRequest;
+
+  const request = apiFetch<{ data?: MarketHolderGroup[] }>(`/markets/holders?${requestKey}`)
+    .then((response) => response?.data ?? [])
+    .finally(() => {
+      inFlightHoldersRequests.delete(requestKey);
+    });
+
+  inFlightHoldersRequests.set(requestKey, request);
+  return request;
+}
+
 export function TopHoldersTabContent({ market, isActive }: TopHoldersTabContentProps) {
   const [holdersLoading, setHoldersLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -95,16 +121,12 @@ export function TopHoldersTabContent({ market, isActive }: TopHoldersTabContentP
       nextOffsetRef.current = 0;
 
       try {
-        const params = new URLSearchParams({
-          market_id: String(market.id),
-          limit: String(PAGE_SIZE),
-          offset: "0",
-          min_balance: "1",
+        const groups = await fetchHoldersPage({
+          marketId: market.id,
+          offset: 0,
         });
-        const response = await apiFetch<{ data?: MarketHolderGroup[] }>(`/markets/holders?${params.toString()}`);
         if (cancelled) return;
 
-        const groups = response?.data ?? [];
         const yes = getHoldersByOutcome(groups, market, "YES");
         const no = getHoldersByOutcome(groups, market, "NO");
         setYesHolders(yes);
@@ -143,14 +165,10 @@ export function TopHoldersTabContent({ market, isActive }: TopHoldersTabContentP
         setLoadingMore(true);
         try {
           const currentOffset = nextOffsetRef.current;
-          const params = new URLSearchParams({
-            market_id: String(market.id),
-            limit: String(PAGE_SIZE),
-            offset: String(currentOffset),
-            min_balance: "1",
+          const groups = await fetchHoldersPage({
+            marketId: market.id,
+            offset: currentOffset,
           });
-          const response = await apiFetch<{ data?: MarketHolderGroup[] }>(`/markets/holders?${params.toString()}`);
-          const groups = response?.data ?? [];
           const yes = getHoldersByOutcome(groups, market, "YES");
           const no = getHoldersByOutcome(groups, market, "NO");
 

@@ -7,6 +7,7 @@ import type { MarketPosition, MarketPositionGroup, PositionStatus, SortDirection
 import { toUnsignedMoney } from "@/lib/utils";
 
 const PAGE_SIZE = 20;
+const inFlightPositionsRequests = new Map<string, Promise<MarketPositionGroup>>();
 
 interface PositionsTabContentProps {
   market: Market;
@@ -65,6 +66,43 @@ function mergeUniquePositions(existing: MarketPosition[], incoming: MarketPositi
   return [...existing, ...uniqueIncoming];
 }
 
+function buildPositionsParams(args: {
+  marketId: number | string;
+  positionStatus: PositionStatus;
+  sortDirection: SortDirection;
+  offset: number;
+}): URLSearchParams {
+  return new URLSearchParams({
+    market_id: String(args.marketId),
+    status: args.positionStatus,
+    limit: String(PAGE_SIZE),
+    offset: String(args.offset),
+    order: "shares",
+    ascending: String(args.sortDirection === "ASC"),
+  });
+}
+
+async function fetchPositionsPage(args: {
+  marketId: number | string;
+  positionStatus: PositionStatus;
+  sortDirection: SortDirection;
+  offset: number;
+}): Promise<MarketPositionGroup> {
+  const params = buildPositionsParams(args);
+  const requestKey = params.toString();
+  const existingRequest = inFlightPositionsRequests.get(requestKey);
+  if (existingRequest) return existingRequest;
+
+  const request = apiFetch<{ data?: MarketPositionGroup }>(`/markets/positions?${requestKey}`)
+    .then((response) => response?.data ?? { YES: [], NO: [] })
+    .finally(() => {
+      inFlightPositionsRequests.delete(requestKey);
+    });
+
+  inFlightPositionsRequests.set(requestKey, request);
+  return request;
+}
+
 export function PositionsTabContent({
   market,
   isActive,
@@ -102,18 +140,14 @@ export function PositionsTabContent({
       nextOffsetRef.current = 0;
 
       try {
-        const params = new URLSearchParams({
-          market_id: String(market.id),
-          status: positionStatus,
-          limit: String(PAGE_SIZE),
-          offset: "0",
-          order: "shares",
-          ascending: String(sortDirection === "ASC"),
+        const groups = await fetchPositionsPage({
+          marketId: market.id,
+          positionStatus,
+          sortDirection,
+          offset: 0,
         });
-        const response = await apiFetch<{ data?: MarketPositionGroup }>(`/markets/positions?${params.toString()}`);
         if (cancelled) return;
 
-        const groups: MarketPositionGroup = response?.data ?? { YES: [], NO: [] };
         setYesPositions(groups.YES ?? []);
         setNoPositions(groups.NO ?? []);
         nextOffsetRef.current = PAGE_SIZE;
@@ -149,16 +183,12 @@ export function PositionsTabContent({
         setPositionsLoadingMore(true);
         try {
           const currentOffset = nextOffsetRef.current;
-          const params = new URLSearchParams({
-            market_id: String(market.id),
-            status: positionStatus,
-            limit: String(PAGE_SIZE),
-            offset: String(currentOffset),
-            order: "shares",
-            ascending: String(sortDirection === "ASC"),
+          const groups = await fetchPositionsPage({
+            marketId: market.id,
+            positionStatus,
+            sortDirection,
+            offset: currentOffset,
           });
-          const response = await apiFetch<{ data?: MarketPositionGroup }>(`/markets/positions?${params.toString()}`);
-          const groups: MarketPositionGroup = response?.data ?? { YES: [], NO: [] };
           const nextYes = groups.YES ?? [];
           const nextNo = groups.NO ?? [];
 
