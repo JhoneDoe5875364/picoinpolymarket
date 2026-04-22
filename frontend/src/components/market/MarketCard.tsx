@@ -3,25 +3,30 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import type { Market } from "@/lib/types";
 import { fmtShortDate } from "@/lib/dates";
 import MarketProbability from "@/components/market/MarketProbability";
 import QuickBuyModal from "@/components/market/QuickBuyModal";
 import { cn } from "@/lib/utils";
 // -----------------------------------------------------
+const DEFAULT_MARKET_ICON = "/images/markets/market-default.png";
 
 function fmtNum(n: unknown, fallback = "0") {
   if (typeof n === "number" && Number.isFinite(n)) return n.toLocaleString();
   const num = typeof n === "string" ? Number(n) : NaN;
   return Number.isFinite(num) ? num.toLocaleString() : fallback;
 }
-function titleOf(m: Market | any) { return m?.question ?? m?.title ?? "Untitled market"; }
+function titleOf(m: Market | any) { return m?.question ?? "Untitled market"; }
+function iconOf(m: Market | any) {
+  return typeof m?.icon === "string" && m.icon.trim().length > 0 ? m.icon : null;
+}
 
 export function MarketCard({ market }: { market: Market | any }) {
   const volume = market?.volume ?? 0;
   const yesPrice = market?.outcome_price_yes ?? 0.5;
   const noPrice = market?.outcome_price_no ?? 0.5;
+  const icon = iconOf(market);
   const pathname = usePathname();
   const yesProbability = Math.round(yesPrice * 100);
   const noProbability = Math.round(noPrice * 100);
@@ -30,6 +35,7 @@ export function MarketCard({ market }: { market: Market | any }) {
   const [modalOpen, setModalOpen] = React.useState(false);
   const [isYesHovered, setIsYesHovered] = React.useState(false);
   const [isNoHovered, setIsNoHovered] = React.useState(false);
+  const [iconSrc, setIconSrc] = React.useState(icon ?? DEFAULT_MARKET_ICON);
 
   // If the pathname changes, reset the modal and buy side states
   React.useEffect(() => {
@@ -44,6 +50,9 @@ export function MarketCard({ market }: { market: Market | any }) {
       setOutcome(null);
     };
   }, []);
+  React.useEffect(() => {
+    setIconSrc(icon ?? DEFAULT_MARKET_ICON);
+  }, [icon]);
 
   function onYes(e: React.MouseEvent) { e.preventDefault(); e.stopPropagation(); setOutcome("YES"); setModalOpen(true); }
   function onNo(e: React.MouseEvent) { e.preventDefault(); e.stopPropagation(); setOutcome("NO"); setModalOpen(true); }
@@ -53,9 +62,24 @@ export function MarketCard({ market }: { market: Market | any }) {
       <Link href={`/markets/${market.id}`} className="block">
         <Card>
           <CardContent>
-            <CardTitle className="text-[14px] md:text-[16px] line-clamp-2 md:line-clamp-3 min-h-12 md:min-h-20">
-              {titleOf(market)}
-            </CardTitle>
+            <div className="mb-3 flex items-start gap-3">
+              <div className="h-12 w-12 md:h-16 md:w-16 shrink-0 overflow-hidden rounded-md border bg-muted/20 ">
+                <img
+                  src={iconSrc}
+                  alt={titleOf(market)}
+                  className="h-full w-full object-cover"
+                  loading="lazy"
+                  onError={() => {
+                    if (iconSrc !== DEFAULT_MARKET_ICON) setIconSrc(DEFAULT_MARKET_ICON);
+                  }}
+                />
+              </div>
+              <div className="flex-1 h-12 md:h-16 overflow-hidden">
+                <CardTitle className="text-[14px] md:text-[16px] leading-6 md:leading-snug line-clamp-2 md:line-clamp-3 break-words">
+                  {titleOf(market)}
+                </CardTitle>
+              </div>
+            </div>
 
             <MarketProbability implied={yesPrice} />
             

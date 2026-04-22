@@ -304,7 +304,7 @@ async def run_seed_markets(session: AsyncSession) -> None:
             question=question,
             slug=slug,
             description="Auto-generated random seed market for local development.",
-            icon="http://localhost:9002/icon.png",
+            icon=f"http://localhost:9002/images/markets/market-{market_id}.png",
             category_id=random.randint(1, 10),
             creator_id=admin_id,
             tier="standard",
