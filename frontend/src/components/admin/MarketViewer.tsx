@@ -1,19 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetchWithToken } from "@/lib/api";
-import { catCls, statusCls } from "@/lib/utils";
 import { format } from "date-fns";
-import { useAuth } from "@/context/AuthContext";
 
 type Status = "open" | "pending_resolution" | "resolved";
 
@@ -174,10 +170,10 @@ export function MarketViewer() {
                   {m.title}
                 </TableCell>
                 <TableCell>
-                  <Badge className={`px-2 py-0.5 rounded-full ${statusCls(m.status)}`}>{m.status}</Badge>
+                  {m.status}
                 </TableCell>
                 <TableCell>
-                  <Badge variant="outline" className={`${catCls(m.category)} border`}>{m.category}</Badge>
+                  {m.category}
                 </TableCell>
                 <TableCell>{format(new Date(m.created_at), "MM/dd/yyyy")}</TableCell>
                 <TableCell>{format(new Date(m.end_date), "MM/dd/yyyy HH:mm")}</TableCell>

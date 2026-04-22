@@ -6,14 +6,13 @@ import { ArrowDown, ArrowUp, ArrowUpDown, MoreHorizontal } from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetchWithToken } from "@/lib/api";
-import { catCls, roundLocale, roundLocalePi, statusCls, toSignedMoney, toUnsignedMoney } from "@/lib/utils";
+import { roundLocale, roundLocalePi } from "@/lib/utils";
 import { format } from "date-fns";
 import { Market } from "@/lib/types";
 
@@ -185,10 +184,10 @@ export function MarketManager() {
                 <TableRow key={m.id}>
                   <TableCell className="min-w-60 line-clamp-2">{m.question}</TableCell>
                   <TableCell className="text-center">
-                    <Badge className={`px-2 py-0.5 rounded-full`}>{m.status}</Badge>
+                    {m.status}
                   </TableCell>
                   <TableCell className="text-center">
-                    <Badge variant="outline" className={`border`}>{m.category}</Badge>
+                    {m.category}
                   </TableCell>
                   <TableCell className="text-center">{format(new Date(m.start_date ?? ""), "MM/dd/yyyy")}</TableCell>
                   <TableCell className="text-center">{format(new Date(m.end_date ?? ""), "MM/dd/yyyy")}</TableCell>
