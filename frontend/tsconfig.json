@@ -37,20 +37,6 @@
     ".next/dev/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules",
-    "functions/**",
-    "functions/**/*",
-    "functions/**",
-    "functions/**/*",
-    "src/functions/**",
-    "src/functions/**/*",
-    "**/functions/**",
-    "**/functions/**/*",
-    "functions/**",
-    "functions/**/*",
-    "src/functions/**",
-    "src/functions/**/*",
-    "**/functions/**",
-    "**/functions/**/*"
+    "node_modules"
   ]
 }

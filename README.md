@@ -152,19 +152,12 @@ PredictPix/
 │   │   │   └── flows/
 │   │   ├── middleware.ts   # Next.js middleware
 │   │   └── globals.css     # Global styles
-│   ├── functions/          # Firebase Cloud Functions
-│   │   └── src/
-│   │       ├── index.ts
-│   │       ├── types.ts
-│   │       └── data.ts
 │   ├── docs/               # Documentation
 │   ├── certs/              # SSL certificates
 │   ├── package.json        # Dependencies
 │   ├── tsconfig.json       # TypeScript config
 │   ├── tailwind.config.ts  # Tailwind configuration
 │   ├── next.config.mjs     # Next.js configuration
-│   ├── firebase.json       # Firebase config
-│   ├── apphosting.yaml     # App hosting config
 │   └── README.md           # Frontend documentation
 │
 ├── requirements/           # Dependency specifications
