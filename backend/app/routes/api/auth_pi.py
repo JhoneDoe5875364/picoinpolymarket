@@ -131,11 +131,3 @@ async def auth_pi_me(user=Depends(verify_token)):
         logger.error("Error verifying Pi token: %s", e)
         raise HTTPException(status_code=401, detail="Failed to verify Pi access token")
 
-
-@router.get("/protected")
-async def protected_route(user=Depends(verify_token)):
-    return {
-        "message": f"Hello {user['username']}!",
-        "user_id": user["sub"],
-        "role": user["role"],
-    }

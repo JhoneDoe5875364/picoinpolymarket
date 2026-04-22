@@ -5,7 +5,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ProfileOverview } from '@/components/profile/ProfileOverview';
 import { ProfilePositionsTab } from '@/components/profile/ProfilePositionsTab';
 import { ProfileActivityTab } from '@/components/profile/ProfileActivityTab';
-import StatusTabs from '@/components/profile/StatusTabs';
 
 export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState<'positions' | 'activity'>('positions');

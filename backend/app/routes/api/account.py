@@ -11,13 +11,6 @@ logger = get_logger()
 router = APIRouter(prefix="/account", tags=["account"])
 
 
-@router.get("/open-positions")
-async def get_open_positions(db: DbSession, user=Depends(verify_token)):
-    user_id = user.get("sub", "")
-    rows = await account_repo.open_positions(db, user_id)
-    return {"ok": True, "rows": jsonable_encoder(rows)}
-
-
 @router.get("/info")
 async def get_user_info(db: DbSession, user=Depends(verify_token)):
     user_id = user.get("sub", "")
@@ -37,46 +30,3 @@ async def get_user_info(db: DbSession, user=Depends(verify_token)):
         },
     }
 
-
-@router.get("/recent-activity")
-async def get_recent_activity(db: DbSession, user=Depends(verify_token)):
-    user_id = user.get("sub", "")
-    rows = await account_repo.recent_activity(db, user_id)
-    return {"ok": True, "rows": jsonable_encoder(rows)}
-
-
-@router.get("/history")
-async def get_history(db: DbSession, user=Depends(verify_token)):
-    user_id = user.get("sub", "")
-    rows = await account_repo.transaction_history(db, user_id)
-    return {"ok": True, "rows": jsonable_encoder(rows)}
-
-
-@router.post("/claim")
-async def handle_claim(db: DbSession, user=Depends(verify_token)):
-    user_id = user.get("sub", "")
-    try:
-        async with db.begin():
-            total_balance, claimable_balance = await account_repo.claim_payouts_flow(
-                db, user_id
-            )
-    except LookupError:
-        raise HTTPException(status_code=404, detail="User not found")
-    except Exception as e:
-        logger.error("Error claiming payouts: %s", e)
-        raise HTTPException(status_code=500, detail="Failed to claim payouts")
-
-    if claimable_balance <= 0:
-        return {
-            "ok": True,
-            "total_balance": total_balance,
-            "claimed_rewards": 0,
-            "claimable_balance": 0,
-        }
-
-    return {
-        "ok": True,
-        "total_balance": total_balance,
-        "claimed_rewards": claimable_balance,
-        "claimable_balance": 0,
-    }
