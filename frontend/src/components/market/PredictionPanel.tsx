@@ -23,7 +23,7 @@ interface PredictionPanelProps {
 
 export function PredictionPanel({ market }: PredictionPanelProps) {
   const { toast } = useToast();
-  const { authUser } = useAuth();
+  const { ppxUser } = useAuth();
   const router = useRouter();
 
   const [outcome, setOutcome] = useState<"YES" | "NO">("YES");
@@ -43,7 +43,7 @@ export function PredictionPanel({ market }: PredictionPanelProps) {
   const potentialProfit = useMemo(() => shares, [shares]);
 
   const handlePay = async () => {
-    if (!authUser) {
+    if (!ppxUser) {
       toast({
         title: "Please log in",
         description: "You must be logged in to place a prediction.",
@@ -56,7 +56,7 @@ export function PredictionPanel({ market }: PredictionPanelProps) {
 
     try {
       await executeBuyTrade({
-        userId: authUser.uid,
+        userId: ppxUser.id,
         marketId: market.id,
         outcome,
         price: selectedPrice,

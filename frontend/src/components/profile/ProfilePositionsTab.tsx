@@ -130,7 +130,7 @@ function normalizePositionPage(rows: any[], startIndex: number): PositionRow[] {
 export function ProfilePositionsTab({
   isActive,
 }: ProfilePositionsTabProps) {
-  const { authUser } = useAuth();
+  const { ppxUser } = useAuth();
   const [status, setStatus] = useState<'active' | 'closed'>('active');
   const [sortBy, setSortBy] = useState<(typeof SORT_OPTIONS)[number]>('Profit/Loss');
   const [searchTerm, setSearchTerm] = useState('');
@@ -164,7 +164,7 @@ export function ProfilePositionsTab({
       nextOffsetRef.current = 0;
 
       try {
-        const userId = authUser?.id?.toString() ?? '3';
+        const userId = ppxUser?.id?.toString() ?? '3';
         const rows = await fetchPositionPage({
           userId,
           positionFilter: status,
@@ -194,7 +194,7 @@ export function ProfilePositionsTab({
     return () => {
       cancelled = true;
     };
-  }, [authUser?.id, debouncedSearch, isActive, status, sortBy]);
+  }, [ppxUser?.id, debouncedSearch, isActive, status, sortBy]);
 
   useEffect(() => {
     if (!isActive || positionsLoading || positionsLoadingMore || !hasMorePositions) return;
@@ -210,7 +210,7 @@ export function ProfilePositionsTab({
         loadMoreInFlightRef.current = true;
         setPositionsLoadingMore(true);
         try {
-          const userId = authUser?.id?.toString() ?? '3';
+          const userId = ppxUser?.id?.toString() ?? '3';
           const currentOffset = nextOffsetRef.current;
           const rows = await fetchPositionPage({
             userId,
@@ -236,7 +236,7 @@ export function ProfilePositionsTab({
 
     observerRef.current.observe(sentinel);
     return () => observerRef.current?.disconnect();
-  }, [authUser?.id, debouncedSearch, hasMorePositions, isActive, status, positionsLoading, positionsLoadingMore, sortBy]);
+  }, [ppxUser?.id, debouncedSearch, hasMorePositions, isActive, status, positionsLoading, positionsLoadingMore, sortBy]);
 
   return (
     <div className="space-y-3">

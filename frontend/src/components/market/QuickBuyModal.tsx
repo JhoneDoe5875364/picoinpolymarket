@@ -18,7 +18,7 @@ type Props = {
 
 export default function QuickBuyModal({ open, marketId, outcome, marketQuestion, price = 0.5, onClose, onDone }: Props) {
   const { toast } = useToast();
-  const { authUser } = useAuth();
+  const { ppxUser } = useAuth();
 
   const [sharesInput, setSharesInput] = useState<string>("");
   const [loading, setLoading] = useState(false);
@@ -36,7 +36,7 @@ export default function QuickBuyModal({ open, marketId, outcome, marketQuestion,
 
   const handlePay = async () => {
     setMsg("");
-    if (!authUser) {
+    if (!ppxUser) {
       setMsg("Please log in first.");
       return;
     }
@@ -50,7 +50,7 @@ export default function QuickBuyModal({ open, marketId, outcome, marketQuestion,
     setLoading(true);
     try {
       await executeBuyTrade({
-        userId: authUser.uid,
+        userId: ppxUser.id,
         marketId,
         outcome,
         price,

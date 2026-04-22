@@ -119,7 +119,7 @@ async function fetchProfileOverview(userId: string, period: PnlPeriod): Promise<
 }
 
 export function ProfileOverview() {
-  const { authUser } = useAuth();
+  const { ppxUser } = useAuth();
   const [selectedPeriod, setSelectedPeriod] = useState<PnlPeriod>('1D');
   const [stats, setStats] = useState<OverviewStats>({
     positionsValue: 0,
@@ -132,13 +132,8 @@ export function ProfileOverview() {
   const [error, setError] = useState<string | null>(null);
 
   const profileName = useMemo(() => {
-    return (
-      authUser?.wallet_address ??
-      authUser?.address ??
-      authUser?.pi_username ??
-      '0x7883590f9f3Dc4...'
-    );
-  }, [authUser]);
+    return (ppxUser?.username ?? 'Unknown User');
+  }, [ppxUser]);
 
   const selectedPeriodCaption = useMemo(
     () => PERIODS.find((item) => item.key === selectedPeriod)?.caption ?? 'Past Day',
@@ -152,7 +147,7 @@ export function ProfileOverview() {
       setIsLoading(true);
       setError(null);
       try {
-        const userId = authUser?.id?.toString() ?? '3';
+        const userId = ppxUser?.id?.toString() ?? '3';
         const payload = await fetchProfileOverview(userId, selectedPeriod);
         if (cancelled) return;
         setStats(payload.stats);
@@ -172,7 +167,7 @@ export function ProfileOverview() {
     return () => {
       cancelled = true;
     };
-  }, [authUser?.id, selectedPeriod]);
+  }, [ppxUser?.id, selectedPeriod]);
 
   const pnlClassName =
     stats.profitLoss > 0

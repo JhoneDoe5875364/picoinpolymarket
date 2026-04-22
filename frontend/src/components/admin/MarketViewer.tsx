@@ -37,7 +37,6 @@ type Row = {
 
 export function MarketViewer() {
   const { toast } = useToast();
-  const { role } = useAuth();
 
   const [rows, setRows] = useState<Row[]>([]);
   const [total, setTotal] = useState(0);

@@ -6,12 +6,11 @@ import { apiFetch } from "@/lib/api";
 import { Button } from "./ui/button";
 import { Loader2, Wallet } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { setAccessToken } from "@/lib/auth-token";
 import { useAuth } from "@/context/AuthContext";
 
 export default function LoginWithPi() {
   const { toast } = useToast();
-  const { authUser, setAuth, logout } = useAuth();
+  const { ppxUser, setPpxUser, setPpxToken, logout } = useAuth();
 
   const [loading, setLoading] = useState(false);
 
@@ -90,24 +89,20 @@ export default function LoginWithPi() {
 
       const authResult = await Pi.authenticate(scopes, onIncompletePaymentFound);
 
-      const { nonce } = await apiFetch("/auth/pi/start", {
-        method: "POST",
-      });
-
-      const { accessToken, username, role } = await apiFetch("/auth/pi/verify", {
+      const { ppx_token, ppx_user } = await apiFetch("/auth/pi/verify", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ nonce, authResult }),
+        body: JSON.stringify({ authResult }),
       });
 
-      setAuth(accessToken, authResult.accessToken, username, authResult.user, role);
-      setAccessToken(accessToken);
+      setPpxToken(ppx_token);
+      setPpxUser(ppx_user);
 
       toast({
         title: "Login Successful!",
-        description: `Authenticated as ${username}.`,
+        description: `Authenticated as ${ppx_user.username}.`,
         variant: "success"
       });
 
@@ -125,7 +120,7 @@ export default function LoginWithPi() {
 
   return (
     <div className="space-y-2">
-      {!authUser ? <Button
+      {!ppxUser ? <Button
         variant='ghost'
         onClick={onLogin}
         disabled={loading}

@@ -88,7 +88,7 @@ function toRelativeTimeLabel(value: string): string {
 export function ProfileActivityTab({
   isActive,
 }: ProfileActivityTabProps) {
-  const { authUser } = useAuth();
+  const { ppxUser } = useAuth();
   const [trades, setTrades] = useState<TradeRow[]>([]);
   const [tradesLoading, setTradesLoading] = useState(false);
   const [tradesLoadingMore, setTradesLoadingMore] = useState(false);
@@ -110,7 +110,7 @@ export function ProfileActivityTab({
       setHasMoreTrades(true);
       tradesNextOffsetRef.current = 0;
       try {
-        const userId = authUser?.id?.toString() ?? '3';
+        const userId = ppxUser?.id?.toString() ?? '3';
         const rows = await fetchTradePage(userId, 0);
         if (cancelled) return;
 
@@ -134,7 +134,7 @@ export function ProfileActivityTab({
     return () => {
       cancelled = true;
     };
-  }, [authUser?.id, isActive]);
+  }, [ppxUser?.id, isActive]);
 
   useEffect(() => {
     if (!isActive || tradesLoading || tradesLoadingMore || !hasMoreTrades) return;
@@ -150,7 +150,7 @@ export function ProfileActivityTab({
         tradesLoadMoreInFlightRef.current = true;
         setTradesLoadingMore(true);
         try {
-          const userId = authUser?.id?.toString() ?? '3';
+          const userId = ppxUser?.id?.toString() ?? '3';
           const currentOffset = tradesNextOffsetRef.current;
           const rows = await fetchTradePage(userId, currentOffset);
           const normalized = normalizeTradePage(rows, currentOffset);
@@ -170,7 +170,7 @@ export function ProfileActivityTab({
 
     tradesObserverRef.current.observe(sentinel);
     return () => tradesObserverRef.current?.disconnect();
-  }, [authUser?.id, hasMoreTrades, isActive, tradesLoading, tradesLoadingMore]);
+  }, [ppxUser?.id, hasMoreTrades, isActive, tradesLoading, tradesLoadingMore]);
 
   return (
     <div className="space-y-3">

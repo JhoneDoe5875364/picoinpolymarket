@@ -8,6 +8,8 @@ from typing import Optional
 from app.core.logger import get_logger
 from dotenv import load_dotenv
 
+from app.core.config import Config
+
 # Load environment variables
 load_dotenv()
 
@@ -26,6 +28,13 @@ PI_ME_URL = f"{PI_API_BASE}/v2/me"
 
 
 async def verify_token(request: Request):
+    if Config.ENVIRONMENT == "development":
+        return {
+            "sub": "3",
+            "username": "dev_user",
+            "role": "user",
+        }
+    
     auth_header = request.headers.get("authorization")
     
     # logger.info(f"[Verify Token]: JWT_SECRET_KEY={JWT_SECRET_KEY}, JWT_ISSUER={JWT_ISSUER}, JWT_AUDIENCE={JWT_AUDIENCE}, JWT_ALGORITHM={JWT_ALGORITHM}")
@@ -56,7 +65,6 @@ async def verify_token(request: Request):
 
 
 def mint_jwt_token(user_id, username, role, pi_access_token):
-    
     now = int(time.time())
     if role == "superadmin":
         ttl_min = ADMIN_JWT_TTL_MIN
@@ -75,9 +83,7 @@ def mint_jwt_token(user_id, username, role, pi_access_token):
         "exp": exp,                            # Expiration
         "tok": pi_access_token
     }
-    
     token = jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
-    
     return token
 
 
@@ -103,22 +109,18 @@ async def _verify_with_pi(access_token: str) -> dict:
         async with httpx.AsyncClient(timeout=10.0) as client:
             r = await client.get(PI_ME_URL, headers={"Authorization": f"Bearer {access_token}"})
     except Exception as e:
-        raise HTTPException(
-            status_code=502, detail=f"Pi verify request failed: {e}")
+        return None
 
     if r.status_code != 200:
-        raise HTTPException(
-            status_code=401, detail=f"Invalid Pi token: HTTP {r.status_code}")
+        return None
 
     try:
         data = r.json()
     except Exception:
-        raise HTTPException(
-            status_code=502, detail="Pi verify returned invalid JSON")
+        return None
 
     if not isinstance(data, dict):
-        raise HTTPException(
-            status_code=502, detail="Pi verify returned unexpected structure")
+        return None
     return data
 
 

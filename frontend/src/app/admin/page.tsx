@@ -68,21 +68,21 @@ export default function AdminPage() {
   const [isMounted, setIsMounted] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const { accessToken } = useAuth();
+  const { ppxToken } = useAuth();
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
   useEffect(() => {
-    if (!accessToken) return;
+    if (!ppxToken) return;
     (async () => {
       setLoading(true);
       await Promise.all([loadCurrentUser()]);
       setLoading(false);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accessToken]);
+  }, [ppxToken]);
 
   async function loadCurrentUser() {
     const res = await apiFetchWithToken('/account/info', { method: "GET" });

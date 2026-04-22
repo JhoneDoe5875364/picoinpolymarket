@@ -11,7 +11,6 @@ class AuthResponse(BaseModel):
 
 
 class VerifyRequest(BaseModel):
-    nonce: str
     authResult: dict
 
 

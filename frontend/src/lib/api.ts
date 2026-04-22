@@ -1,28 +1,8 @@
 // src/lib/api.ts
-import { getAccessToken } from "./auth-token";
+import { getPpxToken } from "@/context/AuthContext";
 
-// Get API base URL - try to detect from current host if not set
-function getApiBase(): string {
-  if (process.env.NEXT_PUBLIC_API_BASE) {
-    return process.env.NEXT_PUBLIC_API_BASE;
-  }
-  
-  // Try to detect API URL from current host (for test.predictpix.com -> api.predictpix.com)
-  if (typeof window !== "undefined") {
-    const host = window.location.hostname;
-    if (host.includes("test.predictpix.com") || host.includes("sandbox.predictpix.com")) {
-      return "https://api.predictpix.com/api";
-    }
-    if (host.includes("predictpix.com")) {
-      return "https://api.predictpix.com/api";
-    }
-  }
-  
-  // Fallback to default
-  return "https://api.predictpix.com/api";
-}
 
-const API_BASE = getApiBase();
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "https://api.predictpix.com/api";
 
 // Logout callback to be registered by AuthContext
 let logoutCallback: (() => void) | null = null;
@@ -69,8 +49,8 @@ export async function apiFetch<T = any>(path: string, init: RequestInit = {}): P
 }
 
 export async function apiFetchWithToken<T = any>(path: string, init: RequestInit = {}): Promise<T> {
-  const token = getAccessToken();
-  if (!token) throw new Error("No access token set. Use setAccessToken(...) once per session.");
+  const token = getPpxToken();
+  if (!token) throw new Error("No ppx token set. Use setPpxToken(...) once per session.");
 
   try {
     const res = await fetch(`${API_BASE}${path}`, {
@@ -109,8 +89,3 @@ export async function apiFetchWithToken<T = any>(path: string, init: RequestInit
     throw error;
   }
 }
-
-export const AccountAPI = {
-  overview: () => apiFetchWithToken("/account/overview"),
-  positionsOpen: () => apiFetchWithToken("/account/positions?status=open"),
-};

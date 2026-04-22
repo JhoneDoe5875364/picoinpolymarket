@@ -1,48 +1,93 @@
 "use client";
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, ReactNode, useMemo } from "react";
 import { apiFetchWithToken, registerLogoutCallback, unregisterLogoutCallback } from "@/lib/api";
-import { setAccessToken as setAuthToken } from "@/lib/auth-token";
+
+interface PpxUser {
+  id: string;
+  username: string;
+  role: string;
+}
 
 interface AuthContextType {
-  accessToken: string | null;
-  piAccessToken: string | null;
-  username: string | null;
-  authUser: any;
-  role: string | null;
-  setAuth: (token: string, piToken: string, username: string, authUser: any, role: string) => void;
+  ppxToken: string | null;
+  ppxUser: PpxUser | null;
+  setPpxToken: (token: string | null) => void;
+  setPpxUser: (user: PpxUser | null) => void;
   logout: () => void;
   isVerifying: boolean;
+}
+
+const PPX_TOKEN_KEY = "ppx_token";
+const PPX_USER_KEY = "ppx_user";
+
+const hasLocalStorage = () => typeof window !== "undefined" && !!window.localStorage;
+
+const savePpxToken = (token: string) => {
+  try {
+    if (!hasLocalStorage()) {
+      return;
+    }
+
+    if (token) {
+      localStorage.setItem(PPX_TOKEN_KEY, token);
+      return;
+    }
+
+    localStorage.removeItem(PPX_TOKEN_KEY);
+  } catch (error) { 
+    console.warn("Failed to save ppx token to localStorage:", error);
+  }
+};
+
+const savePpxUser = (user: PpxUser | null) => {
+  try {
+    if (!hasLocalStorage()) {
+      return;
+    }
+
+    if (user) {
+      localStorage.setItem(PPX_USER_KEY, JSON.stringify(user));
+      return;
+    }
+
+    localStorage.removeItem(PPX_USER_KEY);
+  } catch (error) {
+    console.warn("Failed to save ppx user to localStorage:", error);
+  }
+};
+
+export function getPpxToken(): string | null {
+  if (!hasLocalStorage()) {
+    return null;
+  }
+  return window.localStorage.getItem(PPX_TOKEN_KEY);
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [accessToken, setAccessToken] = useState<string | null>(null);
-  const [piAccessToken, setPiAccessToken] = useState<string | null>(null);
-  const [username, setUsername] = useState<string | null>(null);
-  const [authUser, setAuthUser] = useState<any>(null);
-  const [role, setRole] = useState<string | null>(null);
+  const [ppxToken, setPpxToken] = useState<string | null>(null);
+  const [ppxUser, setPpxUser] = useState<PpxUser | null>(null);
   const [isVerifying, setIsVerifying] = useState(true);
 
   const logout = useCallback(() => {
-    setAccessToken(null);
-    setPiAccessToken(null);
-    setUsername(null);
-    setAuthUser(null);
-    setRole(null);
     try {
-      if (typeof window !== "undefined" && window.localStorage) {
-        localStorage.removeItem("accessToken");
-        localStorage.removeItem("piAccessToken");
-        localStorage.removeItem("username");
-        localStorage.removeItem("authUser");
-        localStorage.removeItem("role");
+      if (hasLocalStorage()) {
+        localStorage.removeItem(PPX_TOKEN_KEY);
+        localStorage.removeItem(PPX_USER_KEY);
       }
     } catch (error) {
       console.warn("Failed to clear localStorage:", error);
     }
-    setAuthToken("");
+
+    setPpxToken(null);
+    setPpxUser(null);
   }, []);
+
+  useEffect(() => {
+    savePpxToken(ppxToken || "");
+    savePpxUser(ppxUser || null);
+  }, [ppxToken, ppxUser]);
 
   // Register logout callback for automatic logout on token expiration
   useEffect(() => {
@@ -54,20 +99,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // When the page initial loads, load the access token and pi access token from localStorage and verify the token
   useEffect(() => {
-    let _accessToken: string | null = null;
-    let _piAccessToken: string | null = null;
-    let _username: string | null = null;
-    let _authUser: string | null = null;
-    let _role: string | null = null;
+    let _ppxToken: string | null = null;
+    let _ppxUserRaw: string | null = null;
+    let _ppxUser: PpxUser | null = null;
     
     // Safely access localStorage (may fail in some mobile browsers or private mode)
     try {
-      if (typeof window !== "undefined" && window.localStorage) {
-        _accessToken = localStorage.getItem("accessToken");
-        _piAccessToken = localStorage.getItem("piAccessToken");
-        _username = localStorage.getItem("username");
-        _authUser = localStorage.getItem("authUser");
-        _role = localStorage.getItem("role");
+      if (hasLocalStorage()) {
+        _ppxToken = localStorage.getItem(PPX_TOKEN_KEY);
+        _ppxUserRaw = localStorage.getItem(PPX_USER_KEY);
+      }
+
+      if (process.env.NEXT_PUBLIC_ENVIRONMENT === "development") {
+        _ppxToken = "test_token";
+        _ppxUser = { id: "3", username: "dev_user", role: "user" };
       }
     } catch (error) {
       console.warn("Failed to access localStorage:", error);
@@ -75,48 +120,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
     
-    if (_accessToken) {
-      setAccessToken(_accessToken);
-      setPiAccessToken(_piAccessToken);
-      setUsername(_username);
+    if (!_ppxUser && _ppxUserRaw) {
       try {
-        setAuthUser(_authUser ? JSON.parse(_authUser) : null);
+        _ppxUser = JSON.parse(_ppxUserRaw) as PpxUser;
       } catch (error) {
-        console.warn("Failed to parse authUser from localStorage:", error);
-        setAuthUser(null);
+        console.warn("Failed to parse ppxUser from localStorage:", error);
+        _ppxUser = null;
       }
-      setRole(_role);
-      setAuthToken(_accessToken);
-      
-      // Verify the token
-      setIsVerifying(true);
-      apiFetchWithToken("/account/info")
-        .then(() => {
-          // The token is valid
-          setIsVerifying(false);
-        })
-        .catch((error) => {
-          // The token has expired or is invalid
-          console.warn("Token verification failed:", error);
-          logout();
-          setIsVerifying(false);
-        });
-    } else {
-      setIsVerifying(false);
     }
-  }, [logout]);
+
+    setPpxToken(_ppxToken);
+    setPpxUser(_ppxUser);
+    setIsVerifying(false);
+  }, []);
 
   // Periodically check token validity
   useEffect(() => {
-    if (!accessToken) {
+    if (!ppxToken) {
       return; // Don't check if not logged in
     }
 
     // Get token check interval from environment variable (in minutes), default to 10 minutes
-    const checkIntervalMinutes = parseInt(
-      process.env.NEXT_PUBLIC_TOKEN_CHECK_INTERVAL_MINUTES || "10",
-      10
-    );
+    const checkIntervalMinutes = parseInt(process.env.NEXT_PUBLIC_TOKEN_CHECK_INTERVAL_MINUTES || "10", 10);
     const checkIntervalMs = checkIntervalMinutes * 60 * 1000;
 
     const checkTokenValidity = async () => {
@@ -142,30 +167,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => {
       clearInterval(intervalId);
     };
-  }, [accessToken, logout]);
+  }, [ppxToken, logout]);
 
-  const setAuth = (token: string, piToken: string, user: string, _authUser: any, _role: string) => {
-    setAccessToken(token);
-    setPiAccessToken(piToken);
-    setUsername(user);
-    setAuthUser(_authUser);
-    setRole(_role);
-    try {
-      if (typeof window !== "undefined" && window.localStorage) {
-        localStorage.setItem("accessToken", token);
-        localStorage.setItem("piAccessToken", piToken);
-        localStorage.setItem("username", user);
-        localStorage.setItem("authUser", typeof _authUser === "string" ? _authUser : JSON.stringify(_authUser));
-        localStorage.setItem("role", _role);
-      }
-    } catch (error) {
-      console.warn("Failed to save to localStorage:", error);
-    }
-    setAuthToken(token);
-  };
+  const contextValue = useMemo(
+    () => ({ ppxToken, ppxUser, setPpxToken, setPpxUser, logout, isVerifying }),
+    [ppxToken, ppxUser, logout, isVerifying]
+  );
 
   return (
-    <AuthContext.Provider value={{ accessToken, piAccessToken, username, authUser, role, setAuth, logout, isVerifying }}>
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );
