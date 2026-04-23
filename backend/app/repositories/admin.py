@@ -242,11 +242,12 @@ async def metrics(session: AsyncSession) -> dict[str, Any]:
     start_month = start_today.replace(day=1)
     start_year = start_today.replace(month=1, day=1)
 
-    periods: list[Tuple[str, datetime]] = [
+    periods: list[Tuple[str, Optional[datetime]]] = [
         ("today", start_today),
         ("week", start_week),
         ("month", start_month),
         ("year", start_year),
+        ("all", None),
     ]
 
     def build_count_columns(ts_column: Any) -> list[Any]:
@@ -254,7 +255,14 @@ async def metrics(session: AsyncSession) -> dict[str, Any]:
             func.coalesce(
                 func.sum(
                     case(
-                        (and_(ts_column.is_not(None), ts_column >= start_at, ts_column <= now), 1),
+                        (
+                            and_(
+                                ts_column.is_not(None),
+                                ts_column <= now,
+                                ts_column >= start_at if start_at is not None else True,
+                            ),
+                            1,
+                        ),
                         else_=0,
                     )
                 ),
@@ -271,8 +279,8 @@ async def metrics(session: AsyncSession) -> dict[str, Any]:
                         (
                             and_(
                                 ts_column.is_not(None),
-                                ts_column >= start_at,
                                 ts_column <= now,
+                                ts_column >= start_at if start_at is not None else True,
                                 value_column.is_not(None),
                                 value_column > 0 if positive_only else True,
                             ),
@@ -306,8 +314,8 @@ async def metrics(session: AsyncSession) -> dict[str, Any]:
                             and_(
                                 Market.is_closed == True,
                                 Market.end_date.is_not(None),
-                                Market.end_date >= start_at,
                                 Market.end_date <= now,
+                                Market.end_date >= start_at if start_at is not None else True,
                             ),
                             1,
                         ),
@@ -330,8 +338,8 @@ async def metrics(session: AsyncSession) -> dict[str, Any]:
                             and_(
                                 Market.is_resolved == True,
                                 Market.resolved_at.is_not(None),
-                                Market.resolved_at >= start_at,
                                 Market.resolved_at <= now,
+                                Market.resolved_at >= start_at if start_at is not None else True,
                             ),
                             1,
                         ),
