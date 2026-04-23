@@ -15,7 +15,6 @@ from app.core.logger import get_logger
 from app.core.security import verify_token
 from app.db.deps import DbSession
 from app.repositories import admin as admin_repo
-from app.routes.api.markets import markets_repo
 
 logger = get_logger()
 
@@ -137,6 +136,93 @@ async def create_market(request: Request, db: DbSession, user=Depends(verify_tok
     except Exception as e:
         logger.error("Error creating market: %s", e)
         raise HTTPException(status_code=500, detail="Failed to create market")
+
+    return {"ok": True, "market": jsonable_encoder(market_row)}
+
+
+@router.put("/markets/{market_id}")
+async def update_market(
+    request: Request,
+    db: DbSession,
+    market_id: int = Path(..., ge=1),
+    user=Depends(verify_token),
+):
+    _ = user.get("sub", "")
+    role = user.get("role", "")
+    if role != "superadmin":
+        raise HTTPException(status_code=403, detail="HasNotSuperadminRole")
+
+    data = await request.json()
+    question = str(data.get("question") or "").strip()
+    slug = str(data.get("slug") or "").strip()
+    description = data.get("description")
+    rules = data.get("rules")
+    category_slug = data.get("category")
+    category_id_raw = data.get("category_id")
+    start_date_raw = data.get("start_date")
+    end_date_raw = data.get("end_date")
+    liquidity_raw = data.get("liquidity")
+    icon_raw = data.get("icon")
+
+    if not question:
+        raise HTTPException(status_code=400, detail="question is required")
+    if not slug:
+        raise HTTPException(status_code=400, detail="slug is required")
+    if not category_slug and category_id_raw is None:
+        raise HTTPException(status_code=400, detail="category is required")
+
+    start_date = _parse_iso_datetime(str(start_date_raw or ""), "start_date")
+    end_date = _parse_iso_datetime(str(end_date_raw or ""), "end_date")
+    if end_date <= start_date:
+        raise HTTPException(status_code=400, detail="end_date must be after start_date")
+
+    liquidity: Optional[Decimal] = None
+    if liquidity_raw not in (None, ""):
+        try:
+            liquidity = Decimal(str(liquidity_raw))
+        except InvalidOperation as exc:
+            raise HTTPException(status_code=400, detail="Invalid liquidity value") from exc
+        if liquidity < 0:
+            raise HTTPException(status_code=400, detail="liquidity must be >= 0")
+
+    icon = str(icon_raw).strip() if icon_raw else None
+
+    explicit_cat: Optional[int] = None
+    if category_id_raw is not None:
+        try:
+            explicit_cat = int(category_id_raw)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="Invalid category_id (expected integer)")
+
+    try:
+        async with db.begin():
+            resolved_cat = await admin_repo.get_category_by_slug(
+                db,
+                slug=category_slug if isinstance(category_slug, str) else None,
+                explicit_id=explicit_cat,
+            )
+            if resolved_cat is None:
+                raise HTTPException(status_code=400, detail="Unknown category")
+            market_row = await admin_repo.update_market(
+                db,
+                market_id=market_id,
+                question=question,
+                slug=slug,
+                category_id=resolved_cat,
+                description=description,
+                rules=rules,
+                start_date_naive=start_date,
+                end_date_naive=end_date,
+                liquidity=liquidity,
+                icon=icon,
+            )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error updating market %s: %s", market_id, e)
+        raise HTTPException(status_code=500, detail="Failed to update market")
 
     return {"ok": True, "market": jsonable_encoder(market_row)}
 

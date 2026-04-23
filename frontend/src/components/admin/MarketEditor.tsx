@@ -5,9 +5,10 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Calendar, Loader2, UploadCloud } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { CardDescription, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -15,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { apiFetchWithToken } from "@/lib/api";
+import { Market } from "@/lib/types";
 
 const marketSchema = z.object({
   question: z.string().min(10, "Question must be at least 10 characters long."),
@@ -31,17 +33,79 @@ const marketSchema = z.object({
 type MarketFormData = z.infer<typeof marketSchema>;
 type CategoryOption = { id: number; slug: string; name: string };
 type MarketImage = { name: string; url: string };
-
-type MarketCreatorProps = {
-  onCreated?: () => void;
+type EditLoadResult = {
+  categoryRows: CategoryOption[];
+  imageRows: MarketImage[];
+  market: Market;
 };
 
-export function MarketCreator({ onCreated }: MarketCreatorProps) {
+const editLoadCache = new Map<string, EditLoadResult>();
+const editLoadInFlight = new Map<string, Promise<EditLoadResult>>();
+
+function toDateTimeLocalInput(value?: string | null): string {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 16);
+}
+
+async function fetchEditLoadData(marketId: string): Promise<EditLoadResult> {
+  const cached = editLoadCache.get(marketId);
+  if (cached) {
+    return cached;
+  }
+
+  const inFlight = editLoadInFlight.get(marketId);
+  if (inFlight) {
+    return inFlight;
+  }
+
+  const request = (async () => {
+    const [categoryRes, imageRes, marketRes] = await Promise.all([
+      apiFetchWithToken("/markets/categories", { method: "GET" }),
+      apiFetchWithToken("/markets/images", { method: "GET" }),
+      apiFetchWithToken(`/markets/${marketId}`, { method: "GET" }),
+    ]);
+
+    const categoryRows = Array.isArray(categoryRes?.data) ? categoryRes.data : [];
+    const imageRows = Array.isArray(imageRes?.data) ? imageRes.data : [];
+    const market = (marketRes?.data ?? null) as Market | null;
+
+    if (!market?.id) {
+      throw new Error("Market not found");
+    }
+
+    const loaded: EditLoadResult = {
+      categoryRows,
+      imageRows,
+      market,
+    };
+    editLoadCache.set(marketId, loaded);
+    return loaded;
+  })();
+
+  editLoadInFlight.set(marketId, request);
+  try {
+    return await request;
+  } finally {
+    editLoadInFlight.delete(marketId);
+  }
+}
+
+type MarketEditorProps = {
+  marketId: string;
+};
+
+export function MarketEditor({ marketId }: MarketEditorProps) {
+  const router = useRouter();
   const { toast } = useToast();
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [categories, setCategories] = useState<CategoryOption[]>([]);
+  const [loadedCategorySlug, setLoadedCategorySlug] = useState("");
   const [images, setImages] = useState<MarketImage[]>([]);
-  const [isLoadingMeta, setIsLoadingMeta] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const startDateInputRef = useRef<HTMLInputElement | null>(null);
   const endDateInputRef = useRef<HTMLInputElement | null>(null);
@@ -66,43 +130,60 @@ export function MarketCreator({ onCreated }: MarketCreatorProps) {
   useEffect(() => {
     let cancelled = false;
 
-    async function loadMeta() {
-      setIsLoadingMeta(true);
-      try {
-        const [categoryRes, imageRes] = await Promise.all([
-          apiFetchWithToken("/markets/categories", { method: "GET" }),
-          apiFetchWithToken("/markets/images", { method: "GET" }),
-        ]);
+    async function loadEditData() {
+      if (!marketId) return;
 
+      setIsLoading(true);
+      try {
+        const { categoryRows, imageRows, market } = await fetchEditLoadData(marketId);
         if (cancelled) return;
-        const categoryRows = Array.isArray(categoryRes?.data) ? categoryRes.data : [];
-        const imageRows = Array.isArray(imageRes?.data) ? imageRes.data : [];
 
         setCategories(categoryRows);
         setImages(imageRows);
+        setLoadedCategorySlug(market.category ?? "");
 
-        const currentCategory = form.getValues("category");
-        if (!currentCategory && categoryRows.length > 0) {
-          form.setValue("category", categoryRows[0].slug, { shouldValidate: true });
-        }
+        form.reset({
+          question: market.question ?? "",
+          slug: market.slug ?? "",
+          description: market.description ?? "",
+          rules: market.rules ?? "",
+          category: "",
+          startDate: toDateTimeLocalInput(market.start_date),
+          endDate: toDateTimeLocalInput(market.end_date),
+          liquidity: Number(market.liquidity ?? 0),
+          icon: market.icon ?? "",
+        });
       } catch (err: any) {
         if (!cancelled) {
           toast({
-            title: "Failed to load market metadata",
-            description: err?.message ?? "Could not fetch categories/images.",
+            title: "Failed to load market",
+            description: err?.message ?? "Could not fetch editable market details.",
             variant: "destructive",
           });
         }
       } finally {
-        if (!cancelled) setIsLoadingMeta(false);
+        if (!cancelled) setIsLoading(false);
       }
     }
 
-    loadMeta();
+    loadEditData();
     return () => {
       cancelled = true;
     };
-  }, [form, toast]);
+  }, [form, marketId, toast]);
+
+  useEffect(() => {
+    if (!loadedCategorySlug || categories.length === 0) return;
+
+    const hasCategory = categories.some((category) => category.slug === loadedCategorySlug);
+    if (!hasCategory) return;
+
+    if (form.getValues("category") !== loadedCategorySlug) {
+      form.setValue("category", loadedCategorySlug, {
+        shouldValidate: true,
+      });
+    }
+  }, [categories, form, loadedCategorySlug]);
 
   const imageOptions = useMemo(() => {
     return images.map((img) => ({
@@ -174,34 +255,24 @@ export function MarketCreator({ onCreated }: MarketCreatorProps) {
         icon: data.icon?.trim() || null,
       };
 
-      const res = await apiFetchWithToken("/admin/markets", {
-        method: "POST",
+      const res = await apiFetchWithToken(`/admin/markets/${marketId}`, {
+        method: "PUT",
         body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
-        throw new Error(res?.error || "Create failed");
+        throw new Error(res?.error || "Update failed");
       }
 
       toast({
-        title: "Market Created",
-        description: `ID: ${res.market?.id ?? "—"}`,
+        title: "Market Updated",
+        description: `ID: ${marketId}`,
       });
-      form.reset({
-        question: "",
-        slug: "",
-        description: "",
-        rules: "",
-        category: categories[0]?.slug || "",
-        startDate: "",
-        endDate: "",
-        liquidity: 0,
-        icon: "",
-      });
-      onCreated?.();
+      router.push("/admin/markets");
+      router.refresh();
     } catch (err: any) {
       toast({
-        title: "Error Creating Market",
+        title: "Error Updating Market",
         description: err?.message ?? "An unexpected error occurred.",
         variant: "destructive",
       });
@@ -211,14 +282,14 @@ export function MarketCreator({ onCreated }: MarketCreatorProps) {
   }
 
   return (
-    <Card className="border-0 shadow-none">
-      <CardHeader className="space-y-1 px-5 pb-3 pt-4">
-        <CardTitle>Create a New Market</CardTitle>
+    <section className="space-y-4">
+      <header className="space-y-1">
+        <CardTitle>Edit Market</CardTitle>
         <CardDescription>
-          Fill in question, description, rules, category, dates, liquidity, and market image.
+          Update question, description, rules, category, dates, liquidity, and market image.
         </CardDescription>
-      </CardHeader>
-      <CardContent className="px-5 pb-4 pt-0">
+      </header>
+      <div>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField
@@ -226,7 +297,7 @@ export function MarketCreator({ onCreated }: MarketCreatorProps) {
               name="question"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Market Question</FormLabel>
+                  <FormLabel>Question</FormLabel>
                   <FormControl>
                     <Input placeholder="e.g., Will X happen by Y date?" {...field} />
                   </FormControl>
@@ -328,6 +399,7 @@ export function MarketCreator({ onCreated }: MarketCreatorProps) {
                   </FormItem>
                 )}
               />
+
               <FormField
                 control={form.control}
                 name="startDate"
@@ -464,17 +536,22 @@ export function MarketCreator({ onCreated }: MarketCreatorProps) {
               )}
             </div>
 
-            {isLoadingMeta && (
-              <p className="text-sm text-muted-foreground">Loading categories and images...</p>
+            {isLoading && (
+              <p className="text-sm text-muted-foreground">Loading market, categories, and images...</p>
             )}
 
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Create Market
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button type="submit" disabled={isSubmitting || isLoading}>
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Save Changes
+              </Button>
+              <Button type="button" variant="outline" onClick={() => router.push("/admin/markets")}>
+                Cancel
+              </Button>
+            </div>
           </form>
         </Form>
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }

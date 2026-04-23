@@ -82,6 +82,44 @@ async def insert_market(
     }
 
 
+async def update_market(
+    session: AsyncSession,
+    *,
+    market_id: int,
+    question: str,
+    slug: str,
+    category_id: Optional[int],
+    description: Optional[str],
+    rules: Optional[str],
+    start_date_naive: datetime,
+    end_date_naive: datetime,
+    liquidity: Optional[Decimal],
+    icon: Optional[str],
+) -> dict[str, Any]:
+    update_stmt = (
+        update(Market)
+        .where(Market.id == market_id)
+        .values(
+            question=question,
+            slug=slug,
+            category_id=category_id,
+            description=description,
+            rules=rules,
+            start_date=start_date_naive,
+            end_date=end_date_naive,
+            liquidity=liquidity,
+            icon=icon,
+            updated_at=datetime.now(),
+        )
+        .returning(*Market.__table__.columns)
+    )
+    updated = await session.execute(update_stmt)
+    updated_row = updated.mappings().first()
+    if not updated_row:
+        raise LookupError("Market not found")
+    return dict(updated_row)
+
+
 async def close_market(
     session: AsyncSession,
     *,
