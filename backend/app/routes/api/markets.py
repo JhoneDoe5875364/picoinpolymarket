@@ -58,6 +58,22 @@ async def list_markets(
     return {"ok": True, "data": jsonable_encoder(rows)}
 
 
+@router.get("/summary", summary="Get market status summary")
+async def get_market_status_summary(
+    db: DbSession,
+    search: Optional[str] = Query(default=None),
+    category: str = Query(default="all", min_length=1),
+    active_only: bool = Query(default=True),
+):
+    summary = await markets_repo.market_status_summary(
+        db,
+        search=search,
+        category=category,
+        active_only=active_only,
+    )
+    return {"ok": True, "data": jsonable_encoder(summary)}
+
+
 @router.get("/{market_id:int}", summary="Get market by id")
 async def get_market_by_id(market_id: int, db: DbSession):
     row = await markets_repo.get_market_by_id(db, market_id)

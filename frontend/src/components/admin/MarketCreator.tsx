@@ -3,103 +3,33 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useState } from "react";
-import { format } from "date-fns";
-import { CalendarIcon, Loader2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Loader2, UploadCloud } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { apiFetchWithToken } from "@/lib/api";
 
 const marketSchema = z.object({
   question: z.string().min(10, "Question must be at least 10 characters long."),
   description: z.string().min(20, "Description must be at least 20 characters long."),
-  category: z.string().min(3, "Category is required."),
-  resolutionDate: z.date().optional(),
-  resolutionTime: z.string().optional(),
-  timezone: z.string().optional(),
-  // Legacy field for backward compatibility
-  endDate: z.date().optional(),
-  isClear: z.boolean().refine((v) => v === true, {
-    message: "Resolution source and criteria must be clear.",
-  }),
-  noRestricted: z.boolean().refine((v) => v === true, {
-    message: "You must confirm the market does not involve restricted topics.",
-  }),
+  rules: z.string().min(10, "Rules must be at least 10 characters long."),
+  category: z.string().min(1, "Category is required."),
+  startDate: z.string().min(1, "Start date is required."),
+  endDate: z.string().min(1, "End date is required."),
+  liquidity: z.number().min(0, "Liquidity must be >= 0"),
+  icon: z.string().optional(),
 });
 
 type MarketFormData = z.infer<typeof marketSchema>;
-
-const categories = [
-  "Crypto",
-  "Technology",
-  "Sports",
-  "Politics",
-  "Science",
-  "Finance",
-  "Entertainment",
-  "World News",
-  "Environment",
-  "Other",
-];
-
-// Common timezones - using IANA timezone names
-// Common timezones ordered by UTC offset, with GMT offset labels
-const commonTimezones = [
-  // GMT-12 to GMT-9
-  { value: "Etc/GMT+12", label: "International Date Line West (GMT-12)" },
-  { value: "Pacific/Pago_Pago", label: "Pacific/Pago_Pago (GMT-11)" },
-  { value: "Pacific/Honolulu", label: "Pacific/Honolulu (GMT-10)" },
-  { value: "America/Anchorage", label: "America/Anchorage (GMT-9)" },
-  // GMT-8 to GMT-5
-  { value: "America/Los_Angeles", label: "America/Los_Angeles (GMT-8)" },
-  { value: "America/Denver", label: "America/Denver (GMT-7)" },
-  { value: "America/Chicago", label: "America/Chicago (GMT-6)" },
-  { value: "America/New_York", label: "America/New_York (GMT-5)" },
-  // GMT-4 to GMT-1
-  { value: "America/Halifax", label: "America/Halifax (GMT-4)" },
-  { value: "America/St_Johns", label: "America/St_Johns (GMT-3)" }, // Standard only
-  { value: "America/Argentina/Buenos_Aires", label: "America/Argentina/Buenos_Aires (GMT-3)" },
-  { value: "Atlantic/South_Georgia", label: "Atlantic/South_Georgia (GMT-2)" },
-  { value: "Atlantic/Azores", label: "Atlantic/Azores (GMT-1)" },
-  // GMT+0 (UTC) and UK
-  { value: "UTC", label: "UTC (GMT+0)" },
-  { value: "Europe/London", label: "Europe/London (GMT+0)" },
-  // Central Europe
-  { value: "Europe/Paris", label: "Europe/Paris (GMT+1)" },
-  { value: "Europe/Berlin", label: "Europe/Berlin (GMT+1)" },
-  { value: "Africa/Lagos", label: "Africa/Lagos (GMT+1)" },
-  // Eastern Europe/Africa
-  { value: "Europe/Athens", label: "Europe/Athens (GMT+2)" },
-  { value: "Europe/Helsinki", label: "Europe/Helsinki (GMT+2)" },
-  { value: "Africa/Cairo", label: "Africa/Cairo (GMT+2)" },
-  { value: "Europe/Istanbul", label: "Europe/Istanbul (GMT+3)" },
-  { value: "Asia/Jerusalem", label: "Asia/Jerusalem (GMT+2)" },
-  // Middle East
-  { value: "Asia/Dubai", label: "Asia/Dubai (GMT+4)" },
-  { value: "Asia/Karachi", label: "Asia/Karachi (GMT+5)" },
-  { value: "Asia/Dhaka", label: "Asia/Dhaka (GMT+6)" },
-  { value: "Asia/Bangkok", label: "Asia/Bangkok (GMT+7)" },
-  { value: "Asia/Shanghai", label: "Asia/Shanghai (GMT+8)" },
-  { value: "Asia/Singapore", label: "Asia/Singapore (GMT+8)" },
-  { value: "Asia/Seoul", label: "Asia/Seoul (GMT+9)" },
-  { value: "Asia/Tokyo", label: "Asia/Tokyo (GMT+9)" },
-  { value: "Australia/Sydney", label: "Australia/Sydney (GMT+10)" },
-  { value: "Pacific/Noumea", label: "Pacific/Noumea (GMT+11)" },
-  { value: "Pacific/Auckland", label: "Pacific/Auckland (GMT+12)" },
-  // GMT+13 and +14 (extreme east)
-  { value: "Pacific/Apia", label: "Pacific/Apia (GMT+13)" },
-  { value: "Pacific/Kiritimati", label: "Pacific/Kiritimati (GMT+14)" },
-];
+type CategoryOption = { id: number; slug: string; name: string };
+type MarketImage = { name: string; url: string };
 
 type MarketCreatorProps = {
   onCreated?: () => void;
@@ -108,53 +38,139 @@ type MarketCreatorProps = {
 export function MarketCreator({ onCreated }: MarketCreatorProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [categories, setCategories] = useState<CategoryOption[]>([]);
+  const [images, setImages] = useState<MarketImage[]>([]);
+  const [isLoadingMeta, setIsLoadingMeta] = useState(true);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
 
   const form = useForm<MarketFormData>({
     resolver: zodResolver(marketSchema),
     defaultValues: {
       question: "",
       description: "",
+      rules: "",
       category: "",
-      resolutionDate: undefined,
-      resolutionTime: "",
-      timezone: "UTC",
-      isClear: false,
-      noRestricted: false,
+      startDate: "",
+      endDate: "",
+      liquidity: 0,
+      icon: "",
     },
   });
 
+  const selectedIcon = form.watch("icon");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadMeta() {
+      setIsLoadingMeta(true);
+      try {
+        const [categoryRes, imageRes] = await Promise.all([
+          apiFetchWithToken("/admin/markets/categories", { method: "GET" }),
+          apiFetchWithToken("/admin/markets/images", { method: "GET" }),
+        ]);
+
+        if (cancelled) return;
+        const categoryRows = Array.isArray(categoryRes?.data) ? categoryRes.data : [];
+        const imageRows = Array.isArray(imageRes?.data) ? imageRes.data : [];
+
+        setCategories(categoryRows);
+        setImages(imageRows);
+
+        const currentCategory = form.getValues("category");
+        if (!currentCategory && categoryRows.length > 0) {
+          form.setValue("category", categoryRows[0].slug, { shouldValidate: true });
+        }
+      } catch (err: any) {
+        if (!cancelled) {
+          toast({
+            title: "Failed to load market metadata",
+            description: err?.message ?? "Could not fetch categories/images.",
+            variant: "destructive",
+          });
+        }
+      } finally {
+        if (!cancelled) setIsLoadingMeta(false);
+      }
+    }
+
+    loadMeta();
+    return () => {
+      cancelled = true;
+    };
+  }, [form, toast]);
+
+  const imageOptions = useMemo(() => {
+    return images.map((img) => ({
+      ...img,
+      value: img.url,
+    }));
+  }, [images]);
+
+  async function uploadImage(file: File) {
+    setIsUploadingImage(true);
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ""));
+        reader.onerror = () => reject(new Error("Failed to read file"));
+        reader.readAsDataURL(file);
+      });
+
+      const res = await apiFetchWithToken("/admin/markets/images", {
+        method: "POST",
+        body: JSON.stringify({
+          filename: file.name,
+          content_base64: dataUrl,
+        }),
+      });
+
+      if (!res?.ok || !res?.data?.url) {
+        throw new Error(res?.error || "Image upload failed");
+      }
+
+      const uploaded = { name: res.data.name, url: res.data.url };
+      setImages((prev) => [uploaded, ...prev.filter((item) => item.url !== uploaded.url)]);
+      form.setValue("icon", uploaded.url, { shouldValidate: true });
+      toast({ title: "Image uploaded", description: uploaded.name });
+    } catch (err: any) {
+      toast({
+        title: "Image upload failed",
+        description: err?.message ?? "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploadingImage(false);
+    }
+  }
+
   async function onSubmit(data: MarketFormData) {
+    const start = new Date(data.startDate);
+    const end = new Date(data.endDate);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      form.setError("startDate", { type: "manual", message: "Start/end date is invalid." });
+      return;
+    }
+    if (end <= start) {
+      form.setError("endDate", { type: "manual", message: "End date must be after start date." });
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      // Map UI fields -> backend payload
-      const payload: any = {
+      const payload = {
         question: data.question.trim(),
         description: data.description.trim(),
+        rules: data.rules.trim(),
         category: data.category.trim(),
-        checklist_resolution_clarity: data.isClear,
-        checklist_restricted_topics: data.noRestricted,
+        start_date: start.toISOString(),
+        end_date: end.toISOString(),
+        liquidity: data.liquidity,
+        icon: data.icon?.trim() || null,
       };
-
-      // Use new format (date + time + timezone) if available, otherwise fall back to legacy format
-      if (data.resolutionDate) {
-        const dateStr = format(data.resolutionDate, "yyyy-MM-dd");
-        payload.resolution_date_str = dateStr;
-        
-        if (data.resolutionTime) {
-          payload.resolution_time_str = data.resolutionTime;
-        }
-        
-        if (data.timezone) {
-          payload.timezone = data.timezone;
-        }
-      } else if (data.endDate) {
-        // Legacy format for backward compatibility
-        payload.resolution_date = data.endDate.toISOString();
-      }
 
       const res = await apiFetchWithToken("/admin/markets", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
@@ -166,7 +182,16 @@ export function MarketCreator({ onCreated }: MarketCreatorProps) {
         title: "Market Created",
         description: `ID: ${res.market?.id ?? "—"}`,
       });
-      form.reset();
+      form.reset({
+        question: "",
+        description: "",
+        rules: "",
+        category: categories[0]?.slug || "",
+        startDate: "",
+        endDate: "",
+        liquidity: 0,
+        icon: "",
+      });
       onCreated?.();
     } catch (err: any) {
       toast({
@@ -180,14 +205,16 @@ export function MarketCreator({ onCreated }: MarketCreatorProps) {
   }
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="border-0 shadow-none">
+      <CardHeader className="space-y-1 px-5 pb-3 pt-4">
         <CardTitle>Create a New Market</CardTitle>
-        <CardDescription>Fill out the details below to launch a new prediction market.</CardDescription>
+        <CardDescription>
+          Fill in question, description, rules, category, dates, liquidity, and market image.
+        </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-5 pb-4 pt-0">
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField
               control={form.control}
               name="question"
@@ -207,169 +234,161 @@ export function MarketCreator({ onCreated }: MarketCreatorProps) {
               name="description"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Description & Rules</FormLabel>
+                  <FormLabel>Description</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="Provide clear resolution criteria and the source of truth for the outcome..." {...field} />
+                    <Textarea
+                      placeholder="Describe the market context and settlement reference details..."
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
 
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <FormField
+              control={form.control}
+              name="rules"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Rules</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder="List detailed participation and resolution rules."
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
               <FormField
                 control={form.control}
                 name="category"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Category</FormLabel>
+                  <FormItem className="grid grid-cols-[92px_1fr] items-center gap-2 md:block">
+                    <FormLabel className="m-0">Category</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger className="w-full">
                           <SelectValue placeholder="Select a category" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
                         {categories.map((c) => (
-                          <SelectItem key={c} value={c}>
-                            {c}
+                          <SelectItem key={c.slug} value={c.slug}>
+                            {c.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                    <FormMessage />
+                    <FormMessage className="col-span-2 md:col-span-1" />
                   </FormItem>
                 )}
               />
 
               <FormField
                 control={form.control}
-                name="resolutionDate"
+                name="liquidity"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Resolution Date (Optional)</FormLabel>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant="outline"
-                            className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}
-                          >
-                            {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={field.value}
-                          onSelect={field.onChange}
-                          disabled={(date) => date < new Date()}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                    <FormMessage />
+                  <FormItem className="grid grid-cols-[92px_1fr] items-center gap-2 md:block">
+                    <FormLabel className="m-0">Liquidity</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min={0}
+                        step="0.0001"
+                        value={field.value}
+                        onChange={(e) => field.onChange(Number(e.target.value))}
+                      />
+                    </FormControl>
+                    <FormMessage className="col-span-2 md:col-span-1" />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="startDate"
+                render={({ field }) => (
+                  <FormItem className="grid grid-cols-[92px_1fr] items-center gap-2 md:block">
+                    <FormLabel className="m-0">Start Date</FormLabel>
+                    <FormControl>
+                      <Input type="datetime-local" {...field} />
+                    </FormControl>
+                    <FormMessage className="col-span-2 md:col-span-1" />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="endDate"
+                render={({ field }) => (
+                  <FormItem className="grid grid-cols-[92px_1fr] items-center gap-2 md:block">
+                    <FormLabel className="m-0">End Date</FormLabel>
+                    <FormControl>
+                      <Input type="datetime-local" {...field} />
+                    </FormControl>
+                    <FormMessage className="col-span-2 md:col-span-1" />
                   </FormItem>
                 )}
               />
             </div>
 
-            {form.watch("resolutionDate") && (
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                <FormField
-                  control={form.control}
-                  name="resolutionTime"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Resolution Time (Optional)</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="time"
-                          placeholder="HH:MM:SS"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        Specify the exact time for resolution (defaults to 00:00:00)
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="timezone"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Timezone</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value || "UTC"}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select timezone" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {commonTimezones.map((tz) => (
-                            <SelectItem key={tz.value} value={tz.value}>
-                              {tz.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormDescription>
-                        Timezone for the resolution date and time
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+            <div className="space-y-3 rounded-md border p-3">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-sm font-medium">Market Image</h3>
+                <label className={cn("inline-flex items-center gap-2 text-sm", isUploadingImage && "opacity-60")}>
+                  <UploadCloud className="h-4 w-4" />
+                  <span>{isUploadingImage ? "Uploading..." : "Upload image"}</span>
+                  <input
+                    type="file"
+                    className="hidden"
+                    accept=".png,.jpg,.jpeg,.webp,.gif,image/*"
+                    disabled={isUploadingImage}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        uploadImage(file);
+                      }
+                      e.currentTarget.value = "";
+                    }}
+                  />
+                </label>
               </div>
-            )}
 
-            <div className="space-y-4 rounded-md border p-4">
-              <h3 className="text-lg font-medium">Compliance Checklist</h3>
-
-              <FormField
-                control={form.control}
-                name="isClear"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                    <FormControl>
-                      <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                    </FormControl>
-                    <div className="space-y-1 leading-none">
-                      <FormLabel>Question & Resolution Clarity</FormLabel>
-                      <FormDescription>
-                        The market question is unambiguous and the resolution criteria are clearly defined.
-                      </FormDescription>
-                      <FormMessage />
-                    </div>
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="noRestricted"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                    <FormControl>
-                      <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                    </FormControl>
-                    <div className="space-y-1 leading-none">
-                      <FormLabel>No Restricted Topics</FormLabel>
-                      <FormDescription>
-                        This market does not involve violence, personal harm, or other restricted topics.
-                      </FormDescription>
-                      <FormMessage />
-                    </div>
-                  </FormItem>
-                )}
-              />
+              {imageOptions.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No uploaded image yet.</p>
+              ) : (
+                <div className="max-h-48 overflow-y-auto pr-1">
+                  <div className="grid grid-cols-3 gap-2 md:grid-cols-4">
+                    {imageOptions.map((img) => {
+                      const active = selectedIcon === img.value;
+                      return (
+                        <button
+                          type="button"
+                          key={img.name}
+                          onClick={() => form.setValue("icon", img.value, { shouldValidate: true })}
+                          className={cn(
+                            "overflow-hidden rounded-md border bg-muted/20 transition",
+                            active ? "border-primary ring-2 ring-primary/30" : "hover:border-primary/40"
+                          )}
+                        >
+                          <img src={img.url} alt={img.name} className="h-16 w-full object-cover" loading="lazy" />
+                          <div className="truncate px-2 py-1 text-[11px]">{img.name}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
+
+            {isLoadingMeta && (
+              <p className="text-sm text-muted-foreground">Loading categories and images...</p>
+            )}
 
             <Button type="submit" disabled={isSubmitting}>
               {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

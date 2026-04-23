@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import uuid
 from datetime import datetime
+from decimal import Decimal
 from typing import Any, List, Optional, Tuple
 
 from sqlalchemy import select, text
@@ -14,8 +14,8 @@ async def resolve_category_id(
     session: AsyncSession,
     *,
     slug: Optional[str],
-    explicit_id: Optional[uuid.UUID],
-) -> Optional[uuid.UUID]:
+    explicit_id: Optional[int],
+) -> Optional[int]:
     if explicit_id is not None:
         return explicit_id
     if not slug:
@@ -24,25 +24,38 @@ async def resolve_category_id(
     return r.scalar_one_or_none()
 
 
+async def list_categories(session: AsyncSession) -> List[dict[str, Any]]:
+    rows = await session.execute(
+        select(Category.id, Category.slug, Category.name).order_by(Category.slug.asc())
+    )
+    return [
+        {"id": row.id, "slug": row.slug, "name": row.name or row.slug}
+        for row in rows.all()
+    ]
+
+
 async def insert_market_admin(
     session: AsyncSession,
     *,
     question: str,
-    category_id: Optional[uuid.UUID],
+    category_id: Optional[int],
     description: Optional[str],
+    rules: Optional[str],
+    start_date_naive: datetime,
     end_date_naive: datetime,
-    resolution_date_utc_naive: datetime,
+    liquidity: Optional[Decimal],
+    icon: Optional[str],
     checklist_resolution_clarity: bool,
     checklist_restricted_topics: bool,
 ) -> dict[str, Any]:
     q = text(
         """
         INSERT INTO markets (
-            question, category_id, description, end_date, close_at, status,
+            question, category_id, description, rules, start_date, end_date, liquidity, icon, status,
             checklist_resolution_clarity, checklist_restricted_topics
         )
         VALUES (
-            :question, :category_id, :description, :end_date, :close_at, 'open',
+            :question, :category_id, :description, :rules, :start_date, :end_date, :liquidity, :icon, 'open',
             :clarity, :restricted
         )
         RETURNING *
@@ -52,10 +65,13 @@ async def insert_market_admin(
         q,
         {
             "question": question,
-            "category_id": str(category_id) if category_id else None,
+            "category_id": category_id,
             "description": description,
+            "rules": rules,
+            "start_date": start_date_naive,
             "end_date": end_date_naive,
-            "close_at": resolution_date_utc_naive,
+            "liquidity": liquidity,
+            "icon": icon,
             "clarity": checklist_resolution_clarity,
             "restricted": checklist_restricted_topics,
         },

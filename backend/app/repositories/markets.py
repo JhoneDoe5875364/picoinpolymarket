@@ -120,6 +120,47 @@ async def list_markets(
     return [market_to_dict(m) for m in rows]
 
 
+async def market_status_summary(
+    session: AsyncSession,
+    *,
+    search: Optional[str] = None,
+    category: str = "all",
+    active_only: bool = True,
+) -> dict[str, int]:
+    conditions: list[Any] = []
+
+    if active_only:
+        conditions.append(Market.is_active == True)
+    if search is not None and search.strip():
+        search_text = f"%{search.strip()}%"
+        conditions.append(
+            or_(
+                Market.question.ilike(search_text),
+                Market.description.ilike(search_text),
+                Market.slug.ilike(search_text),
+            )
+        )
+    if category and category.strip().lower() != "all":
+        normalized_category = category.strip().lower()
+        conditions.append(Market.category.has(func.lower(Category.slug) == normalized_category))
+
+    stmt = select(
+        func.count(Market.id).label("total"),
+        func.coalesce(func.sum(case((Market.status == "open", 1), else_=0)), 0).label("open_count"),
+        func.coalesce(func.sum(case((Market.status == "pending", 1), else_=0)), 0).label("pending_count"),
+        func.coalesce(func.sum(case((Market.status == "resolved", 1), else_=0)), 0).label("resolved_count"),
+    ).where(*conditions)
+
+    result = await session.execute(stmt)
+    row = result.one()
+    return {
+        "total": int(row.total or 0),
+        "open": int(row.open_count or 0),
+        "pending": int(row.pending_count or 0),
+        "resolved": int(row.resolved_count or 0),
+    }
+
+
 async def get_market_by_id(session: AsyncSession, market_id: int) -> Optional[dict[str, Any]]:
     stmt = (
         select(Market)

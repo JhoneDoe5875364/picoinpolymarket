@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import timedelta
 from typing import Any, List, Optional, Tuple
 from uuid import UUID
 
@@ -101,8 +100,6 @@ async def approve_suggestion_create_market(
     if not suggestion.get("end_time"):
         raise ValueError("Suggestion end_time is missing")
 
-    resolution_date = suggestion["end_time"] + timedelta(days=1)
-
     cat_r = await session.execute(
         select(Category.id).where(Category.slug == suggestion["category"])
     )
@@ -119,10 +116,10 @@ async def approve_suggestion_create_market(
         text(
             """
             INSERT INTO markets (
-                question, category_id, description, end_date, close_at, status,
+                question, category_id, description, end_date, status,
                 checklist_resolution_clarity, checklist_restricted_topics
             )
-            VALUES (:q, :cid, :desc, :end_t, :close_at, 'open', true, true)
+            VALUES (:q, :cid, :desc, :end_t, 'open', true, true)
             RETURNING *
             """
         ),
@@ -131,7 +128,6 @@ async def approve_suggestion_create_market(
             "cid": str(category_id),
             "desc": suggestion["description"],
             "end_t": suggestion["end_time"],
-            "close_at": resolution_date,
         },
     )
     market_row = mr.mappings().first()

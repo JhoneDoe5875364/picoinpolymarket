@@ -2,9 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { MoreHorizontal } from "lucide-react";
+import { CheckCircle2, CircleDot, Clock3, Layers3, MoreHorizontal } from "lucide-react";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -18,9 +17,17 @@ import { MarketCreator } from "@/components/admin/MarketCreator";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { format } from "date-fns";
 import { Market } from "@/lib/types";
+import { Badge } from "@/components/ui/badge";
 
 type Status = "open" | "pending" | "resolved";
 type SortField = "question" | "status" | "category" | "start_date" | "end_date" | "traders" | "volume";
+type MarketSummary = {
+  total: number;
+  open: number;
+  pending: number;
+  resolved: number;
+};
+const DEFAULT_MARKET_ICON = "/images/markets/market-default.png";
 
 
 export function MarketManager() {
@@ -35,6 +42,8 @@ export function MarketManager() {
   const [sortBy, setSortBy] = useState<SortField>("start_date");
   const [order, setOrder] = useState<"asc" | "desc">("desc");
   const [loading, setLoading] = useState(false);
+  const [summary, setSummary] = useState<MarketSummary>({ total: 0, open: 0, pending: 0, resolved: 0 });
+  const [summaryLoading, setSummaryLoading] = useState(false);
 
   const [resolveDialogOpen, setResolveDialogOpen] = useState(false);
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
@@ -52,13 +61,20 @@ export function MarketManager() {
     return params.toString();
   }, [page, limit, sortBy, order, search, status]);
 
+  const summaryQs = useMemo(() => {
+    const params = new URLSearchParams();
+    if (search) params.set("search", search);
+    params.set("active_only", "true");
+    return params.toString();
+  }, [search]);
+
   async function load() {
     setLoading(true);
     try {
       const res = await apiFetchWithToken(`/markets?${qs}`, { method: "GET" });
       if (res.ok) {
         setRows(res.data || []);
-        setTotal(res.total || 0);
+        setTotal(res.total ?? res.data?.length ?? 0);
       }
     } catch (e: any) {
       toast({ title: "Load failed", description: e.message, variant: "destructive" });
@@ -67,7 +83,27 @@ export function MarketManager() {
     }
   }
 
+  async function loadSummary() {
+    setSummaryLoading(true);
+    try {
+      const res = await apiFetchWithToken(`/markets/summary?${summaryQs}`, { method: "GET" });
+      if (res.ok && res.data) {
+        setSummary({
+          total: Number(res.data.total ?? 0),
+          open: Number(res.data.open ?? 0),
+          pending: Number(res.data.pending ?? 0),
+          resolved: Number(res.data.resolved ?? 0),
+        });
+      }
+    } catch (e: any) {
+      toast({ title: "Summary load failed", description: e.message, variant: "destructive" });
+    } finally {
+      setSummaryLoading(false);
+    }
+  }
+
   useEffect(() => { load(); }, [qs]);
+  useEffect(() => { loadSummary(); }, [summaryQs]);
 
   async function resolve(outcome: "YES" | "NO") {
     if (!selectedMarketId) return;
@@ -79,6 +115,7 @@ export function MarketManager() {
     } else {
       toast({ title: "Resolved", description: outcome.toUpperCase() });
       load();
+      loadSummary();
     }
     setSelectedMarketId(null);
   }
@@ -91,16 +128,63 @@ export function MarketManager() {
     } else {
       toast({ title: "Closed", description: "Market closed" });
       load();
+      loadSummary();
     }
     setSelectedMarketId(null);
   }
 
+  const totalForRate = summary.total > 0 ? summary.total : 1;
+  const openRate = Math.round((summary.open / totalForRate) * 100);
+  const pendingRate = Math.round((summary.pending / totalForRate) * 100);
+  const resolvedRate = Math.round((summary.resolved / totalForRate) * 100);
+
   return (
     <>
-      <Card>
-        <CardContent className="space-y-3">
-          <CardTitle>Manage Markets</CardTitle>
-          <CardDescription>View, create, edit, resolve, and close markets.</CardDescription>
+      <section className="space-y-3">
+          <h2 className="text-2xl leading-none tracking-tight">Manage Markets</h2>
+          <p className="text-sm text-muted-foreground">View, create, edit, resolve, and close markets.</p>
+          <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
+            <div className="rounded-lg border p-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-muted-foreground">Total Markets</p>
+                <Layers3 className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <p className="text-xl font-semibold">{summaryLoading ? "..." : roundLocale(summary.total)}</p>
+                <Badge variant="outline">100%</Badge>
+              </div>
+            </div>
+            <div className="rounded-lg border p-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-muted-foreground">Open</p>
+                <CircleDot className="h-4 w-4 text-primary" />
+              </div>
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <p className="text-xl font-semibold">{summaryLoading ? "..." : roundLocale(summary.open)}</p>
+                <Badge variant="default">{openRate}%</Badge>
+              </div>
+            </div>
+            <div className="rounded-lg border p-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-muted-foreground">Pending</p>
+                <Clock3 className="h-4 w-4 text-orange-500" />
+              </div>
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <p className="text-xl font-semibold">{summaryLoading ? "..." : roundLocale(summary.pending)}</p>
+                <Badge variant="secondary">{pendingRate}%</Badge>
+              </div>
+            </div>
+            <div className="rounded-lg border p-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-muted-foreground">Resolved</p>
+                <CheckCircle2 className="h-4 w-4 text-green-500" />
+              </div>
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <p className="text-xl font-semibold">{summaryLoading ? "..." : roundLocale(summary.resolved)}</p>
+                <Badge variant="success">{resolvedRate}%</Badge>
+              </div>
+            </div>
+          </div>
           <div className="space-y-2 md:flex md:items-center md:gap-2 md:space-y-0">
             <div className="grid grid-cols-3 gap-2 md:flex md:items-center md:gap-2">
               <Input
@@ -198,7 +282,24 @@ export function MarketManager() {
               {rows.map((m) => (
                 <TableRow key={m.id}>
                   <TableCell className="text-center">{m.id}</TableCell>
-                  <TableCell className="min-w-60 line-clamp-2">{m.question}</TableCell>
+                  <TableCell className="min-w-60">
+                    <div className="flex items-start gap-2">
+                      <div className="h-10 w-10 shrink-0 overflow-hidden rounded-md border bg-muted/20">
+                        <img
+                          src={typeof m.icon === "string" && m.icon.trim().length > 0 ? m.icon : DEFAULT_MARKET_ICON}
+                          alt={m.question ?? "Market image"}
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                          onError={(e) => {
+                            if (e.currentTarget.src !== DEFAULT_MARKET_ICON) {
+                              e.currentTarget.src = DEFAULT_MARKET_ICON;
+                            }
+                          }}
+                        />
+                      </div>
+                      <p className="line-clamp-2">{m.question}</p>
+                    </div>
+                  </TableCell>
                   <TableCell className="text-center">
                     {m.status}
                   </TableCell>
@@ -256,8 +357,7 @@ export function MarketManager() {
               </Button>
             </div>
           )}
-        </CardContent>
-      </Card>
+      </section>
 
       {/* Resolve dialog */}
       {resolveDialogOpen && (
@@ -308,6 +408,7 @@ export function MarketManager() {
             onCreated={() => {
               setCreateDialogOpen(false);
               load();
+              loadSummary();
             }}
           />
         </DialogContent>

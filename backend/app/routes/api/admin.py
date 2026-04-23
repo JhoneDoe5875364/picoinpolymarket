@@ -1,6 +1,10 @@
-import uuid
-from datetime import datetime, timedelta
+import base64
+import binascii
+import re
+from datetime import datetime
+from decimal import Decimal, InvalidOperation
 from math import ceil
+from pathlib import Path as FsPath
 from typing import Optional
 
 import pytz
@@ -15,6 +19,45 @@ from app.repositories import admin as admin_repo
 logger = get_logger()
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+PROJECT_ROOT = FsPath(__file__).resolve().parents[4]
+MARKET_IMAGE_DIR = PROJECT_ROOT / "frontend" / "public" / "images" / "markets"
+if not MARKET_IMAGE_DIR.exists():
+    MARKET_IMAGE_DIR = PROJECT_ROOT / "frontend" / "images" / "markets"
+MARKET_IMAGE_DIR.mkdir(parents=True, exist_ok=True)
+ALLOWED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
+BASE64_DATA_PREFIX = re.compile(r"^data:image/[a-zA-Z0-9.+-]+;base64,")
+
+
+def _parse_iso_datetime(value: str, field_name: str) -> datetime:
+    raw = value.strip()
+    if not raw:
+        raise HTTPException(status_code=400, detail=f"{field_name} is required")
+    normalized = raw.replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid {field_name}. Use ISO datetime format.",
+        ) from exc
+    if parsed.tzinfo is not None:
+        parsed = parsed.astimezone(pytz.UTC).replace(tzinfo=None)
+    return parsed
+
+
+def _safe_image_name(filename: str) -> str:
+    stem = FsPath(filename).name
+    ext = FsPath(stem).suffix.lower()
+    if ext not in ALLOWED_IMAGE_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported file type. Allowed: .png, .jpg, .jpeg, .webp, .gif",
+        )
+    token = re.sub(r"[^a-zA-Z0-9._-]", "-", FsPath(stem).stem).strip("-")
+    if not token:
+        token = "market-image"
+    timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+    return f"{token}-{timestamp}{ext}"
 
 
 @router.post("/markets")
@@ -28,67 +71,45 @@ async def create_market(request: Request, db: DbSession, user=Depends(verify_tok
     data = await request.json()
     question = data.get("question")
     description = data.get("description")
+    rules = data.get("rules")
     category_slug = data.get("category")
     category_id_raw = data.get("category_id")
-    resolution_date_str = data.get("resolution_date_str")
-    resolution_time_str = data.get("resolution_time_str")
-    timezone_str = data.get("timezone")
+    start_date_raw = data.get("start_date")
+    end_date_raw = data.get("end_date")
+    liquidity_raw = data.get("liquidity")
+    icon_raw = data.get("icon")
     checklist_resolution_clarity = data.get("checklist_resolution_clarity")
     checklist_restricted_topics = data.get("checklist_restricted_topics")
 
-    resolution_dt = None
-    if resolution_date_str:
+    question = str(question or "").strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="question is required")
+
+    if not category_slug and category_id_raw is None:
+        raise HTTPException(status_code=400, detail="category is required")
+
+    start_date = _parse_iso_datetime(str(start_date_raw or ""), "start_date")
+    end_date = _parse_iso_datetime(str(end_date_raw or ""), "end_date")
+    if end_date <= start_date:
+        raise HTTPException(status_code=400, detail="end_date must be after start_date")
+
+    liquidity: Optional[Decimal] = None
+    if liquidity_raw not in (None, ""):
         try:
-            date_part = datetime.strptime(resolution_date_str, "%Y-%m-%d").date()
-            if resolution_time_str:
-                try:
-                    time_part = datetime.strptime(resolution_time_str, "%H:%M:%S").time()
-                except ValueError:
-                    try:
-                        time_part = datetime.strptime(resolution_time_str + ":00", "%H:%M:%S").time()
-                    except ValueError:
-                        raise HTTPException(
-                            status_code=400,
-                            detail=f"Invalid time format: {resolution_time_str}. Expected HH:MM or HH:MM:SS",
-                        )
-            else:
-                time_part = datetime.min.time()
-            naive_dt = datetime.combine(date_part, time_part)
-            if timezone_str:
-                try:
-                    tz = pytz.timezone(timezone_str)
-                    resolution_dt = tz.localize(naive_dt).astimezone(pytz.UTC)
-                except pytz.exceptions.UnknownTimeZoneError:
-                    raise HTTPException(
-                        status_code=400,
-                        detail=f"Unknown timezone: {timezone_str}. Use IANA timezone names.",
-                    )
-            else:
-                resolution_dt = pytz.UTC.localize(naive_dt)
-        except ValueError as e:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid date/time format. Date: YYYY-MM-DD, Time: HH:MM:SS. Error: {str(e)}",
-            )
+            liquidity = Decimal(str(liquidity_raw))
+        except InvalidOperation as exc:
+            raise HTTPException(status_code=400, detail="Invalid liquidity value") from exc
+        if liquidity < 0:
+            raise HTTPException(status_code=400, detail="liquidity must be >= 0")
 
-    if not resolution_dt:
-        raise HTTPException(
-            status_code=400,
-            detail="Either 'resolution_date' (ISO 8601) or 'resolution_date_str' with optional 'resolution_time_str' and 'timezone' must be provided",
-        )
+    icon = str(icon_raw).strip() if icon_raw else None
 
-    end_date = resolution_dt - timedelta(days=1)
-    resolution_date_utc = (
-        resolution_dt.replace(tzinfo=None) if resolution_dt.tzinfo else resolution_dt
-    )
-    end_date_naive = end_date.replace(tzinfo=None) if end_date.tzinfo else end_date
-
-    explicit_cat: Optional[uuid.UUID] = None
+    explicit_cat: Optional[int] = None
     if category_id_raw is not None:
         try:
-            explicit_cat = uuid.UUID(str(category_id_raw))
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid category_id (expected UUID)")
+            explicit_cat = int(category_id_raw)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="Invalid category_id (expected integer)")
 
     try:
         async with db.begin():
@@ -97,15 +118,20 @@ async def create_market(request: Request, db: DbSession, user=Depends(verify_tok
                 slug=category_slug if isinstance(category_slug, str) else None,
                 explicit_id=explicit_cat,
             )
+            if resolved_cat is None:
+                raise HTTPException(status_code=400, detail="Unknown category")
             market_row = await admin_repo.insert_market_admin(
                 db,
                 question=question,
                 category_id=resolved_cat,
                 description=description,
-                end_date_naive=end_date_naive,
-                resolution_date_utc_naive=resolution_date_utc,
-                checklist_resolution_clarity=bool(checklist_resolution_clarity),
-                checklist_restricted_topics=bool(checklist_restricted_topics),
+                rules=rules,
+                start_date_naive=start_date,
+                end_date_naive=end_date,
+                liquidity=liquidity,
+                icon=icon,
+                checklist_resolution_clarity=bool(checklist_resolution_clarity) if checklist_resolution_clarity is not None else True,
+                checklist_restricted_topics=bool(checklist_restricted_topics) if checklist_restricted_topics is not None else True,
             )
     except HTTPException:
         raise
@@ -114,6 +140,65 @@ async def create_market(request: Request, db: DbSession, user=Depends(verify_tok
         raise HTTPException(status_code=500, detail="Failed to create market")
 
     return {"ok": True, "market": jsonable_encoder(market_row)}
+
+
+@router.get("/markets/categories")
+async def get_market_categories(db: DbSession, user=Depends(verify_token)):
+    _ = user.get("sub", "")
+    role = user.get("role", "")
+    if role not in ("superadmin", "admin"):
+        raise HTTPException(status_code=403, detail="HasNotAdminRole")
+
+    rows = await admin_repo.list_categories(db)
+    return {"ok": True, "data": jsonable_encoder(rows)}
+
+
+@router.get("/markets/images")
+async def get_market_images(user=Depends(verify_token)):
+    _ = user.get("sub", "")
+    role = user.get("role", "")
+    if role not in ("superadmin", "admin"):
+        raise HTTPException(status_code=403, detail="HasNotAdminRole")
+
+    images = []
+    for path in sorted(MARKET_IMAGE_DIR.glob("*")):
+        if path.is_file() and path.suffix.lower() in ALLOWED_IMAGE_EXTENSIONS:
+            images.append(
+                {
+                    "name": path.name,
+                    "url": f"/images/markets/{path.name}",
+                }
+            )
+    return {"ok": True, "data": images}
+
+
+@router.post("/markets/images")
+async def upload_market_image(request: Request, user=Depends(verify_token)):
+    _ = user.get("sub", "")
+    role = user.get("role", "")
+    if role != "superadmin":
+        raise HTTPException(status_code=403, detail="HasNotSuperadminRole")
+
+    data = await request.json()
+    original_name = str(data.get("filename") or "").strip()
+    content_base64 = str(data.get("content_base64") or "").strip()
+
+    if not original_name:
+        raise HTTPException(status_code=400, detail="filename is required")
+    if not content_base64:
+        raise HTTPException(status_code=400, detail="content_base64 is required")
+
+    normalized_payload = BASE64_DATA_PREFIX.sub("", content_base64)
+    try:
+        decoded = base64.b64decode(normalized_payload, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="Invalid base64 image payload") from exc
+
+    saved_name = _safe_image_name(original_name)
+    save_path = MARKET_IMAGE_DIR / saved_name
+    save_path.write_bytes(decoded)
+
+    return {"ok": True, "data": {"name": saved_name, "url": f"/images/markets/{saved_name}"}}
 
 
 @router.get("/markets")
