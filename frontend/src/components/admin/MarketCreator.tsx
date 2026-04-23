@@ -3,8 +3,8 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useEffect, useMemo, useState } from "react";
-import { Loader2, UploadCloud } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Calendar, Loader2, UploadCloud } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -43,6 +43,8 @@ export function MarketCreator({ onCreated }: MarketCreatorProps) {
   const [images, setImages] = useState<MarketImage[]>([]);
   const [isLoadingMeta, setIsLoadingMeta] = useState(true);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const startDateInputRef = useRef<HTMLInputElement | null>(null);
+  const endDateInputRef = useRef<HTMLInputElement | null>(null);
 
   const form = useForm<MarketFormData>({
     resolver: zodResolver(marketSchema),
@@ -329,29 +331,87 @@ export function MarketCreator({ onCreated }: MarketCreatorProps) {
               <FormField
                 control={form.control}
                 name="startDate"
-                render={({ field }) => (
-                  <FormItem className="grid grid-cols-[92px_1fr] items-center gap-2 md:block">
-                    <FormLabel className="m-0">Start Date</FormLabel>
-                    <FormControl>
-                      <Input type="datetime-local" {...field} />
-                    </FormControl>
-                    <FormMessage className="col-span-2 md:col-span-1" />
-                  </FormItem>
-                )}
+                render={({ field }) => {
+                  const { ref, ...fieldProps } = field;
+                  return (
+                    <FormItem className="grid grid-cols-[92px_1fr] items-center gap-2 md:block">
+                      <FormLabel className="m-0">Start Date</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <Input
+                            type="datetime-local"
+                            className="ppx-datetime-input pr-10"
+                            {...fieldProps}
+                            ref={(el) => {
+                              ref(el);
+                              startDateInputRef.current = el;
+                            }}
+                          />
+                          <button
+                            type="button"
+                            aria-label="Open start date picker"
+                            className="ppx-datetime-trigger"
+                            onClick={() => {
+                              const input = startDateInputRef.current;
+                              if (!input) return;
+                              if (typeof input.showPicker === "function") {
+                                input.showPicker();
+                              } else {
+                                input.focus();
+                              }
+                            }}
+                          >
+                            <Calendar className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </FormControl>
+                      <FormMessage className="col-span-2 md:col-span-1" />
+                    </FormItem>
+                  );
+                }}
               />
 
               <FormField
                 control={form.control}
                 name="endDate"
-                render={({ field }) => (
-                  <FormItem className="grid grid-cols-[92px_1fr] items-center gap-2 md:block">
-                    <FormLabel className="m-0">End Date</FormLabel>
-                    <FormControl>
-                      <Input type="datetime-local" {...field} />
-                    </FormControl>
-                    <FormMessage className="col-span-2 md:col-span-1" />
-                  </FormItem>
-                )}
+                render={({ field }) => {
+                  const { ref, ...fieldProps } = field;
+                  return (
+                    <FormItem className="grid grid-cols-[92px_1fr] items-center gap-2 md:block">
+                      <FormLabel className="m-0">End Date</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <Input
+                            type="datetime-local"
+                            className="ppx-datetime-input pr-10"
+                            {...fieldProps}
+                            ref={(el) => {
+                              ref(el);
+                              endDateInputRef.current = el;
+                            }}
+                          />
+                          <button
+                            type="button"
+                            aria-label="Open end date picker"
+                            className="ppx-datetime-trigger"
+                            onClick={() => {
+                              const input = endDateInputRef.current;
+                              if (!input) return;
+                              if (typeof input.showPicker === "function") {
+                                input.showPicker();
+                              } else {
+                                input.focus();
+                              }
+                            }}
+                          >
+                            <Calendar className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </FormControl>
+                      <FormMessage className="col-span-2 md:col-span-1" />
+                    </FormItem>
+                  );
+                }}
               />
             </div>
 

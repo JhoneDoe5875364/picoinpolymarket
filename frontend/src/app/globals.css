@@ -79,6 +79,42 @@
       transparent
     ); */
   }
+
+  /* Improve native datetime picker visibility in dark mode (Chromium/WebKit). */
+  .dark .ppx-datetime-input {
+    color-scheme: dark;
+  }
+
+  .ppx-datetime-input::-webkit-calendar-picker-indicator {
+    opacity: 0;
+    display: none;
+    -webkit-appearance: none;
+  }
+
+  .ppx-datetime-trigger {
+    position: absolute;
+    right: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: hsl(var(--muted-foreground));
+    background: transparent;
+    border: 0;
+    padding: 0.125rem;
+    border-radius: 0.25rem;
+    cursor: pointer;
+  }
+
+  .ppx-datetime-trigger:hover {
+    color: hsl(var(--foreground));
+  }
+
+  .ppx-datetime-trigger:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 1px;
+  }
 }
 
 @layer components {
