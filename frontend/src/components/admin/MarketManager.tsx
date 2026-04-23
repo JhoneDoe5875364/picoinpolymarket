@@ -218,6 +218,10 @@ export function MarketManager() {
   const openRate = Math.round((summary.open / totalForRate) * 100);
   const pendingRate = Math.round((summary.pending / totalForRate) * 100);
   const resolvedRate = Math.round((summary.resolved / totalForRate) * 100);
+  const selectedMarket = useMemo(
+    () => rows.find((market) => market.id.toString() === selectedMarketId) ?? null,
+    [rows, selectedMarketId],
+  );
 
   return (
     <>
@@ -315,7 +319,7 @@ export function MarketManager() {
                   <SelectItem value="status">Status</SelectItem>
                   <SelectItem value="category">Category</SelectItem>
                   <SelectItem value="traders">Traders</SelectItem>
-                  <SelectItem value="volume">Volume (PI)</SelectItem>
+                  <SelectItem value="volume">Volume (π)</SelectItem>
                 </SelectContent>
               </Select>
               <Select
@@ -449,7 +453,27 @@ export function MarketManager() {
               <AlertDialogTitle>Resolve Market</AlertDialogTitle>
               <AlertDialogDescription>Choose the final outcome.</AlertDialogDescription>
             </AlertDialogHeader>
-            <AlertDialogFooter>
+            {selectedMarket ? (
+              <div className="flex items-center gap-3 rounded-md border p-3">
+                <img
+                  src={
+                    typeof selectedMarket.icon === "string" && selectedMarket.icon.trim().length > 0
+                      ? selectedMarket.icon
+                      : DEFAULT_MARKET_ICON
+                  }
+                  alt={selectedMarket.question ?? "Market image"}
+                  className="h-12 w-12 rounded-md object-cover border border-border shrink-0"
+                  loading="lazy"
+                  onError={(e) => {
+                    if (e.currentTarget.src !== DEFAULT_MARKET_ICON) {
+                      e.currentTarget.src = DEFAULT_MARKET_ICON;
+                    }
+                  }}
+                />
+                <p className="text-sm font-medium break-words">{selectedMarket.question}</p>
+              </div>
+            ) : null}
+            <AlertDialogFooter className="flex-row justify-end gap-2 space-x-0">
               <AlertDialogCancel>Close</AlertDialogCancel>
               <AlertDialogAction onClick={() => resolve("NO")} className="bg-red-600 hover:bg-red-700">
                 Resolve NO
@@ -470,7 +494,27 @@ export function MarketManager() {
               <AlertDialogTitle>Close market?</AlertDialogTitle>
               <AlertDialogDescription>This will refund all participants and close the market.</AlertDialogDescription>
             </AlertDialogHeader>
-            <AlertDialogFooter>
+            {selectedMarket ? (
+              <div className="flex items-center gap-3 rounded-md border p-3">
+                <img
+                  src={
+                    typeof selectedMarket.icon === "string" && selectedMarket.icon.trim().length > 0
+                      ? selectedMarket.icon
+                      : DEFAULT_MARKET_ICON
+                  }
+                  alt={selectedMarket.question ?? "Market image"}
+                  className="h-12 w-12 rounded-md object-cover border border-border shrink-0"
+                  loading="lazy"
+                  onError={(e) => {
+                    if (e.currentTarget.src !== DEFAULT_MARKET_ICON) {
+                      e.currentTarget.src = DEFAULT_MARKET_ICON;
+                    }
+                  }}
+                />
+                <p className="text-sm font-medium break-words">{selectedMarket.question}</p>
+              </div>
+            ) : null}
+            <AlertDialogFooter className="flex-row justify-end gap-2 space-x-0">
               <AlertDialogCancel>Close</AlertDialogCancel>
               <AlertDialogAction onClick={close} className="bg-red-600 hover:bg-red-700">
                 Close Market

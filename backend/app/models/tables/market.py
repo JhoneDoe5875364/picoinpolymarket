@@ -37,6 +37,7 @@ class Market(Base):
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
     is_resolved: Mapped[bool] = mapped_column(Boolean, default=False)
     rules: Mapped[Optional[str]] = mapped_column(Text)
+    closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     resolved_outcome: Mapped[Optional[str]] = mapped_column(String)
     resolved_by_user_id: Mapped[Optional[str]] = mapped_column(String)

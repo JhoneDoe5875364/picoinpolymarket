@@ -140,6 +140,7 @@ async def close_market(
                 (Market.status == "open", "pending"),
                 else_=Market.status,
             ),
+            closed_at=datetime.now(),
             updated_at=datetime.now(),
         )
         .returning(
@@ -179,18 +180,23 @@ async def resolve_market(
 ) -> dict[str, Any]:
     final_price_value = Decimal("1") if outcome == "YES" else Decimal("0")
     loser_price_value = Decimal("0") if outcome == "YES" else Decimal("1")
+    now = datetime.now()
     update_stmt = (
         update(Market)
         .where(Market.id == market_id)
         .values(
             resolved_outcome=outcome,
-            resolved_at=datetime.now(),
+            resolved_at=now,
             is_resolved=True,
             is_closed=True,
+            closed_at=case(
+                (Market.closed_at.is_(None), now),
+                else_=Market.closed_at,
+            ),
             resolved_by_user_id=user_id,
             resolved_by_username=username,
             status="resolved",
-            updated_at=datetime.now(),
+            updated_at=now,
         )
         .returning(
             Market.id,
