@@ -3,38 +3,55 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type { User } from '@/lib/types';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { MoreHorizontal, ShieldOff, ShieldCheck, Edit, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Layers3, ShieldCheck, ShieldOff, UserCheck, UserMinus, UserX } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { apiFetchWithToken } from '@/lib/api';
 import { Input } from '../ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { roundLocale } from '@/lib/utils';
+
+type UserSummary = {
+  total: number;
+  active: number;
+  suspended: number;
+  banned: number;
+};
 
 export function UserManager() {
   const [users, setUsers] = useState<User[]>([]);
   const { toast } = useToast();
 
   const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [limit] = useState(25);
+  const [offset, setOffset] = useState(0);
+  const [limit] = useState(20);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<"pi_username" | "created_at" | "balance" | "status">("created_at");
-  const [order, setOrder] = useState<"asc" | "desc">("desc");
+  const [order, setOrder] = useState<"ASC" | "DESC">("DESC");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "ACTIVE" | "SUSPENDED" | "BANNED">("ALL");
   const [loading, setLoading] = useState(false);
+  const [summary, setSummary] = useState<UserSummary>({ total: 0, active: 0, suspended: 0, banned: 0 });
+  const [summaryLoading, setSummaryLoading] = useState(false);
 
   const qs = useMemo(() => {
     const params = new URLSearchParams();
-    params.set("page", String(page));
     params.set("limit", String(limit));
+    params.set("offset", String(offset));
     params.set("sort_by", sortBy);
     params.set("order", order);
+    params.set("status", statusFilter);
     if (search) params.set("search", search);
     return params.toString();
-  }, [page, limit, sortBy, order, search]);
+  }, [offset, limit, sortBy, order, statusFilter, search]);
+
+  const summaryQs = useMemo(() => {
+    const params = new URLSearchParams();
+    if (search) params.set("search", search);
+    return params.toString();
+  }, [search]);
 
   async function load() {
     setLoading(true);
@@ -51,10 +68,34 @@ export function UserManager() {
 
   useEffect(() => { load(); }, [qs]);
 
+  async function loadSummary() {
+    setSummaryLoading(true);
+    try {
+      const res = await apiFetchWithToken(`/users/summary?${summaryQs}`, { method: "GET" });
+      if (res.ok && res.data) {
+        setSummary({
+          total: Number(res.data.total ?? 0),
+          active: Number(res.data.active ?? 0),
+          suspended: Number(res.data.suspended ?? 0),
+          banned: Number(res.data.banned ?? 0),
+        });
+      }
+    } catch (e: any) {
+      toast({ title: "Summary load failed", description: e.message, variant: "destructive" });
+    } finally {
+      setSummaryLoading(false);
+    }
+  }
+
+  useEffect(() => { loadSummary(); }, [summaryQs]);
+
   const handleUpdateStatus = async (userId: string, status: User['status']) => {
     try {
       const res = await apiFetchWithToken(`/users/status`, {
         method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
           user_id: userId,
           status: status
@@ -67,10 +108,11 @@ export function UserManager() {
             user.id === updatedUser.id ? { ...user, ...updatedUser } : user
           )
         );
+        void loadSummary();
         toast({
           title: `User ${status.charAt(0).toUpperCase() + status.slice(1)}`,
           description: `User ${updatedUser?.pi_username} has been ${status}.`,
-          variant: status === 'banned' ? 'destructive' : 'default',
+          variant: status === 'BANNED' ? 'destructive' : 'default',
         });
       }
     } catch (e: any) {
@@ -78,117 +120,194 @@ export function UserManager() {
     }
   };
 
-  const handleSort = (column: "pi_username" | "created_at" | "balance" | "status") => {
-    if (sortBy === column) {
-      setOrder(order === "asc" ? "desc" : "asc");
-    } else {
-      setSortBy(column);
-      setOrder("desc");
-    }
-  };
-
-  const getSortIcon = (column: "pi_username" | "created_at" | "balance" | "status") => {
-    if (sortBy !== column) {
-      return <ArrowUpDown className="ml-2 h-4 w-4" />;
-    }
-    return order === "asc"
-      ? <ArrowUp className="ml-2 h-4 w-4" />
-      : <ArrowDown className="ml-2 h-4 w-4" />;
-  };
-
-  const getStatusBadgeVariant = (status: User['status']) => {
+  const getStatusBadgeClassName = (status: User['status']) => {
     switch (status) {
-      case 'active': return 'default';
-      case 'suspended': return 'outline';
-      case 'banned': return 'destructive';
-      default: return 'secondary';
+      case 'ALL': return 'border-blue-500 bg-blue-500 text-white hover:bg-blue-500/90';
+      case 'ACTIVE': return 'border-green-500 bg-green-500 text-white hover:bg-green-500/90';
+      case 'SUSPENDED': return 'border-orange-500 bg-orange-500 text-white hover:bg-orange-500/90';
+      case 'BANNED': return 'border-red-500 bg-red-500 text-white hover:bg-red-500/90';
+      default: return '';
     }
   };
+
+  const totalForRate = summary.total > 0 ? summary.total : 1;
+  const activeRate = Math.round((summary.active / totalForRate) * 100);
+  const suspendedRate = Math.round((summary.suspended / totalForRate) * 100);
+  const bannedRate = Math.round((summary.banned / totalForRate) * 100);
 
   return (
     <>
-      <Card>
-        <CardHeader>
-          <CardTitle>User Management</CardTitle>
-          <CardDescription>View, manage, and take action on user accounts.</CardDescription>
-        </CardHeader>
-        <CardContent>
+      <section className="space-y-4">
+        <div className="space-y-1">
+          <h2 className="text-xl font-semibold tracking-tight">User Management</h2>
+          <p className="text-sm text-muted-foreground">View, manage, and take action on user accounts.</p>
+        </div>
+        <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
+          <div className="rounded-lg border p-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">Total Users</p>
+              <Layers3 className="h-4 w-4 text-muted-foreground" />
+            </div>
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <p className="text-xl font-semibold">{summaryLoading ? "..." : roundLocale(summary.total)}</p>
+              <Badge className={getStatusBadgeClassName('ALL')}>100%</Badge>
+            </div>
+          </div>
+          <div className="rounded-lg border p-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">Active</p>
+              <UserCheck className="h-4 w-4 text-primary" />
+            </div>
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <p className="text-xl font-semibold">{summaryLoading ? "..." : roundLocale(summary.active)}</p>
+              <Badge className={getStatusBadgeClassName('ACTIVE')}>
+                {activeRate}%
+              </Badge>
+            </div>
+          </div>
+          <div className="rounded-lg border p-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">Suspended</p>
+              <UserMinus className="h-4 w-4 text-orange-500" />
+            </div>
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <p className="text-xl font-semibold">{summaryLoading ? "..." : roundLocale(summary.suspended)}</p>
+              <Badge className={getStatusBadgeClassName('SUSPENDED')}>
+                {suspendedRate}%
+              </Badge>
+            </div>
+          </div>
+          <div className="rounded-lg border p-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">Banned</p>
+              <UserX className="h-4 w-4 text-red-500" />
+            </div>
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <p className="text-xl font-semibold">{summaryLoading ? "..." : roundLocale(summary.banned)}</p>
+              <Badge className={getStatusBadgeClassName('BANNED')}>
+                {bannedRate}%
+              </Badge>
+            </div>
+          </div>
+        </div>
+        <div>
           <div className="flex flex-wrap items-center gap-2">
             <Input
               placeholder="Search…"
               value={search}
-              onChange={(e) => { setPage(1); setSearch(e.target.value); }}
+              onChange={(e) => { setOffset(0); setSearch(e.target.value); }}
               className="w-64"
             />
-            <div className="ml-auto text-sm opacity-70">
-              {loading ? "Loading…" : `${users.length} / ${total}`}
+            <div className="flex items-center gap-2">
+              <Select
+                value={statusFilter}
+                onValueChange={(value: "ALL" | "ACTIVE" | "SUSPENDED" | "BANNED") => {
+                  setOffset(0);
+                  setStatusFilter(value);
+                }}
+              >
+                <SelectTrigger className="w-36">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">All Status</SelectItem>
+                  <SelectItem value="ACTIVE">Active</SelectItem>
+                  <SelectItem value="SUSPENDED">Suspended</SelectItem>
+                  <SelectItem value="BANNED">Banned</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-2">
+              <Select
+                value={sortBy}
+                onValueChange={(value: "pi_username" | "created_at" | "balance" | "status") => {
+                  setOffset(0);
+                  setSortBy(value);
+                }}
+              >
+                <SelectTrigger className="w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="created_at">Member Since</SelectItem>
+                  <SelectItem value="pi_username">Username</SelectItem>
+                  <SelectItem value="status">Status</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-2">
+              <Select
+                value={order}
+                onValueChange={(value: "ASC" | "DESC") => {
+                  setOffset(0);
+                  setOrder(value);
+                }}
+              >
+                <SelectTrigger className="w-28">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="DESC">Desc</SelectItem>
+                  <SelectItem value="ASC">Asc</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
           
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>
-                  <Button variant="ghost" onClick={() => handleSort("pi_username")} className="h-8 px-2 lg:px-3">
-                    Username
-                    {getSortIcon("pi_username")}
-                  </Button>
-                </TableHead>
-                <TableHead>User ID</TableHead>
-                <TableHead>
-                  <Button variant="ghost" onClick={() => handleSort("status")} className="h-8 px-2 lg:px-3">
-                    Status
-                    {getSortIcon("status")}
-                  </Button>
-                </TableHead>
-                <TableHead className='truncate'>
-                  <Button variant="ghost" onClick={() => handleSort("created_at")} className="h-8 px-2 lg:px-3">
-                    Member Since
-                    {getSortIcon("created_at")}
-                  </Button>
-                </TableHead>
+                <TableHead className='truncate'>User ID</TableHead>
+                <TableHead>Username</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className='truncate'>Created Date</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {users.map((user) => (
                 <TableRow key={user.id}>
+                  <TableCell className="font-mono text-xs truncate text-center">{user.id}</TableCell>
                   <TableCell className="font-medium">{user.pi_username}</TableCell>
-                  <TableCell className="font-mono text-xs truncate">{user.id}</TableCell>
                   <TableCell>
-                    <Badge variant={getStatusBadgeVariant(user.status)}>{user.status}</Badge>
+                    <Badge
+                      className={getStatusBadgeClassName(user.status)}
+                    >
+                      {user.status}
+                    </Badge>
                   </TableCell>
                   <TableCell className='truncate'>{format(new Date(user.created_at), 'P')}</TableCell>
                   <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="h-8 w-8 p-0">
-                          <span className="sr-only">Open menu</span>
-                          <MoreHorizontal className="h-4 w-4" />
+                    <div className="flex items-center gap-2">
+                      {user.status !== 'BANNED' ? (
+                        <Button
+                          variant="outline"
+                          className="text-red-500"
+                          size="sm"
+                          onClick={async () => handleUpdateStatus(user.id, 'BANNED')}
+                        >
+                          <ShieldOff className="mr-2 h-4 w-4 text-red-500" />
+                          Ban
                         </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        {user.status !== 'banned' ? (
-                          <DropdownMenuItem onSelect={async () => handleUpdateStatus(user.id, 'banned')} className="text-destructive focus:text-destructive">
-                            <ShieldOff className="mr-2 h-4 w-4" />
-                            Ban User
-                          </DropdownMenuItem>
-                        ) : (
-                          <DropdownMenuItem onSelect={async () => handleUpdateStatus(user.id, 'active')}>
-                            <ShieldCheck className="mr-2 h-4 w-4 text-green-500" />
-                            Unban User
-                          </DropdownMenuItem>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          className="text-green-500"
+                          size="sm"
+                          onClick={async () => handleUpdateStatus(user.id, 'ACTIVE')}
+                        >
+                          <ShieldCheck className="mr-2 h-4 w-4 text-green-500" />
+                          Unban
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
+        </div>
+      </section>
     </>
   );
 }

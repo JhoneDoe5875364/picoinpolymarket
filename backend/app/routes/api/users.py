@@ -23,7 +23,7 @@ async def get_users(
     order: str = Query(default="DESC"),
     search: str = Query(default=""),
 ):
-    if sort_by not in ["pi_username", "created_at", "balance"]:
+    if sort_by not in ["pi_username", "created_at", "status"]:
         raise HTTPException(status_code=400, detail="Invalid sort_by")
     if order not in ["ASC", "DESC"]:
         raise HTTPException(status_code=400, detail="Invalid order")
@@ -46,6 +46,15 @@ async def get_users(
         "page": ceil(offset / limit) + 1,
         "pages": ceil(total / limit) if total else 0,
     }
+
+
+@router.get("/summary")
+async def get_users_summary(
+    db: DbSession,
+    search: str = Query(default=""),
+):
+    summary = await users_repo.get_users_summary(db, search=search)
+    return {"ok": True, "data": summary}
 
 
 @router.get("/positions", summary="Get positions by user")
@@ -199,7 +208,7 @@ async def update_user_status(
         raise HTTPException(status_code=400, detail="Invalid status")
 
     user_row = await users_repo.update_user_status(
-        db, pi_uid=target_user_id, status=status
+        db, user_id=target_user_id, status=status
     )
     return {"ok": True, "user": jsonable_encoder(user_row)}
 

@@ -127,6 +127,43 @@ async def get_users(
     return rows, int(total or 0)
 
 
+async def get_users_summary(
+    session: AsyncSession,
+    *,
+    search: str = "",
+) -> dict[str, int]:
+    filters: list[Any] = [User.role_id == 3]
+    if search and search.strip():
+        filters.append(User.pi_username.ilike(f"%{search}%"))
+
+    stmt = select(
+        func.count(User.id).label("total"),
+        func.coalesce(
+            func.sum(case((User.status == "ACTIVE", 1), else_=0)),
+            0,
+        ).label("active"),
+        func.coalesce(
+            func.sum(case((User.status == "SUSPENDED", 1), else_=0)),
+            0,
+        ).label("suspended"),
+        func.coalesce(
+            func.sum(case((User.status == "BANNED", 1), else_=0)),
+            0,
+        ).label("banned"),
+    ).where(*filters)
+
+    result = await session.execute(stmt)
+    row = result.mappings().first()
+    if not row:
+        return {"total": 0, "active": 0, "suspended": 0, "banned": 0}
+    return {
+        "total": int(row["total"] or 0),
+        "active": int(row["active"] or 0),
+        "suspended": int(row["suspended"] or 0),
+        "banned": int(row["banned"] or 0),
+    }
+
+
 async def get_user_balance_by_uuid(session: AsyncSession, pi_uid: str) -> Any:
     stmt = select(User).where(User.pi_uid == pi_uid)
     result = await session.execute(stmt)
@@ -137,11 +174,11 @@ async def get_user_balance_by_uuid(session: AsyncSession, pi_uid: str) -> Any:
 
 
 async def update_user_status(
-    session: AsyncSession, *, pi_uid: str, status: str
+    session: AsyncSession, *, user_id: int, status: str
 ) -> dict[str, Any]:
     stmt = (
         update(User)
-        .where(User.pi_uid == pi_uid)
+        .where(User.id == user_id)
         .values(status=status, updated_at=func.now())
         .returning(
             User.id,
@@ -156,6 +193,7 @@ async def update_user_status(
     user_row = result.mappings().first()
     if not user_row:
         raise LookupError("User not found")
+    await session.commit()
     return dict(user_row)
 
 
