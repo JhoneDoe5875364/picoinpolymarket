@@ -17,8 +17,10 @@ from app.models.tables.market_trades import MarketTrade
 from app.models.tables.user import User
 
 _ORDER_COLUMNS: dict[str, Any] = {
-    "created_at": Market.created_at,
-    "updated_at": Market.updated_at,
+    "id": Market.id,
+    "question": Market.question,
+    "status": Market.status,
+    "category": Market.category,
     "start_date": Market.start_date,
     "end_date": Market.end_date,
     "volume": Market.volume,
@@ -72,10 +74,10 @@ async def list_markets(
 
     if status is not None and status.strip().lower() != "all":
         conditions.append(Market.status == status)
-    if closed is None and resolved is None:
-        conditions.append(Market.is_closed == False)
-        conditions.append(Market.is_resolved == False)
-        conditions.append(Market.is_active == True)
+    # if closed is None and resolved is None:
+        # conditions.append(Market.is_closed == False)
+        # conditions.append(Market.is_resolved == False)
+        # conditions.append(Market.is_active == True)
     if closed is not None:
         conditions.append(Market.is_closed == closed)
     if resolved is not None:

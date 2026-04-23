@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { CheckCircle2, CircleDot, Clock3, Layers3, MoreHorizontal } from "lucide-react";
 
@@ -20,7 +20,7 @@ import { Market } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 
 type Status = "open" | "pending" | "resolved";
-type SortField = "question" | "status" | "category" | "start_date" | "end_date" | "traders" | "volume";
+type SortField = "id" | "question" | "status" | "category" | "start_date" | "end_date" | "traders" | "volume";
 type MarketSummary = {
   total: number;
   open: number;
@@ -28,6 +28,7 @@ type MarketSummary = {
   resolved: number;
 };
 const DEFAULT_MARKET_ICON = "/images/markets/market-default.png";
+const PAGE_SIZE = 20;
 
 
 export function MarketManager() {
@@ -35,31 +36,37 @@ export function MarketManager() {
 
   const [rows, setRows] = useState<Market[]>([]);
   const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [limit] = useState(100);
+  const [nextOffset, setNextOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<"all" | Status>("all");
-  const [sortBy, setSortBy] = useState<SortField>("start_date");
-  const [order, setOrder] = useState<"asc" | "desc">("desc");
-  const [loading, setLoading] = useState(false);
+  const [order, setOrder] = useState<SortField>("id");
+  const [ascending, setAscending] = useState<"ASC" | "DESC">("DESC");
+  const [isInitialLoading, setIsInitialLoading] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [summary, setSummary] = useState<MarketSummary>({ total: 0, open: 0, pending: 0, resolved: 0 });
   const [summaryLoading, setSummaryLoading] = useState(false);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const rowsRef = useRef<Market[]>([]);
+  const totalRef = useRef(0);
+  const nextOffsetRef = useRef(0);
+  const hasMoreRef = useRef(true);
+  const isInitialLoadingRef = useRef(false);
+  const isLoadingMoreRef = useRef(false);
 
   const [resolveDialogOpen, setResolveDialogOpen] = useState(false);
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [selectedMarketId, setSelectedMarketId] = useState<string | null>(null);
 
-  const qs = useMemo(() => {
+  const listBaseQs = useMemo(() => {
     const params = new URLSearchParams();
-    params.set("limit", String(limit));
-    params.set("offset", String((page - 1) * limit));
-    params.set("order", sortBy);
-    params.set("ascending", order === "asc" ? "true" : "false");
+    params.set("order", order);
+    params.set("ascending", ascending === "ASC" ? "true" : "false");
     if (search) params.set("search", search);
     if (status) params.set("status", status);
     return params.toString();
-  }, [page, limit, sortBy, order, search, status]);
+  }, [order, ascending, search, status]);
 
   const summaryQs = useMemo(() => {
     const params = new URLSearchParams();
@@ -68,20 +75,53 @@ export function MarketManager() {
     return params.toString();
   }, [search]);
 
-  async function load() {
-    setLoading(true);
+  const loadMarkets = useCallback(async (reset: boolean) => {
+    if ((!reset && (!hasMoreRef.current || isLoadingMoreRef.current)) || (reset && isInitialLoadingRef.current)) return;
+
+    if (reset) {
+      isInitialLoadingRef.current = true;
+      setIsInitialLoading(true);
+    } else {
+      isLoadingMoreRef.current = true;
+      setIsLoadingMore(true);
+    }
+
+    const offset = reset ? 0 : nextOffsetRef.current;
+    const params = new URLSearchParams(listBaseQs);
+    params.set("limit", String(PAGE_SIZE));
+    params.set("offset", String(offset));
+
     try {
-      const res = await apiFetchWithToken(`/markets?${qs}`, { method: "GET" });
+      const res = await apiFetchWithToken(`/markets?${params.toString()}`, { method: "GET" });
       if (res.ok) {
-        setRows(res.data || []);
-        setTotal(res.total ?? res.data?.length ?? 0);
+        const incoming = Array.isArray(res.data) ? res.data : [];
+        const hasServerTotal = res.total !== undefined && res.total !== null;
+        const incomingTotal = hasServerTotal ? Number(res.total) : (reset ? incoming.length : rowsRef.current.length + incoming.length);
+        const mergedRows = reset ? incoming : [...rowsRef.current, ...incoming];
+        const computedNextOffset = offset + incoming.length;
+        const reachedEnd = hasServerTotal ? (incoming.length < PAGE_SIZE || computedNextOffset >= incomingTotal) : incoming.length < PAGE_SIZE;
+
+        setRows(mergedRows);
+        setTotal(incomingTotal);
+        setNextOffset(computedNextOffset);
+        setHasMore(!reachedEnd);
+        rowsRef.current = mergedRows;
+        totalRef.current = incomingTotal;
+        nextOffsetRef.current = computedNextOffset;
+        hasMoreRef.current = !reachedEnd;
       }
     } catch (e: any) {
       toast({ title: "Load failed", description: e.message, variant: "destructive" });
     } finally {
-      setLoading(false);
+      if (reset) {
+        isInitialLoadingRef.current = false;
+        setIsInitialLoading(false);
+      } else {
+        isLoadingMoreRef.current = false;
+        setIsLoadingMore(false);
+      }
     }
-  }
+  }, [listBaseQs, toast]);
 
   async function loadSummary() {
     setSummaryLoading(true);
@@ -102,8 +142,49 @@ export function MarketManager() {
     }
   }
 
-  useEffect(() => { load(); }, [qs]);
+  const refreshMarkets = useCallback(() => {
+    setRows([]);
+    setTotal(0);
+    setNextOffset(0);
+    setHasMore(true);
+    rowsRef.current = [];
+    totalRef.current = 0;
+    nextOffsetRef.current = 0;
+    hasMoreRef.current = true;
+    void loadMarkets(true);
+  }, [loadMarkets]);
+
+  useEffect(() => {
+    setRows([]);
+    setTotal(0);
+    setNextOffset(0);
+    setHasMore(true);
+    rowsRef.current = [];
+    totalRef.current = 0;
+    nextOffsetRef.current = 0;
+    hasMoreRef.current = true;
+    void loadMarkets(true);
+  }, [listBaseQs, loadMarkets]);
+
   useEffect(() => { loadSummary(); }, [summaryQs]);
+
+  useEffect(() => {
+    const target = loadMoreRef.current;
+    if (!target || !hasMore || isInitialLoading || isLoadingMore) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+        if (entry?.isIntersecting) {
+          void loadMarkets(false);
+        }
+      },
+      { root: null, rootMargin: "300px 0px", threshold: 0 }
+    );
+
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [hasMore, isInitialLoading, isLoadingMore, loadMarkets]);
 
   async function resolve(outcome: "YES" | "NO") {
     if (!selectedMarketId) return;
@@ -114,7 +195,7 @@ export function MarketManager() {
       toast({ title: "Resolve failed", description: res.error || "Unknown error", variant: "destructive" });
     } else {
       toast({ title: "Resolved", description: outcome.toUpperCase() });
-      load();
+      refreshMarkets();
       loadSummary();
     }
     setSelectedMarketId(null);
@@ -127,7 +208,7 @@ export function MarketManager() {
       toast({ title: "Close failed", description: res.error || "Unknown error", variant: "destructive" });
     } else {
       toast({ title: "Closed", description: "Market closed" });
-      load();
+      refreshMarkets();
       loadSummary();
     }
     setSelectedMarketId(null);
@@ -190,7 +271,7 @@ export function MarketManager() {
               <Input
                 placeholder="Search…"
                 value={search}
-                onChange={(e) => { setPage(1); setSearch(e.target.value); }}
+                onChange={(e) => { setSearch(e.target.value); }}
                 className="col-span-2 w-full md:w-64"
               />
               <Button
@@ -204,7 +285,6 @@ export function MarketManager() {
               <Select
                 value={status}
                 onValueChange={(value) => {
-                  setPage(1);
                   setStatus(value as "all" | Status);
                 }}
               >
@@ -219,16 +299,16 @@ export function MarketManager() {
                 </SelectContent>
               </Select>
               <Select
-                value={sortBy}
+                value={order}
                 onValueChange={(value) => {
-                  setPage(1);
-                  setSortBy(value as SortField);
+                  setOrder(value as SortField);
                 }}
               >
                 <SelectTrigger className="w-full md:w-44">
                   <SelectValue placeholder="Sort by" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="id">Id</SelectItem>
                   <SelectItem value="start_date">Start Date</SelectItem>
                   <SelectItem value="end_date">End Date</SelectItem>
                   <SelectItem value="question">Question</SelectItem>
@@ -239,18 +319,17 @@ export function MarketManager() {
                 </SelectContent>
               </Select>
               <Select
-                value={order}
+                value={ascending}
                 onValueChange={(value) => {
-                  setPage(1);
-                  setOrder(value as "asc" | "desc");
+                  setAscending(value as "ASC" | "DESC");
                 }}
               >
                 <SelectTrigger className="w-full md:w-36">
                   <SelectValue placeholder="Order" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="desc">DESC</SelectItem>
-                  <SelectItem value="asc">ASC</SelectItem>
+                  <SelectItem value="DESC">DESC</SelectItem>
+                  <SelectItem value="ASC">ASC</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -347,14 +426,17 @@ export function MarketManager() {
           </Table>
 
 
-          {total > limit && (
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setPage(Math.max(1, page - 1))} disabled={page <= 1}>
-                Prev
-              </Button>
-              <Button variant="outline" onClick={() => setPage(page + 1)} disabled={page * limit >= total}>
-                Next
-              </Button>
+          {isInitialLoading && (
+            <p className="text-sm text-muted-foreground">Loading markets...</p>
+          )}
+          {!isInitialLoading && rows.length === 0 && (
+            <p className="text-sm text-muted-foreground">No markets found.</p>
+          )}
+          {rows.length > 0 && (
+            <div className="space-y-1">
+              <div ref={loadMoreRef} className="h-1 w-full" />
+              {isLoadingMore && <p className="text-sm text-muted-foreground">Loading more markets...</p>}
+              {!hasMore && total > 0 && <p className="text-sm text-muted-foreground">All markets loaded.</p>}
             </div>
           )}
       </section>
@@ -407,7 +489,7 @@ export function MarketManager() {
           <MarketCreator
             onCreated={() => {
               setCreateDialogOpen(false);
-              load();
+              refreshMarkets();
               loadSummary();
             }}
           />
