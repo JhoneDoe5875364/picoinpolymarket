@@ -17,6 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.logger import get_logger, setup_logger
 from app.db.session import create_engine_and_sessionmaker, dispose_engine
 from app.routes import include_all_routers
+from app.updator.market_close_updater import run_periodic_market_close_refresh
 from app.updator.leaderboard_updater import run_periodic_leaderboard_refresh
 from app.updator.market_price_candle_updater import run_periodic_market_price_candle_refresh
 
@@ -28,6 +29,7 @@ logger = get_logger()
 async def lifespan(app: FastAPI):
     leaderboard_task: asyncio.Task[None] | None = None
     market_candle_task: asyncio.Task[None] | None = None
+    market_close_task: asyncio.Task[None] | None = None
     try:
         engine, session_maker = create_engine_and_sessionmaker()
         app.state.async_engine = engine
@@ -45,12 +47,19 @@ async def lifespan(app: FastAPI):
         )
         app.state.market_candle_refresh_task = market_candle_task
         logger.info("Market price candle refresh task started")
+        market_close_task = asyncio.create_task(
+            run_periodic_market_close_refresh(session_maker),
+            name="market-close-refresh",
+        )
+        app.state.market_close_refresh_task = market_close_task
+        logger.info("Market close refresh task started")
     except Exception as e:
         logger.warning("Database not initialized: %s", e)
         app.state.async_engine = None
         app.state.async_session_maker = None
         app.state.leaderboard_refresh_task = None
         app.state.market_candle_refresh_task = None
+        app.state.market_close_refresh_task = None
     yield
     if leaderboard_task is not None:
         leaderboard_task.cancel()
@@ -64,6 +73,12 @@ async def lifespan(app: FastAPI):
             await market_candle_task
         except asyncio.CancelledError:
             logger.info("Market price candle refresh task stopped")
+    if market_close_task is not None:
+        market_close_task.cancel()
+        try:
+            await market_close_task
+        except asyncio.CancelledError:
+            logger.info("Market close refresh task stopped")
     await dispose_engine()
     logger.info("Database engine disposed")
 

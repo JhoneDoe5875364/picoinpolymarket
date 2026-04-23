@@ -13,7 +13,7 @@ from app.models.tables.market_price_candles import MarketPriceCandle
 from app.models.tables.market_token import MarketToken
 
 logger = get_logger()
-MARKET_CANDLE_REFRESH_INTERVAL_SECONDS = 1 * 60
+MARKET_CANDLE_REFRESH_INTERVAL_SECONDS = 10 * 60
 _PRICE_QUANT = Decimal("0.0001")
 _VOLUME_QUANT = Decimal("0.0001")
 
