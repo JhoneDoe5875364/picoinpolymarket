@@ -3,8 +3,8 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Calendar, Loader2, UploadCloud } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Calendar, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
@@ -14,9 +14,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { cn } from "@/lib/utils";
 import { apiFetchWithToken } from "@/lib/api";
 import { Market } from "@/lib/types";
+import { MarketImagePickerField } from "@/components/admin/MarketImagePickerField";
 
 const marketSchema = z.object({
   question: z.string().min(10, "Question must be at least 10 characters long."),
@@ -184,13 +184,6 @@ export function MarketEditor({ marketId }: MarketEditorProps) {
       });
     }
   }, [categories, form, loadedCategorySlug]);
-
-  const imageOptions = useMemo(() => {
-    return images.map((img) => ({
-      ...img,
-      value: img.url,
-    }));
-  }, [images]);
 
   async function uploadImage(file: File) {
     setIsUploadingImage(true);
@@ -487,54 +480,13 @@ export function MarketEditor({ marketId }: MarketEditorProps) {
               />
             </div>
 
-            <div className="space-y-3 rounded-md border p-3">
-              <div className="flex items-center justify-between gap-2">
-                <h3 className="text-sm font-medium">Market Image</h3>
-                <label className={cn("inline-flex items-center gap-2 text-sm", isUploadingImage && "opacity-60")}>
-                  <UploadCloud className="h-4 w-4" />
-                  <span>{isUploadingImage ? "Uploading..." : "Upload image"}</span>
-                  <input
-                    type="file"
-                    className="hidden"
-                    accept=".png,.jpg,.jpeg,.webp,.gif,image/*"
-                    disabled={isUploadingImage}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        uploadImage(file);
-                      }
-                      e.currentTarget.value = "";
-                    }}
-                  />
-                </label>
-              </div>
-
-              {imageOptions.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No uploaded image yet.</p>
-              ) : (
-                <div className="max-h-48 overflow-y-auto pr-1">
-                  <div className="grid grid-cols-4 gap-2 md:grid-cols-6">
-                    {imageOptions.map((img) => {
-                      const active = selectedIcon === img.value;
-                      return (
-                        <button
-                          type="button"
-                          key={img.name}
-                          onClick={() => form.setValue("icon", img.value, { shouldValidate: true })}
-                          className={cn(
-                            "overflow-hidden rounded-md border bg-muted/20 transition",
-                            active ? "border-primary ring-2 ring-primary/30" : "hover:border-primary/40"
-                          )}
-                        >
-                          <img src={img.url} alt={img.name} className="h-16 w-full object-cover" loading="lazy" />
-                          <div className="truncate px-2 py-1 text-[11px]">{img.name}</div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
+            <MarketImagePickerField
+              selectedIcon={selectedIcon}
+              images={images}
+              isUploadingImage={isUploadingImage}
+              onUploadImage={uploadImage}
+              onSelectImage={(url) => form.setValue("icon", url, { shouldValidate: true })}
+            />
 
             {isLoading && (
               <p className="text-sm text-muted-foreground">Loading market, categories, and images...</p>
