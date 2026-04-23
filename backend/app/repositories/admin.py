@@ -1,16 +1,40 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from decimal import Decimal
 from typing import Any, List, Optional, Tuple
 
-from sqlalchemy import select, text
+from sqlalchemy import case, func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.tables.category import Category
+from app.models.tables.market import Market
+from app.models.tables.market_position import MarketPosition
+from app.models.tables.market_token import MarketToken
 
 
-async def resolve_category_id(
+_SLUG_CLEANUP_PATTERN = re.compile(r"[^a-z0-9]+")
+
+
+def _slugify_question(question: str) -> str:
+    normalized = _SLUG_CLEANUP_PATTERN.sub("-", question.strip().lower()).strip("-")
+    return normalized or "market"
+
+
+async def _build_unique_market_slug(session: AsyncSession, question: str) -> str:
+    base_slug = _slugify_question(question)
+    slug = base_slug
+    dedupe_seq = 2
+    while True:
+        existing = await session.execute(select(Market.id).where(Market.slug == slug).limit(1))
+        if existing.scalar_one_or_none() is None:
+            return slug
+        slug = f"{base_slug}-{dedupe_seq}"
+        dedupe_seq += 1
+
+
+async def get_category_by_slug(
     session: AsyncSession,
     *,
     slug: Optional[str],
@@ -24,20 +48,11 @@ async def resolve_category_id(
     return r.scalar_one_or_none()
 
 
-async def list_categories(session: AsyncSession) -> List[dict[str, Any]]:
-    rows = await session.execute(
-        select(Category.id, Category.slug, Category.name).order_by(Category.slug.asc())
-    )
-    return [
-        {"id": row.id, "slug": row.slug, "name": row.name or row.slug}
-        for row in rows.all()
-    ]
-
-
-async def insert_market_admin(
+async def insert_market(
     session: AsyncSession,
     *,
     question: str,
+    slug: str,
     category_id: Optional[int],
     description: Optional[str],
     rules: Optional[str],
@@ -45,146 +60,75 @@ async def insert_market_admin(
     end_date_naive: datetime,
     liquidity: Optional[Decimal],
     icon: Optional[str],
-    checklist_resolution_clarity: bool,
-    checklist_restricted_topics: bool,
 ) -> dict[str, Any]:
-    q = text(
-        """
-        INSERT INTO markets (
-            question, category_id, description, rules, start_date, end_date, liquidity, icon, status,
-            checklist_resolution_clarity, checklist_restricted_topics
-        )
-        VALUES (
-            :question, :category_id, :description, :rules, :start_date, :end_date, :liquidity, :icon, 'open',
-            :clarity, :restricted
-        )
-        RETURNING *
-        """
+    market = Market(
+        question=question,
+        slug=slug,
+        category_id=category_id,
+        description=description,
+        rules=rules,
+        start_date=start_date_naive,
+        end_date=end_date_naive,
+        liquidity=liquidity,
+        icon=icon,
+        status="open",
     )
-    r = await session.execute(
-        q,
-        {
-            "question": question,
-            "category_id": category_id,
-            "description": description,
-            "rules": rules,
-            "start_date": start_date_naive,
-            "end_date": end_date_naive,
-            "liquidity": liquidity,
-            "icon": icon,
-            "clarity": checklist_resolution_clarity,
-            "restricted": checklist_restricted_topics,
-        },
-    )
-    row = r.mappings().first()
-    if not row:
-        raise RuntimeError("Failed to create market")
-    return dict(row)
+    session.add(market)
+    await session.flush()
+    await session.refresh(market)
+    return {
+        col.name: getattr(market, col.name)
+        for col in Market.__table__.columns
+    }
 
 
-async def admin_markets_page(
+async def close_market(
     session: AsyncSession,
     *,
-    page: int,
-    limit: int,
-    sort_by: str,
-    order: str,
-    search: str,
-    status: Optional[str],
-) -> Tuple[int, List[dict[str, Any]]]:
-    where_clauses: List[str] = []
-    params: dict[str, Any] = {}
-
-    if search:
-        where_clauses.append("(question ILIKE :s1 OR description ILIKE :s2)")
-        p = f"%{search}%"
-        params["s1"] = p
-        params["s2"] = p
-
-    if status and status.lower() != "all":
-        where_clauses.append("status = :st")
-        params["st"] = status
-
-    where_sql = "WHERE " + " AND ".join(where_clauses) if where_clauses else ""
-    offset = (page - 1) * limit
-    params["limit"] = limit
-    params["offset"] = offset
-
-    count_q = text(f"SELECT COUNT(*) AS total FROM v_market_snapshots {where_sql}")
-    cr = await session.execute(count_q, params)
-    total = cr.mappings().first()["total"] or 0
-
-    data_q = text(
-        f"""
-        SELECT id AS id, status AS status, title AS title, category AS category,
-               created_at AS created_at, end_date AS end_date,
-               COALESCE(total_pi, 0) AS total_pi,
-               COALESCE(total_participants, 0) AS total_participants,
-               COALESCE(total_volume, 0) AS total_volume,
-               COALESCE(yes_volume, 0) AS yes_volume,
-               COALESCE(no_volume, 0) AS no_volume,
-               COALESCE(volume_24h, 0) AS volume_24h
-        FROM v_market_snapshots
-        {where_sql}
-        ORDER BY {sort_by} {order}
-        LIMIT :limit OFFSET :offset
-        """
+    market_id: int,
+) -> dict[str, Any]:
+    update_stmt = (
+        update(Market)
+        .where(
+            Market.id == market_id,
+            func.coalesce(Market.is_resolved, False) == False,
+        )
+        .values(
+            is_closed=True,
+            status=case(
+                (Market.status == "open", "pending"),
+                else_=Market.status,
+            ),
+            updated_at=datetime.now(),
+        )
+        .returning(
+            Market.id,
+            Market.question,
+            Market.status,
+            Market.is_closed,
+            Market.is_resolved,
+            Market.updated_at,
+        )
     )
-    dr = await session.execute(data_q, params)
-    rows = [dict(x) for x in dr.mappings().all()]
-    return int(total), rows
+    updated = await session.execute(update_stmt)
+    updated_row = updated.mappings().first()
+    if updated_row:
+        return dict(updated_row)
+
+    exists_stmt = select(
+        Market.id,
+        func.coalesce(Market.is_resolved, False).label("is_resolved"),
+    ).where(Market.id == market_id)
+    exists_result = await session.execute(exists_stmt)
+    existing_row = exists_result.mappings().first()
+    if not existing_row:
+        raise LookupError("Market not found")
+    if existing_row["is_resolved"]:
+        raise ValueError("Resolved market cannot be closed")
+    raise ValueError("Market cannot be closed")
 
 
-async def admin_resolutions_page(
-    session: AsyncSession,
-    *,
-    page: int,
-    limit: int,
-    sort_by: str,
-    order: str,
-    search: str,
-) -> Tuple[int, List[dict[str, Any]]]:
-    where_clauses = ["m.status = 'resolved'", "m.resolved = true"]
-    params: dict[str, Any] = {}
-
-    if search:
-        where_clauses.append("(m.question ILIKE :s1 OR m.description ILIKE :s2)")
-        p = f"%{search}%"
-        params["s1"] = p
-        params["s2"] = p
-
-    where_sql = "WHERE " + " AND ".join(where_clauses)
-    offset = (page - 1) * limit
-    params["limit"] = limit
-    params["offset"] = offset
-
-    count_q = text(f"SELECT COUNT(*) AS total FROM markets m {where_sql}")
-    cr = await session.execute(count_q, params)
-    total = cr.mappings().first()["total"] or 0
-
-    data_q = text(
-        f"""
-        SELECT m.id AS id, m.title AS title, m.description AS description,
-               cat.slug AS category, m.created_at AS created_at, m.resolved_at AS resolved_at,
-               m.resolved_by_username AS resolved_by_username, m.resolved_outcome AS resolved_outcome,
-               COALESCE((
-                   SELECT SUM(t.pi_amount)
-                   FROM trades t
-                   WHERE t.market_id = m.id AND COALESCE(t.invalid, false) = false
-               ), 0) AS total_volume,
-               m.status AS status
-        FROM markets m
-        LEFT JOIN categories cat ON cat.id = m.category_id
-        {where_sql}
-        ORDER BY {sort_by} {order}
-        LIMIT :limit OFFSET :offset
-        """
-    )
-    dr = await session.execute(data_q, params)
-    return int(total), [dict(x) for x in dr.mappings().all()]
-
-
-async def resolve_market_row(
+async def resolve_market(
     session: AsyncSession,
     *,
     market_id: int,
@@ -192,84 +136,65 @@ async def resolve_market_row(
     user_id: str,
     username: str,
 ) -> dict[str, Any]:
-    q = text(
-        """
-        UPDATE markets
-        SET resolved_outcome = :outcome,
-            resolved_at = NOW(),
-            resolved = true,
-            resolved_by_user_id = :uid,
-            resolved_by_username = :uname,
-            status = 'resolved'
-        WHERE id = :mid
-        RETURNING id, question, resolved, resolved_outcome, resolved_at, status
-        """
+    final_price_value = Decimal("1") if outcome == "YES" else Decimal("0")
+    loser_price_value = Decimal("0") if outcome == "YES" else Decimal("1")
+    update_stmt = (
+        update(Market)
+        .where(Market.id == market_id)
+        .values(
+            resolved_outcome=outcome,
+            resolved_at=datetime.now(),
+            is_resolved=True,
+            is_closed=True,
+            resolved_by_user_id=user_id,
+            resolved_by_username=username,
+            status="resolved",
+            updated_at=datetime.now(),
+        )
+        .returning(
+            Market.id,
+            Market.question,
+            Market.status,
+            Market.is_closed,
+            Market.is_resolved,
+            Market.resolved_outcome,
+            Market.resolved_at,
+        )
     )
-    r = await session.execute(
-        q,
-        {"outcome": outcome, "uid": user_id, "uname": username, "mid": market_id},
-    )
-    row = r.mappings().first()
-    if not row:
+    updated = await session.execute(update_stmt)
+    updated_row = updated.mappings().first()
+    if not updated_row:
         raise LookupError("Market not found")
+
     await session.execute(
-        text("UPDATE trades SET invalid = false WHERE market_id = :mid"),
-        {"mid": market_id},
-    )
-    return dict(row)
-
-
-async def cancel_market_flow(session: AsyncSession, market_id: int) -> None:
-    qm = text("SELECT * FROM markets m WHERE id = :mid")
-    mr = await session.execute(qm, {"mid": market_id})
-    market = mr.mappings().first()
-    if not market:
-        raise LookupError("MarketNotFound")
-
-    qp = text(
-        """
-        SELECT user_id, SUM(pi_amount) AS total_amount
-        FROM positions
-        WHERE market_id = :mid
-        GROUP BY user_id
-        """
-    )
-    pr = await session.execute(qp, {"mid": market_id})
-    open_positions = pr.mappings().all()
-
-    um = text(
-        """
-        UPDATE markets SET status = 'cancelled' WHERE id = :mid RETURNING *
-        """
-    )
-    await session.execute(um, {"mid": market_id})
-
-    for pos in open_positions:
-        uid = pos["user_id"]
-        qu = text("SELECT id, balance FROM users WHERE id = :uid")
-        ur = await session.execute(qu, {"uid": uid})
-        user = ur.mappings().first()
-        if not user:
-            continue
-        pi_amount = pos["total_amount"] or 0
-        old_balance = user["balance"] or 0
-        new_balance = old_balance + pi_amount
-        await session.execute(
-            text("UPDATE users SET balance = :bal WHERE id = :uid RETURNING *"),
-            {"bal": new_balance, "uid": uid},
+        update(MarketPosition)
+        .where(
+            MarketPosition.market_id == market_id,
+            MarketPosition.final_price.is_(None),
         )
-        await session.execute(
-            text(
-                """
-                INSERT INTO transactions (user_id, market_id, amount, pi_amount, type, status, details, date)
-                VALUES (:uid, :mid, :amt, :amt, 'refund', 'completed', 'Refund due to cancellation', CURRENT_DATE)
-                """
-            ),
-            {"uid": uid, "mid": market_id, "amt": pi_amount},
+        .values(
+            is_closed=True,
+            final_price=case(
+                (MarketPosition.outcome == outcome, final_price_value),
+                else_=loser_price_value,
+            )
         )
+    )
+    await session.execute(
+        update(MarketToken)
+        .where(MarketToken.market_id == market_id)
+        .values(
+            price=case(
+                (MarketToken.outcome == outcome, final_price_value),
+                else_=loser_price_value,
+            )
+        )
+    )
+
+    return dict(updated_row)
 
 
-async def platform_state_counts(session: AsyncSession) -> dict[str, Any]:
+async def metrics(session: AsyncSession) -> dict[str, Any]:
     total_users = (
         await session.execute(text("SELECT COUNT(*) AS count FROM users"))
     ).mappings().first()["count"] or 0

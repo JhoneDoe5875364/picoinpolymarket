@@ -108,6 +108,17 @@ PI_API_KEY=your-pi-server-api-key
 uvicorn app.main:app --host 0.0.0.0 --port 8001
 ```
 
+### Reset `markets.id` sequence after manual seed IDs
+If markets are seeded with explicit IDs (for example, `100000~100049`), run this SQL once so new inserts continue from the current max ID instead of restarting at `1`.
+
+```sql
+SELECT setval(
+  pg_get_serial_sequence('markets', 'id'),
+  COALESCE((SELECT MAX(id) FROM markets), 1),
+  true
+);
+```
+
 Backend Access:
 ```
 http://localhost:8001

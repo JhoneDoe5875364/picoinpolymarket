@@ -1,6 +1,8 @@
+import re
 from datetime import datetime
 from decimal import Decimal
 from typing import Literal, Optional, Union
+from pathlib import Path as FsPath
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.encoders import jsonable_encoder
@@ -16,6 +18,13 @@ logger = get_logger()
 router = APIRouter(prefix="/markets", tags=["markets"])
 
 FEE_RATE = Config.FEE_RATE
+PROJECT_ROOT = FsPath(__file__).resolve().parents[4]
+MARKET_IMAGE_DIR = PROJECT_ROOT / "frontend" / "public" / "images" / "markets"
+if not MARKET_IMAGE_DIR.exists():
+    MARKET_IMAGE_DIR = PROJECT_ROOT / "frontend" / "images" / "markets"
+MARKET_IMAGE_DIR.mkdir(parents=True, exist_ok=True)
+ALLOWED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
+BASE64_DATA_PREFIX = re.compile(r"^data:image/[a-zA-Z0-9.+-]+;base64,")
 
 
 @router.get("/", summary="List markets")
@@ -283,3 +292,32 @@ async def resolve_market(
 
     return {"ok": True, "data": jsonable_encoder(row)}
 
+
+@router.get("/categories")
+async def get_market_categories(db: DbSession, user=Depends(verify_token)):
+    _ = user.get("sub", "")
+    role = user.get("role", "")
+    if role not in ("superadmin", "admin"):
+        raise HTTPException(status_code=403, detail="HasNotAdminRole")
+
+    rows = await markets_repo.list_categories(db)
+    return {"ok": True, "data": jsonable_encoder(rows)}
+
+
+@router.get("/images")
+async def get_market_images(user=Depends(verify_token)):
+    _ = user.get("sub", "")
+    role = user.get("role", "")
+    if role not in ("superadmin", "admin"):
+        raise HTTPException(status_code=403, detail="HasNotAdminRole")
+
+    images = []
+    for path in sorted(MARKET_IMAGE_DIR.glob("*")):
+        if path.is_file() and path.suffix.lower() in ALLOWED_IMAGE_EXTENSIONS:
+            images.append(
+                {
+                    "name": path.name,
+                    "url": f"/images/markets/{path.name}",
+                }
+            )
+    return {"ok": True, "data": images}

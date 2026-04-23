@@ -4,7 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, List, Optional
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Identity, Integer, Numeric, String, Text
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 class Market(Base):
     __tablename__ = "markets"
 
-    id: Mapped[int] = mapped_column(BigInteger, Identity(always=False), primary_key=True)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     question: Mapped[str] = mapped_column(Text)
     slug: Mapped[str] = mapped_column(Text)
     description: Mapped[Optional[str]] = mapped_column(Text)

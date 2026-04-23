@@ -107,7 +107,7 @@ export function MarketManager() {
 
   async function resolve(outcome: "YES" | "NO") {
     if (!selectedMarketId) return;
-    const res = await apiFetchWithToken(`/markets/resolve?outcome=${outcome}&market_id=${selectedMarketId}`, {
+    const res = await apiFetchWithToken(`/admin/markets/resolve?outcome=${outcome}&market_id=${selectedMarketId}`, {
       method: "POST",
     });
     if (!res.ok) {
@@ -122,7 +122,7 @@ export function MarketManager() {
 
   async function close() {
     if (!selectedMarketId) return;
-    const res = await apiFetchWithToken(`/markets/close?market_id=${selectedMarketId}`, { method: "POST" });
+    const res = await apiFetchWithToken(`/admin/markets/close?market_id=${selectedMarketId}`, { method: "POST" });
     if (!res.ok) {
       toast({ title: "Close failed", description: res.error || "Unknown error", variant: "destructive" });
     } else {

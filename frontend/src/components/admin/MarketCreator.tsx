@@ -18,6 +18,7 @@ import { apiFetchWithToken } from "@/lib/api";
 
 const marketSchema = z.object({
   question: z.string().min(10, "Question must be at least 10 characters long."),
+  slug: z.string().min(1, "Slug is required."),
   description: z.string().min(20, "Description must be at least 20 characters long."),
   rules: z.string().min(10, "Rules must be at least 10 characters long."),
   category: z.string().min(1, "Category is required."),
@@ -47,6 +48,7 @@ export function MarketCreator({ onCreated }: MarketCreatorProps) {
     resolver: zodResolver(marketSchema),
     defaultValues: {
       question: "",
+      slug: "",
       description: "",
       rules: "",
       category: "",
@@ -66,8 +68,8 @@ export function MarketCreator({ onCreated }: MarketCreatorProps) {
       setIsLoadingMeta(true);
       try {
         const [categoryRes, imageRes] = await Promise.all([
-          apiFetchWithToken("/admin/markets/categories", { method: "GET" }),
-          apiFetchWithToken("/admin/markets/images", { method: "GET" }),
+          apiFetchWithToken("/markets/categories", { method: "GET" }),
+          apiFetchWithToken("/markets/images", { method: "GET" }),
         ]);
 
         if (cancelled) return;
@@ -160,6 +162,7 @@ export function MarketCreator({ onCreated }: MarketCreatorProps) {
     try {
       const payload = {
         question: data.question.trim(),
+        slug: data.slug.trim(),
         description: data.description.trim(),
         rules: data.rules.trim(),
         category: data.category.trim(),
@@ -184,6 +187,7 @@ export function MarketCreator({ onCreated }: MarketCreatorProps) {
       });
       form.reset({
         question: "",
+        slug: "",
         description: "",
         rules: "",
         category: categories[0]?.slug || "",
@@ -223,6 +227,20 @@ export function MarketCreator({ onCreated }: MarketCreatorProps) {
                   <FormLabel>Market Question</FormLabel>
                   <FormControl>
                     <Input placeholder="e.g., Will X happen by Y date?" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="slug"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Slug</FormLabel>
+                  <FormControl>
+                    <Input placeholder="e.g., will-btc-hit-100k-by-2026" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

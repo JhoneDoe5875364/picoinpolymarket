@@ -5,7 +5,7 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from math import ceil
 from pathlib import Path as FsPath
-from typing import Optional
+from typing import Literal, Optional
 
 import pytz
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
@@ -15,6 +15,7 @@ from app.core.logger import get_logger
 from app.core.security import verify_token
 from app.db.deps import DbSession
 from app.repositories import admin as admin_repo
+from app.routes.api.markets import markets_repo
 
 logger = get_logger()
 
@@ -70,6 +71,7 @@ async def create_market(request: Request, db: DbSession, user=Depends(verify_tok
 
     data = await request.json()
     question = data.get("question")
+    slug = data.get("slug")
     description = data.get("description")
     rules = data.get("rules")
     category_slug = data.get("category")
@@ -78,8 +80,6 @@ async def create_market(request: Request, db: DbSession, user=Depends(verify_tok
     end_date_raw = data.get("end_date")
     liquidity_raw = data.get("liquidity")
     icon_raw = data.get("icon")
-    checklist_resolution_clarity = data.get("checklist_resolution_clarity")
-    checklist_restricted_topics = data.get("checklist_restricted_topics")
 
     question = str(question or "").strip()
     if not question:
@@ -113,16 +113,17 @@ async def create_market(request: Request, db: DbSession, user=Depends(verify_tok
 
     try:
         async with db.begin():
-            resolved_cat = await admin_repo.resolve_category_id(
+            resolved_cat = await admin_repo.get_category_by_slug(
                 db,
                 slug=category_slug if isinstance(category_slug, str) else None,
                 explicit_id=explicit_cat,
             )
             if resolved_cat is None:
                 raise HTTPException(status_code=400, detail="Unknown category")
-            market_row = await admin_repo.insert_market_admin(
+            market_row = await admin_repo.insert_market(
                 db,
                 question=question,
+                slug=slug,
                 category_id=resolved_cat,
                 description=description,
                 rules=rules,
@@ -130,8 +131,6 @@ async def create_market(request: Request, db: DbSession, user=Depends(verify_tok
                 end_date_naive=end_date,
                 liquidity=liquidity,
                 icon=icon,
-                checklist_resolution_clarity=bool(checklist_resolution_clarity) if checklist_resolution_clarity is not None else True,
-                checklist_restricted_topics=bool(checklist_restricted_topics) if checklist_restricted_topics is not None else True,
             )
     except HTTPException:
         raise
@@ -140,36 +139,6 @@ async def create_market(request: Request, db: DbSession, user=Depends(verify_tok
         raise HTTPException(status_code=500, detail="Failed to create market")
 
     return {"ok": True, "market": jsonable_encoder(market_row)}
-
-
-@router.get("/markets/categories")
-async def get_market_categories(db: DbSession, user=Depends(verify_token)):
-    _ = user.get("sub", "")
-    role = user.get("role", "")
-    if role not in ("superadmin", "admin"):
-        raise HTTPException(status_code=403, detail="HasNotAdminRole")
-
-    rows = await admin_repo.list_categories(db)
-    return {"ok": True, "data": jsonable_encoder(rows)}
-
-
-@router.get("/markets/images")
-async def get_market_images(user=Depends(verify_token)):
-    _ = user.get("sub", "")
-    role = user.get("role", "")
-    if role not in ("superadmin", "admin"):
-        raise HTTPException(status_code=403, detail="HasNotAdminRole")
-
-    images = []
-    for path in sorted(MARKET_IMAGE_DIR.glob("*")):
-        if path.is_file() and path.suffix.lower() in ALLOWED_IMAGE_EXTENSIONS:
-            images.append(
-                {
-                    "name": path.name,
-                    "url": f"/images/markets/{path.name}",
-                }
-            )
-    return {"ok": True, "data": images}
 
 
 @router.post("/markets/images")
@@ -201,155 +170,69 @@ async def upload_market_image(request: Request, user=Depends(verify_token)):
     return {"ok": True, "data": {"name": saved_name, "url": f"/images/markets/{saved_name}"}}
 
 
-@router.get("/markets")
-async def get_markets(
+@router.post("/markets/close", summary="Close a market")
+async def close_market(
     db: DbSession,
-    page: int = Query(1, ge=1),
-    limit: int = Query(20, ge=1, le=100),
-    sort_by: str = Query("created_at"),
-    order: str = Query("desc"),
-    search: str = Query(""),
-    status: Optional[str] = Query(None),
+    market_id: int = Query(..., ge=1),
     user=Depends(verify_token),
 ):
-    _ = user.get("sub", "")
     role = user.get("role", "")
     if role not in ("superadmin", "admin"):
         raise HTTPException(status_code=403, detail="HasNotAdminRole")
-
-    allowed_sort_columns = {"created_at", "question", "status", "end_date"}
-    if sort_by not in allowed_sort_columns:
-        sort_by = "created_at"
-    order = order.lower() if order.lower() in ("asc", "desc") else "desc"
-
-    total, rows = await admin_repo.admin_markets_page(
-        db,
-        page=page,
-        limit=limit,
-        sort_by=sort_by,
-        order=order,
-        search=search,
-        status=status,
-    )
-    return {
-        "ok": True,
-        "page": page,
-        "limit": limit,
-        "total": total,
-        "pages": ceil(total / limit) if total else 0,
-        "data": jsonable_encoder(rows),
-    }
-
-
-@router.get("/resolutions")
-async def get_resolutions(
-    db: DbSession,
-    page: int = Query(1, ge=1),
-    limit: int = Query(25, ge=1, le=100),
-    sort_by: str = Query("resolved_at"),
-    order: str = Query("desc"),
-    search: str = Query(""),
-    user=Depends(verify_token),
-):
-    _ = user.get("sub", "")
-    role = user.get("role", "")
-    if role not in ("superadmin", "admin"):
-        raise HTTPException(status_code=403, detail="HasNotAdminRole")
-
-    allowed_sort_columns = {
-        "resolved_at",
-        "resolved_outcome",
-        "title",
-        "created_at",
-        "total_volume",
-        "resolved_by_username",
-    }
-    if sort_by not in allowed_sort_columns:
-        sort_by = "resolved_at"
-    order = order.lower() if order.lower() in ("asc", "desc") else "desc"
-
-    total, rows = await admin_repo.admin_resolutions_page(
-        db,
-        page=page,
-        limit=limit,
-        sort_by=sort_by,
-        order=order,
-        search=search,
-    )
-    return {
-        "ok": True,
-        "page": page,
-        "limit": limit,
-        "total": total,
-        "pages": ceil(total / limit) if total else 0,
-        "data": jsonable_encoder(rows),
-    }
-
-
-@router.post("/markets/{market_id}/resolve/{outcome}")
-async def resolve_market(
-    db: DbSession,
-    market_id: int = Path(...),
-    outcome: str = Path(...),
-    user=Depends(verify_token),
-):
-    user_id = user.get("sub", "")
-    username = user.get("username", "")
-    role = user.get("role", "")
-    if role != "superadmin":
-        raise HTTPException(status_code=403, detail="HasNotSuperadminRole")
-    if outcome not in {"yes", "no"}:
-        raise HTTPException(status_code=400, detail="Invalid outcome value")
 
     try:
         async with db.begin():
-            updated_row = await admin_repo.resolve_market_row(
+            row = await admin_repo.close_market(db, market_id=market_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.error("Error closing market %s: %s", market_id, exc)
+        raise HTTPException(status_code=500, detail="Failed to close market") from exc
+
+    return {"ok": True, "data": jsonable_encoder(row)}
+
+
+@router.post("/markets/resolve", summary="Resolve a market")
+async def resolve_market(
+    db: DbSession,
+    market_id: int = Query(..., ge=1),
+    outcome: Literal["YES", "NO"] = Query(...),
+    user=Depends(verify_token),
+):
+    user_id = str(user.get("sub", ""))
+    username = str(user.get("username", ""))
+    role = user.get("role", "")
+    if role not in ("superadmin"):
+        raise HTTPException(status_code=403, detail="HasNotAdminRole")
+
+    normalized_outcome = outcome.upper()
+
+    try:
+        async with db.begin():
+            row = await admin_repo.resolve_market(
                 db,
                 market_id=market_id,
-                outcome=outcome,
+                outcome=normalized_outcome,
                 user_id=user_id,
                 username=username,
             )
-    except LookupError:
-        raise HTTPException(status_code=404, detail="Market not found")
-    except Exception as e:
-        logger.error("Error resolving market %s: %s", market_id, e)
-        raise HTTPException(status_code=500, detail="Failed to resolve market")
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.error("Error resolving market %s with %s: %s", market_id, normalized_outcome, exc)
+        raise HTTPException(status_code=500, detail="Failed to resolve market") from exc
 
-    return {"ok": True, "data": jsonable_encoder(updated_row)}
-
-
-@router.post("/markets/{market_id}/cancel")
-async def cancel_market(
-    db: DbSession,
-    market_id: int = Path(...),
-    user=Depends(verify_token),
-):
-    _ = user.get("sub", "")
-    role = user.get("role", "")
-    if role != "superadmin":
-        raise HTTPException(status_code=403, detail="HasNotSuperadminRole")
-
-    try:
-        async with db.begin():
-            await admin_repo.cancel_market_flow(db, market_id)
-    except LookupError:
-        raise HTTPException(status_code=404, detail="MarketNotFound")
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("Error cancelling market %s: %s", market_id, e)
-        raise HTTPException(status_code=500, detail="Failed to cancel market")
-
-    return {"ok": True}
+    return {"ok": True, "data": jsonable_encoder(row)}
 
 
-@router.get("/platform_state")
-async def get_platform_state(db: DbSession, user=Depends(verify_token)):
+@router.get("/metrics")
+async def get_metrics(db: DbSession, user=Depends(verify_token)):
     _ = user.get("sub", "")
     role = user.get("role", "")
     if role not in ("superadmin", "admin"):
         raise HTTPException(status_code=403, detail="HasNotAdminRole")
 
-    stats = await admin_repo.platform_state_counts(db)
+    stats = await admin_repo.metrics(db)
     return {"ok": True, **stats}
