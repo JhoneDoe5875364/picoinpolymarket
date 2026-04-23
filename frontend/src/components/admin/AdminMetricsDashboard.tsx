@@ -49,6 +49,13 @@ const PERIODS: Array<{ key: PeriodKey; label: string }> = [
   { key: "year", label: "This Year" },
 ];
 
+const PERIOD_TABS: Array<{ key: PeriodKey; label: string }> = [
+  { key: "today", label: "1D" },
+  { key: "week", label: "1W" },
+  { key: "month", label: "1M" },
+  { key: "year", label: "1Y" },
+];
+
 function formatNumber(value: number): string {
   return Number(value || 0).toLocaleString();
 }
@@ -70,22 +77,21 @@ function formatDate(value?: string | null): string {
 function MetricPeriodTable({
   title,
   values,
+  selectedPeriod,
   format = formatNumber,
 }: {
   title: string;
   values: PeriodValue;
+  selectedPeriod: PeriodKey;
   format?: (value: number) => string;
 }) {
+  const selectedPeriodLabel = PERIODS.find((period) => period.key === selectedPeriod)?.label ?? "Today";
+
   return (
     <div>
-      <span className="text-sm">{title}</span>
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 pt-2">
-        {PERIODS.map((period) => (
-          <div key={period.key} className="rounded-md border p-2 flex justify-between items-center">
-            <p className="text-xs text-muted-foreground">{period.label}</p>
-            <p className="text-md font-semibold">{format(values[period.key] ?? 0)}</p>
-          </div>
-        ))}
+      <div className="rounded-md border p-2 flex justify-between items-center">
+        <p className="text-xs text-muted-foreground">{title} ({selectedPeriodLabel})</p>
+        <p className="text-md font-semibold">{format(values[selectedPeriod] ?? 0)}</p>
       </div>
     </div>
   );
@@ -99,6 +105,7 @@ export function AdminMetricsDashboard() {
   const [selectedMarket, setSelectedMarket] = useState<ClosedUnresolvedMarket | null>(null);
   const [selectedOutcome, setSelectedOutcome] = useState<"YES" | "NO">("YES");
   const [isResolving, setIsResolving] = useState(false);
+  const [selectedPeriod, setSelectedPeriod] = useState<PeriodKey>("today");
   const hasRequestedRef = useRef(false);
 
   useEffect(() => {
@@ -239,41 +246,65 @@ export function AdminMetricsDashboard() {
         </div>
       </div>
 
-      <MetricPeriodTable
-        title="Created Markets"
-        values={data.market_count_created}
-      />
-      <MetricPeriodTable
-        title="Ended Markets"
-        values={data.market_count_ended}
-      />
-      <MetricPeriodTable
-        title="Resolved Markets"
-        values={data.market_count_resolved}
-      />
-      <MetricPeriodTable
-        title="User Purchased PI"
-        values={data.total_pi_purchased}
-        format={roundLocalePi}
-      />
-      <MetricPeriodTable
-        title="Generated Fees"
-        values={data.total_fee_generated}
-        format={roundLocalePi}
-      />
-      <MetricPeriodTable
-        title="Settled PI"
-        values={data.total_pi_claimed}
-        format={roundLocalePi}
-      />
-      <MetricPeriodTable
-        title="Created Users"
-        values={data.user_count_created}
-      />
-      <MetricPeriodTable
-        title="Created Suggestions"
-        values={data.suggestion_count_created}
-      />
+      <div className="flex items-center gap-2 py-1">
+        {PERIOD_TABS.map((period) => (
+          <Button
+            key={period.key}
+            type="button"
+            variant={selectedPeriod === period.key ? "default" : "outline"}
+            size="sm"
+            onClick={() => setSelectedPeriod(period.key)}
+          >
+            {period.label}
+          </Button>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 pt-2">
+        <MetricPeriodTable
+          title="Created Markets"
+          values={data.market_count_created}
+          selectedPeriod={selectedPeriod}
+        />
+        <MetricPeriodTable
+          title="Ended Markets"
+          values={data.market_count_ended}
+          selectedPeriod={selectedPeriod}
+        />
+        <MetricPeriodTable
+          title="Resolved Markets"
+          values={data.market_count_resolved}
+          selectedPeriod={selectedPeriod}
+        />
+        <MetricPeriodTable
+          title="User Purchased PI"
+          values={data.total_pi_purchased}
+          selectedPeriod={selectedPeriod}
+          format={roundLocalePi}
+        />
+        <MetricPeriodTable
+          title="Generated Fees"
+          values={data.total_fee_generated}
+          selectedPeriod={selectedPeriod}
+          format={roundLocalePi}
+        />
+        <MetricPeriodTable
+          title="Settled PI"
+          values={data.total_pi_claimed}
+          selectedPeriod={selectedPeriod}
+          format={roundLocalePi}
+        />
+        <MetricPeriodTable
+          title="Created Users"
+          values={data.user_count_created}
+          selectedPeriod={selectedPeriod}
+        />
+        <MetricPeriodTable
+          title="Created Suggestions"
+          values={data.suggestion_count_created}
+          selectedPeriod={selectedPeriod}
+        />
+      </div>
 
       <div className="pt-4">
         <span className="text-sm">Closed But Unresolved Markets</span>
