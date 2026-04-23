@@ -5,7 +5,7 @@ import { UploadCloud } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { FormLabel } from "@/components/ui/form";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
 type MarketImage = { name: string; url: string };
@@ -38,9 +38,9 @@ export function MarketImagePickerField({
 
   return (
     <>
-      <div className="grid grid-cols-[92px_1fr] items-start gap-2 md:block">
-        <FormLabel className="m-0">{label}</FormLabel>
-        <div className="flex items-center gap-3">
+      <div className="flex items-start gap-3 md:block md:space-y-0">
+        <Label className="m-0 w-24 shrink-0 md:w-auto">{label}</Label>
+        <div className="flex flex-1 items-center gap-3">
           <div className="h-24 w-24 overflow-hidden rounded-md border bg-muted/20">
             {selectedIcon ? (
               <img src={selectedIcon} alt="Selected market image" className="h-full w-full object-cover" loading="lazy" />

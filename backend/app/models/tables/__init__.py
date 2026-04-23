@@ -12,6 +12,7 @@ from app.models.tables.market_trades import MarketTrade
 from app.models.tables.market_price_candles import MarketPriceCandle
 from app.models.tables.order import Order
 from app.models.tables.payment import Payment
+from app.models.tables.suggestion import Suggestion
 from app.models.tables.user import User
 
 __all__ = [
@@ -22,6 +23,7 @@ __all__ = [
     "User",
     "Order",
     "Payment",
+    "Suggestion",
     "MarketPosition",
     "MarketTrade",
     "MarketPriceCandle",

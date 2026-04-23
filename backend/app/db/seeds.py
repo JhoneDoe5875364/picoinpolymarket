@@ -7,7 +7,7 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 import random
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql.ext import ts_headline
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +21,7 @@ from app.models.tables.market_trades import MarketTrade
 from app.models.tables.market_price_candles import MarketPriceCandle
 from app.models.tables.market_position import MarketPosition
 from app.models.tables.leaderboard import Leaderboard
+from app.models.tables.suggestion import Suggestion
 from app.updator import leaderboard_updater
 
 
@@ -52,11 +53,52 @@ async def _ensure_market_position(session: AsyncSession, **kwargs: object) -> No
     session.add(MarketPosition(**kwargs))
 
 
+async def _ensure_suggestion(session: AsyncSession, **kwargs: object) -> None:
+    session.add(Suggestion(**kwargs))
+
+
+async def _sync_table_sequence(session: AsyncSession, table_name: str, id_column: str = "id") -> None:
+    await session.execute(
+        text(
+            f"""
+            WITH seq AS (
+                SELECT pg_get_serial_sequence('{table_name}', '{id_column}') AS seq_name
+            )
+            SELECT setval(
+                seq.seq_name,
+                COALESCE((SELECT MAX({id_column}) FROM {table_name}), 0) + 1,
+                false
+            )
+            FROM seq
+            WHERE seq.seq_name IS NOT NULL
+            """
+        )
+    )
+
+
+async def _sync_seed_sequences(session: AsyncSession) -> None:
+    seed_tables = [
+        "categories",
+        "users",
+        "suggestions",
+        "markets",
+        "market_tokens",
+        "market_trades",
+        "market_price_candles",
+        "market_positions",
+        "leaderboards",
+    ]
+    for table_name in seed_tables:
+        await _sync_table_sequence(session, table_name)
+
+
 async def run_seeds(session: AsyncSession) -> None:
     """Insert seed rows if missing."""
     await run_seed_categories(session)
     await session.flush()
     await run_seed_users(session)
+    await session.flush()
+    await run_seed_suggestions(session)
     await session.flush()
     await run_seed_markets(session)
     await session.flush()
@@ -67,7 +109,9 @@ async def run_seeds(session: AsyncSession) -> None:
     await run_seed_market_positions(session)
     await session.flush()
     # Seed path should run leaderboard aggregation once.
-    await leaderboard_updater.rebuild_leaderboards(session)
+    await leaderboard_updater.rebuild_leaderboards(session, commit=False)
+    await session.flush()
+    await _sync_seed_sequences(session)
     await session.flush()
 
 
@@ -338,6 +382,80 @@ async def run_seed_markets(session: AsyncSession) -> None:
             outcome="NO",
             token=str(generate_bigint_64()),
             price=no_price,
+        )
+
+
+async def run_seed_suggestions(session: AsyncSession) -> None:
+    now: datetime = datetime.now(timezone.utc)
+    category_slugs = [
+        "politics",
+        "sports",
+        "crypto",
+        "esports",
+        "finance",
+        "geopolitics",
+        "tech",
+        "culture",
+        "economy",
+        "weather",
+    ]
+    question_templates = [
+        "Will {topic} happen before {window}?",
+        "Will {topic} close above target by {window}?",
+        "Will official data show {topic} by {window}?",
+        "Will {topic} exceed forecasts by {window}?",
+        "Will {topic} milestone be reached before {window}?",
+    ]
+    topics = [
+        "BTC above $120k",
+        "ETH staking ratio at new high",
+        "US CPI under 2.5%",
+        "Pi ecosystem app count over 5,000",
+        "major AI model launch",
+        "KOSPI yearly gain over 8%",
+        "World Cup qualifier upset",
+        "global oil price under $70",
+        "typhoon landfall in Korea",
+        "next flagship smartphone release",
+    ]
+    windows = [
+        "Q3 2026",
+        "Q4 2026",
+        "year-end 2026",
+        "the next 90 days",
+        "the next 120 days",
+    ]
+
+    suggestion_count = 20
+    suggestion_first_id = 1
+    for idx in range(suggestion_count):
+        suggestion_id = suggestion_first_id + idx
+        start_date = (now + timedelta(days=random.randint(1, 15))).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        end_date = (start_date + timedelta(days=random.randint(20, 90))).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        question = random.choice(question_templates).format(
+            topic=random.choice(topics),
+            window=random.choice(windows),
+        )
+
+        await _ensure_suggestion(
+            session,
+            id=suggestion_id,
+            user_id=random.randint(3, 22),
+            question=question,
+            description="Seed suggestion for admin review flow validation.",
+            category=random.choice(category_slugs),
+            start_date=start_date,
+            end_date=end_date,
+            status="pending",
+            reject_reason=None,
+            reviewed_by=None,
+            reviewed_at=None,
+            created_at=now,
+            updated_at=now,
         )
 
 

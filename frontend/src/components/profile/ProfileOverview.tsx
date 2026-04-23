@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowDownToLine, ArrowUpFromLine, Pencil } from 'lucide-react';
+import { ArrowDownToLine, ArrowUpFromLine, MessageSquarePlus, Pencil } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
 import { apiFetchWithToken } from '@/lib/api';
 import { cn, toSignedMoney, toUnsignedMoney } from '@/lib/utils';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { SuggestMarketForm } from '@/components/market/SuggestMarketForm';
 
 type PnlPeriod = '1D' | '1W' | '1M' | 'ALL';
 
@@ -30,6 +32,9 @@ type OverviewPayload = {
   stats: OverviewStats;
   pnlHistory: PnlHistoryPoint[];
 };
+
+const overviewCache = new Map<string, OverviewPayload>();
+const overviewInFlight = new Map<string, Promise<OverviewPayload>>();
 
 const PERIODS: Array<{ key: PnlPeriod; label: string; caption: string }> = [
   { key: '1D', label: '1D', caption: 'Past Day' },
@@ -99,6 +104,17 @@ function normalizePnlHistory(rows: any[]): PnlHistoryPoint[] {
 }
 
 async function fetchProfileOverview(userId: string, period: PnlPeriod): Promise<OverviewPayload> {
+  const cacheKey = `${userId}:${period}`;
+  const cached = overviewCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+  const pending = overviewInFlight.get(cacheKey);
+  if (pending) {
+    return pending;
+  }
+
+  const request = (async () => {
   const [marketsRes, positionsRes, biggestWinRes, pnlRes, pnlHistoryRes] = await Promise.all([
     apiFetchWithToken<any>(`/users/total-markets-traded?user_id=${userId}`, { method: 'GET' }),
     apiFetchWithToken<any>(`/users/total-positions-value?user_id=${userId}`, { method: 'GET' }),
@@ -107,15 +123,25 @@ async function fetchProfileOverview(userId: string, period: PnlPeriod): Promise<
     apiFetchWithToken<any>(`/users/pnl-history?user_id=${userId}&period=${period}`, { method: 'GET' }),
   ]);
 
-  return {
-    stats: {
-      predictions: toNumber(marketsRes?.data?.total_markets_traded),
-      positionsValue: toNumber(positionsRes?.data?.total_positions_value),
-      biggestWin: toNumber(biggestWinRes?.data?.biggest_win),
-      profitLoss: toNumber(pnlRes?.data?.profit_loss),
-    },
-    pnlHistory: normalizePnlHistory(Array.isArray(pnlHistoryRes?.data?.history) ? pnlHistoryRes.data.history : []),
-  };
+    const payload: OverviewPayload = {
+      stats: {
+        predictions: toNumber(marketsRes?.data?.total_markets_traded),
+        positionsValue: toNumber(positionsRes?.data?.total_positions_value),
+        biggestWin: toNumber(biggestWinRes?.data?.biggest_win),
+        profitLoss: toNumber(pnlRes?.data?.profit_loss),
+      },
+      pnlHistory: normalizePnlHistory(Array.isArray(pnlHistoryRes?.data?.history) ? pnlHistoryRes.data.history : []),
+    };
+    overviewCache.set(cacheKey, payload);
+    return payload;
+  })();
+
+  overviewInFlight.set(cacheKey, request);
+  try {
+    return await request;
+  } finally {
+    overviewInFlight.delete(cacheKey);
+  }
 }
 
 export function ProfileOverview() {
@@ -130,6 +156,7 @@ export function ProfileOverview() {
   const [pnlHistory, setPnlHistory] = useState<PnlHistoryPoint[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [suggestDialogOpen, setSuggestDialogOpen] = useState(false);
 
   const profileName = useMemo(() => {
     return (ppxUser?.username ?? 'Unknown User');
@@ -195,6 +222,15 @@ export function ProfileOverview() {
               </div>
             </div>
             <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1 px-2 text-xs"
+                onClick={() => setSuggestDialogOpen(true)}
+              >
+                <MessageSquarePlus className="h-4 w-4" />
+                Suggest
+              </Button>
               <Button variant="ghost" size="icon" className="h-8 w-8">
                 <Pencil className="h-4 w-4" />
               </Button>
@@ -315,6 +351,22 @@ export function ProfileOverview() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={suggestDialogOpen} onOpenChange={setSuggestDialogOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Suggest New Market</DialogTitle>
+            <DialogDescription>
+              Submit question, description, category, and start/end date for admin review.
+            </DialogDescription>
+          </DialogHeader>
+          <SuggestMarketForm
+            onSubmitted={() => {
+              setSuggestDialogOpen(false);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }

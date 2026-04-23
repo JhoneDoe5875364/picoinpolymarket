@@ -187,18 +187,18 @@ class Role(BaseModel):
 class Suggestion(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: UUID
+    id: int
     user_id: Optional[int] = None
-    title: str
+    question: str
     category: str
     description: Optional[str] = None
-    end_time: datetime
+    start_date: datetime
+    end_date: datetime
     status: str = "pending"
     reject_reason: Optional[str] = None
-    created_at: datetime
-    approved_at: Optional[datetime] = None
-    approved_by: Optional[int] = None
-    submitted_by: Optional[str] = None
+    created_at: Optional[datetime] = None
+    reviewed_at: Optional[datetime] = None
+    reviewed_by: Optional[int] = None
 
 
 class Transaction(BaseModel):

@@ -67,15 +67,15 @@ class CommentCreate(BaseModel):
 
 class SuggestionCreate(BaseModel):
     user_id: Optional[int] = None
-    title: str
+    question: str
     category: str
     description: Optional[str] = None
-    end_time: datetime
-    submitted_by: Optional[str] = None
+    start_date: datetime
+    end_date: datetime
 
 
 class SuggestionUpdate(BaseModel):
     status: Optional[str] = None
     reject_reason: Optional[str] = None
-    approved_by: Optional[int] = None
-    approved_at: Optional[datetime] = None
+    reviewed_by: Optional[int] = None
+    reviewed_at: Optional[datetime] = None

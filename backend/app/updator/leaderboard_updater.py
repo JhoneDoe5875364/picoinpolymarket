@@ -92,7 +92,7 @@ async def _load_trade_rows(
     ]
 
 
-async def rebuild_leaderboards(session: AsyncSession) -> int:
+async def rebuild_leaderboards(session: AsyncSession, *, commit: bool = True) -> int:
     now = datetime.now(timezone.utc)
     bucket_starts = _bucket_starts(now)
 
@@ -230,7 +230,10 @@ async def rebuild_leaderboards(session: AsyncSession) -> int:
     await session.execute(delete(Leaderboard))
     if rows_to_insert:
         session.add_all(rows_to_insert)
-    await session.commit()
+    if commit:
+        await session.commit()
+    else:
+        await session.flush()
     return len(rows_to_insert)
 
 

@@ -98,15 +98,20 @@ export interface Activity {
 };
 
 export interface Suggestion {
-  id: string;
-  title: string;
-  description: string;
+  id: number;
+  question: string;
+  description?: string | null;
   category: string;
   status: string;
-  user_id: string;
-  pi_username: string;
-  end_time: string;
-  created_at: string;
+  user_id?: string;
+  pi_username?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  reject_reason?: string | null;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 };
 
 export interface PriceHistory {
