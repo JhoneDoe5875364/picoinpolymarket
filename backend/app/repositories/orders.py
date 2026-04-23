@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, List, Literal, Optional, Tuple
 
@@ -68,8 +68,8 @@ async def create_order(
         size=Decimal(str(size)), 
         pi_amount=Decimal(str(pi_amount)),
         status="PENDING",
-        created_at=datetime.now(),
-        updated_at=datetime.now(),
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
     ).returning(Order)
     result = await session.execute(stmt)
     row = result.scalar_one_or_none()
@@ -94,7 +94,7 @@ async def cancel_order(
     stmt = (
         update(Order)
         .where(Order.id == order_id)
-        .values(status="CANCELLED", updated_at=datetime.now())
+        .values(status="CANCELLED", updated_at=datetime.now(timezone.utc))
         .returning(Order)
     )
     result = await session.execute(stmt)
@@ -136,7 +136,7 @@ async def cancel_orders(
         update_stmt = (
             update(Order)
             .where(Order.id.in_(cancellable_ids))
-            .values(status="CANCELLED", updated_at=datetime.now())
+            .values(status="CANCELLED", updated_at=datetime.now(timezone.utc))
             .returning(Order.id)
         )
         update_result = await session.execute(update_stmt)
@@ -176,7 +176,7 @@ async def cancel_all_open_orders_by_user(
     stmt = (
         update(Order)
         .where(Order.id.in_(cancellable_ids))
-        .values(status="CANCELLED", updated_at=datetime.now())
+        .values(status="CANCELLED", updated_at=datetime.now(timezone.utc))
         .returning(Order.id)
     )
     result = await session.execute(stmt)
@@ -215,7 +215,7 @@ async def cancel_open_orders_by_user_and_market(
     stmt = (
         update(Order)
         .where(Order.id.in_(cancellable_ids))
-        .values(status="CANCELLED", updated_at=datetime.now())
+        .values(status="CANCELLED", updated_at=datetime.now(timezone.utc))
         .returning(Order.id)
     )
     result = await session.execute(stmt)

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, List, Literal, Optional, Union
 
@@ -285,7 +285,7 @@ async def market_prices_history(
 
     has_interval_from_ts = False
     if interval is not None:
-        end_ts = int(datetime.now().timestamp())
+        end_ts = int(datetime.now(timezone.utc).timestamp())
         if interval != "MAX":
             start_ts = end_ts - interval_seconds_map[interval]
             has_interval_from_ts = True
@@ -582,7 +582,7 @@ async def insert_trade(
         pi_amount=Decimal(pi_amount),
         pi_fee=Decimal(pi_fee),
         pi_total_amount=Decimal(pi_total_amount),
-        created_at=datetime.now(),
+        created_at=datetime.now(timezone.utc),
     )
     result = await session.execute(stmt)
     await session.commit()
@@ -643,8 +643,8 @@ async def update_position(
             no_pi_amount=Decimal(no_pi_amount), 
             yes_avg_price=Decimal(yes_avg_price), 
             no_avg_price=Decimal(no_avg_price),
-            created_at=datetime.now(),
-            updated_at=datetime.now(),
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
         )
     
     yes_shares = position["yes_shares"] + shares if outcome == "YES" else position["yes_shares"]
@@ -664,7 +664,7 @@ async def update_position(
         no_pi_amount=Decimal(no_pi_amount),
         avg_price_yes=Decimal(yes_avg_price),
         avg_price_no=Decimal(no_avg_price),
-        updated_at=datetime.now(),
+        updated_at=datetime.now(timezone.utc),
     )
     result = await session.execute(stmt)
     await session.commit()
@@ -696,8 +696,8 @@ async def insert_position(
         no_pi_amount=Decimal(no_pi_amount),
         avg_price_yes=Decimal(yes_avg_price),
         avg_price_no=Decimal(no_avg_price),
-        created_at=datetime.now(),
-        updated_at=datetime.now(),
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
     )
     result = await session.execute(stmt)
     await session.commit()

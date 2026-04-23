@@ -32,7 +32,7 @@ type AdminMetricsData = {
     resolved: number;
   };
   market_count_created: PeriodValue;
-  market_count_ended: PeriodValue;
+  market_count_closed: PeriodValue;
   market_count_resolved: PeriodValue;
   total_pi_purchased: PeriodValue;
   total_fee_generated: PeriodValue;
@@ -282,8 +282,8 @@ export function AdminMetricsDashboard() {
           selectedPeriod={selectedPeriod}
         />
         <MetricPeriodTable
-          title="Ended Markets"
-          values={data.market_count_ended}
+          title="Closed Markets"
+          values={data.market_count_closed}
           selectedPeriod={selectedPeriod}
         />
         <MetricPeriodTable

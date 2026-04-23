@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, List, Optional, Tuple
 
-from sqlalchemy import and_, case, func, select, update
+from sqlalchemy import and_, case, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.tables.category import Category
@@ -112,7 +112,7 @@ async def update_market(
             end_date=end_date_naive,
             liquidity=liquidity,
             icon=icon,
-            updated_at=datetime.now(),
+            updated_at=datetime.now(timezone.utc),
         )
         .returning(*Market.__table__.columns)
     )
@@ -140,8 +140,8 @@ async def close_market(
                 (Market.status == "open", "pending"),
                 else_=Market.status,
             ),
-            closed_at=datetime.now(),
-            updated_at=datetime.now(),
+            closed_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
         )
         .returning(
             Market.id,
@@ -180,7 +180,7 @@ async def resolve_market(
 ) -> dict[str, Any]:
     final_price_value = Decimal("1") if outcome == "YES" else Decimal("0")
     loser_price_value = Decimal("0") if outcome == "YES" else Decimal("1")
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     update_stmt = (
         update(Market)
         .where(Market.id == market_id)
@@ -242,7 +242,7 @@ async def resolve_market(
 
 
 async def metrics(session: AsyncSession) -> dict[str, Any]:
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     start_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
     start_week = start_today - timedelta(days=start_today.weekday())
     start_month = start_today.replace(day=1)
@@ -255,6 +255,28 @@ async def metrics(session: AsyncSession) -> dict[str, Any]:
         ("year", start_year),
         ("all", None),
     ]
+
+    is_resolved_expr = or_(
+        func.coalesce(Market.is_resolved, False) == True,
+        Market.status == "resolved",
+    )
+    is_closed_expr = and_(
+        Market.closed_at.is_not(None),
+        Market.closed_at <= now,
+    )
+    is_pending_expr = and_(
+        ~is_resolved_expr,
+        or_(
+            func.coalesce(Market.is_closed, False) == True,
+            Market.status == "pending",
+            is_closed_expr,
+        ),
+    )
+    is_open_expr = and_(
+        ~is_resolved_expr,
+        ~is_pending_expr,
+    )
+    resolved_time_expr = func.coalesce(Market.resolved_at, Market.closed_at, Market.updated_at)
 
     def build_count_columns(ts_column: Any) -> list[Any]:
         return [
@@ -302,26 +324,24 @@ async def metrics(session: AsyncSession) -> dict[str, Any]:
 
     market_status_stmt = select(
         func.count(Market.id).label("total"),
-        func.coalesce(func.sum(case((Market.status == "open", 1), else_=0)), 0).label("open_count"),
-        func.coalesce(func.sum(case((Market.status == "pending", 1), else_=0)), 0).label("pending_count"),
-        func.coalesce(func.sum(case((Market.status == "resolved", 1), else_=0)), 0).label("resolved_count"),
+        func.coalesce(func.sum(case((is_open_expr, 1), else_=0)), 0).label("open_count"),
+        func.coalesce(func.sum(case((is_pending_expr, 1), else_=0)), 0).label("pending_count"),
+        func.coalesce(func.sum(case((is_resolved_expr, 1), else_=0)), 0).label("resolved_count"),
     )
     market_status_row = (await session.execute(market_status_stmt)).one()
 
     market_created_stmt = select(*build_count_columns(Market.created_at))
     market_created_row = (await session.execute(market_created_stmt)).mappings().one()
 
-    market_ended_stmt = select(
+    market_closed_stmt = select(
         *[
             func.coalesce(
                 func.sum(
                     case(
                         (
                             and_(
-                                Market.is_closed == True,
-                                Market.end_date.is_not(None),
-                                Market.end_date <= now,
-                                Market.end_date >= start_at if start_at is not None else True,
+                                is_closed_expr,
+                                Market.closed_at >= start_at if start_at is not None else True,
                             ),
                             1,
                         ),
@@ -333,7 +353,7 @@ async def metrics(session: AsyncSession) -> dict[str, Any]:
             for label, start_at in periods
         ]
     )
-    market_ended_row = (await session.execute(market_ended_stmt)).mappings().one()
+    market_closed_row = (await session.execute(market_closed_stmt)).mappings().one()
 
     market_resolved_stmt = select(
         *[
@@ -342,10 +362,10 @@ async def metrics(session: AsyncSession) -> dict[str, Any]:
                     case(
                         (
                             and_(
-                                Market.is_resolved == True,
-                                Market.resolved_at.is_not(None),
-                                Market.resolved_at <= now,
-                                Market.resolved_at >= start_at if start_at is not None else True,
+                                is_resolved_expr,
+                                resolved_time_expr.is_not(None),
+                                resolved_time_expr <= now,
+                                resolved_time_expr >= start_at if start_at is not None else True,
                             ),
                             1,
                         ),
@@ -394,8 +414,7 @@ async def metrics(session: AsyncSession) -> dict[str, Any]:
             Market.updated_at,
         )
         .where(
-            Market.is_closed == True,
-            Market.is_resolved == False,
+            is_pending_expr,
         )
         .order_by(Market.end_date.desc().nullslast(), Market.id.desc())
     )
@@ -409,7 +428,7 @@ async def metrics(session: AsyncSession) -> dict[str, Any]:
             "resolved": int(market_status_row.resolved_count or 0),
         },
         "market_count_created": {k: int(market_created_row[k] or 0) for k, _ in periods},
-        "market_count_ended": {k: int(market_ended_row[k] or 0) for k, _ in periods},
+        "market_count_closed": {k: int(market_closed_row[k] or 0) for k, _ in periods},
         "market_count_resolved": {k: int(market_resolved_row[k] or 0) for k, _ in periods},
         "total_pi_purchased": {k: float(purchased_pi_row[k] or 0) for k, _ in periods},
         "total_fee_generated": {k: float(fee_row[k] or 0) for k, _ in periods},
