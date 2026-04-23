@@ -313,6 +313,39 @@ async def resolve_market(
     return {"ok": True, "data": jsonable_encoder(row)}
 
 
+@router.post("/resolve", summary="Resolve a market")
+async def resolve_market_direct(
+    db: DbSession,
+    market_id: int = Query(..., ge=1),
+    outcome: Literal["YES", "NO"] = Query(...),
+    user=Depends(verify_token),
+):
+    user_id = str(user.get("sub", ""))
+    username = str(user.get("username", ""))
+    role = user.get("role", "")
+    if role not in ("superadmin"):
+        raise HTTPException(status_code=403, detail="HasNotAdminRole")
+
+    normalized_outcome = outcome.upper()
+
+    try:
+        async with db.begin():
+            row = await admin_repo.resolve_market(
+                db,
+                market_id=market_id,
+                outcome=normalized_outcome,
+                user_id=user_id,
+                username=username,
+            )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.error("Error resolving market %s with %s: %s", market_id, normalized_outcome, exc)
+        raise HTTPException(status_code=500, detail="Failed to resolve market") from exc
+
+    return {"ok": True, "data": jsonable_encoder(row)}
+
+
 @router.get("/metrics")
 async def get_metrics(db: DbSession, user=Depends(verify_token)):
     _ = user.get("sub", "")

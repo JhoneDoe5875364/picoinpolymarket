@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetchWithToken } from "@/lib/api";
@@ -93,6 +95,10 @@ export function AdminMetricsDashboard() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<AdminMetricsData | null>(null);
+  const [resolveDialogOpen, setResolveDialogOpen] = useState(false);
+  const [selectedMarket, setSelectedMarket] = useState<ClosedUnresolvedMarket | null>(null);
+  const [selectedOutcome, setSelectedOutcome] = useState<"YES" | "NO">("YES");
+  const [isResolving, setIsResolving] = useState(false);
   const hasRequestedRef = useRef(false);
 
   useEffect(() => {
@@ -126,6 +132,63 @@ export function AdminMetricsDashboard() {
     () => data?.market_status ?? { total: 0, open: 0, pending: 0, resolved: 0 },
     [data],
   );
+
+  function openResolveDialog(market: ClosedUnresolvedMarket) {
+    setSelectedMarket(market);
+    setSelectedOutcome("YES");
+    setResolveDialogOpen(true);
+  }
+
+  function closeResolveDialog() {
+    if (isResolving) return;
+    setResolveDialogOpen(false);
+    setSelectedMarket(null);
+    setSelectedOutcome("YES");
+  }
+
+  async function resolveSelectedMarket() {
+    if (!selectedMarket || isResolving) return;
+
+    const marketId = selectedMarket.id;
+    const outcome = selectedOutcome;
+    setIsResolving(true);
+
+    try {
+      const res = await apiFetchWithToken<{ ok: boolean; error?: string }>(
+        `/admin/markets/resolve?outcome=${outcome}&market_id=${marketId}`,
+        {
+          method: "POST",
+          body: JSON.stringify({ market_id: marketId, outcome }),
+        },
+      );
+
+      if (!res.ok) {
+        throw new Error(res.error || "Unknown error");
+      }
+
+      setData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          closed_unresolved_markets: prev.closed_unresolved_markets.filter((market) => market.id !== marketId),
+        };
+      });
+
+      toast({
+        title: "Market resolved",
+        description: `Market #${marketId} resolved as ${outcome}.`,
+      });
+      closeResolveDialog();
+    } catch (e: any) {
+      toast({
+        title: "Resolve failed",
+        description: e?.message || "Unknown error",
+        variant: "destructive",
+      });
+    } finally {
+      setIsResolving(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -221,12 +284,13 @@ export function AdminMetricsDashboard() {
                 <TableHead className="w-20">ID</TableHead>
                 <TableHead className="min-w-60">Question</TableHead>
                 <TableHead className="w-40">End Date</TableHead>
+                <TableHead className="w-32 text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {data.closed_unresolved_markets.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground">
+                  <TableCell colSpan={4} className="text-center text-muted-foreground">
                     No closed unresolved markets.
                   </TableCell>
                 </TableRow>
@@ -253,6 +317,14 @@ export function AdminMetricsDashboard() {
                       </div>
                     </TableCell>
                     <TableCell>{formatDate(market.end_date)}</TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        size="sm"
+                        onClick={() => openResolveDialog(market)}
+                      >
+                        Resolve
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))
               )}
@@ -260,6 +332,77 @@ export function AdminMetricsDashboard() {
           </Table>
         </div>
       </div>
+
+      <Dialog
+        open={resolveDialogOpen}
+        onOpenChange={(open) => {
+          if (isResolving) return;
+          if (!open) {
+            closeResolveDialog();
+            return;
+          }
+          setResolveDialogOpen(true);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Resolve Market</DialogTitle>
+            <DialogDescription>
+              {selectedMarket
+                ? `Choose the final outcome for market #${selectedMarket.id}.`
+                : "Choose the final outcome."}
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedMarket ? (
+            <div className="flex items-center gap-3 rounded-md border p-3">
+              {selectedMarket.icon ? (
+                <img
+                  src={selectedMarket.icon}
+                  alt={selectedMarket.question}
+                  className="h-12 w-12 rounded-md object-cover border border-border shrink-0"
+                  loading="lazy"
+                />
+              ) : (
+                <div className="h-12 w-12 rounded-md border border-border shrink-0 bg-muted" />
+              )}
+              <div className="min-w-0">
+                <p className="text-sm font-medium break-words">{selectedMarket.question}</p>
+              </div>
+            </div>
+          ) : null}
+
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              type="button"
+              variant={selectedOutcome === "YES" ? "default" : "outline"}
+              className={selectedOutcome === "YES" ? "bg-green-500 hover:bg-green-600 text-white" : ""}
+              onClick={() => setSelectedOutcome("YES")}
+              disabled={isResolving}
+            >
+              Yes
+            </Button>
+            <Button
+              type="button"
+              variant={selectedOutcome === "NO" ? "default" : "outline"}
+              className={selectedOutcome === "NO" ? "bg-red-500 hover:bg-red-600 text-white" : ""}
+              onClick={() => setSelectedOutcome("NO")}
+              disabled={isResolving}
+            >
+              No
+            </Button>
+          </div>
+
+          <DialogFooter className="flex-row justify-end gap-2 space-x-0">
+            <Button type="button" variant="outline" onClick={closeResolveDialog} disabled={isResolving}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={resolveSelectedMarket} disabled={!selectedMarket || isResolving}>
+              {isResolving ? "Resolving..." : "Resolve"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
