@@ -321,4 +321,4 @@ async def get_metrics(db: DbSession, user=Depends(verify_token)):
         raise HTTPException(status_code=403, detail="HasNotAdminRole")
 
     stats = await admin_repo.metrics(db)
-    return {"ok": True, **stats}
+    return {"ok": True, "data": jsonable_encoder(stats)}

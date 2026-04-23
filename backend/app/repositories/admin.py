@@ -1,17 +1,20 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any, List, Optional, Tuple
 
-from sqlalchemy import case, func, select, text, update
+from sqlalchemy import and_, case, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.tables.category import Category
 from app.models.tables.market import Market
 from app.models.tables.market_position import MarketPosition
+from app.models.tables.market_trades import MarketTrade
 from app.models.tables.market_token import MarketToken
+from app.models.tables.suggestion import Suggestion
+from app.models.tables.user import User
 
 
 _SLUG_CLEANUP_PATTERN = re.compile(r"[^a-z0-9]+")
@@ -233,57 +236,171 @@ async def resolve_market(
 
 
 async def metrics(session: AsyncSession) -> dict[str, Any]:
-    total_users = (
-        await session.execute(text("SELECT COUNT(*) AS count FROM users"))
-    ).mappings().first()["count"] or 0
+    now = datetime.utcnow()
+    start_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    start_week = start_today - timedelta(days=start_today.weekday())
+    start_month = start_today.replace(day=1)
+    start_year = start_today.replace(month=1, day=1)
 
-    open_markets = (
-        await session.execute(
-            text("SELECT COUNT(*) AS count FROM markets WHERE status = 'open'")
-        )
-    ).mappings().first()["count"] or 0
+    periods: list[Tuple[str, datetime]] = [
+        ("today", start_today),
+        ("week", start_week),
+        ("month", start_month),
+        ("year", start_year),
+    ]
 
-    resolved_markets = (
-        await session.execute(
-            text(
-                """
-                SELECT COUNT(*) AS count FROM markets
-                WHERE resolved = true AND status = 'resolved'
-                """
-            )
-        )
-    ).mappings().first()["count"] or 0
+    def build_count_columns(ts_column: Any) -> list[Any]:
+        return [
+            func.coalesce(
+                func.sum(
+                    case(
+                        (and_(ts_column.is_not(None), ts_column >= start_at, ts_column <= now), 1),
+                        else_=0,
+                    )
+                ),
+                0,
+            ).label(label)
+            for label, start_at in periods
+        ]
 
-    locked_pi_row = (
-        await session.execute(
-            text(
-                """
-                SELECT COALESCE(SUM(total_volume), 0) AS total
-                FROM v_market_snapshots
-                WHERE status = 'open'
-                """
-            )
-        )
-    ).mappings().first()
-    locked_pi = float(locked_pi_row["total"] or 0) if locked_pi_row else 0
+    def build_sum_columns(ts_column: Any, value_column: Any, *, positive_only: bool = False) -> list[Any]:
+        return [
+            func.coalesce(
+                func.sum(
+                    case(
+                        (
+                            and_(
+                                ts_column.is_not(None),
+                                ts_column >= start_at,
+                                ts_column <= now,
+                                value_column.is_not(None),
+                                value_column > 0 if positive_only else True,
+                            ),
+                            value_column,
+                        ),
+                        else_=Decimal("0"),
+                    )
+                ),
+                Decimal("0"),
+            ).label(label)
+            for label, start_at in periods
+        ]
 
-    hist_row = (
-        await session.execute(
-            text(
-                """
-                SELECT COALESCE(SUM(pi_amount), 0) AS total
-                FROM trades
-                WHERE type IN ('buy', 'sell') AND COALESCE(invalid, false) = false
-                """
-            )
+    market_status_stmt = select(
+        func.count(Market.id).label("total"),
+        func.coalesce(func.sum(case((Market.status == "open", 1), else_=0)), 0).label("open_count"),
+        func.coalesce(func.sum(case((Market.status == "pending", 1), else_=0)), 0).label("pending_count"),
+        func.coalesce(func.sum(case((Market.status == "resolved", 1), else_=0)), 0).label("resolved_count"),
+    )
+    market_status_row = (await session.execute(market_status_stmt)).one()
+
+    market_created_stmt = select(*build_count_columns(Market.created_at))
+    market_created_row = (await session.execute(market_created_stmt)).mappings().one()
+
+    market_ended_stmt = select(
+        *[
+            func.coalesce(
+                func.sum(
+                    case(
+                        (
+                            and_(
+                                Market.is_closed == True,
+                                Market.end_date.is_not(None),
+                                Market.end_date >= start_at,
+                                Market.end_date <= now,
+                            ),
+                            1,
+                        ),
+                        else_=0,
+                    )
+                ),
+                0,
+            ).label(label)
+            for label, start_at in periods
+        ]
+    )
+    market_ended_row = (await session.execute(market_ended_stmt)).mappings().one()
+
+    market_resolved_stmt = select(
+        *[
+            func.coalesce(
+                func.sum(
+                    case(
+                        (
+                            and_(
+                                Market.is_resolved == True,
+                                Market.resolved_at.is_not(None),
+                                Market.resolved_at >= start_at,
+                                Market.resolved_at <= now,
+                            ),
+                            1,
+                        ),
+                        else_=0,
+                    )
+                ),
+                0,
+            ).label(label)
+            for label, start_at in periods
+        ]
+    )
+    market_resolved_row = (await session.execute(market_resolved_stmt)).mappings().one()
+
+    purchased_pi_stmt = select(
+        *build_sum_columns(
+            MarketTrade.created_at,
+            MarketTrade.pi_amount,
+            positive_only=True,
         )
-    ).mappings().first()
-    historical_pi = float(hist_row["total"] or 0) if hist_row else 0
+    ).where(MarketTrade.side == "BUY")
+    purchased_pi_row = (await session.execute(purchased_pi_stmt)).mappings().one()
+
+    fee_stmt = select(*build_sum_columns(MarketTrade.created_at, MarketTrade.pi_fee, positive_only=True))
+    fee_row = (await session.execute(fee_stmt)).mappings().one()
+
+    claimed_pi_expr = (MarketPosition.shares * MarketPosition.final_price)
+    claimed_pi_stmt = select(*build_sum_columns(MarketPosition.updated_at, claimed_pi_expr, positive_only=True)).where(
+        MarketPosition.is_claimed == True,
+        MarketPosition.final_price.is_not(None),
+    )
+    claimed_pi_row = (await session.execute(claimed_pi_stmt)).mappings().one()
+
+    users_created_stmt = select(*build_count_columns(User.created_at))
+    users_created_row = (await session.execute(users_created_stmt)).mappings().one()
+
+    suggestions_created_stmt = select(*build_count_columns(Suggestion.created_at))
+    suggestions_created_row = (await session.execute(suggestions_created_stmt)).mappings().one()
+
+    unresolved_closed_stmt = (
+        select(
+            Market.id,
+            Market.question,
+            Market.icon,
+            Market.status,
+            Market.end_date,
+            Market.updated_at,
+        )
+        .where(
+            Market.is_closed == True,
+            Market.is_resolved == False,
+        )
+        .order_by(Market.end_date.desc().nullslast(), Market.id.desc())
+    )
+    unresolved_closed_rows = (await session.execute(unresolved_closed_stmt)).mappings().all()
 
     return {
-        "total_users": int(total_users),
-        "open_markets": int(open_markets),
-        "resolved_markets": int(resolved_markets),
-        "locked_pi": locked_pi,
-        "historical_pi": historical_pi,
+        "market_status": {
+            "total": int(market_status_row.total or 0),
+            "open": int(market_status_row.open_count or 0),
+            "pending": int(market_status_row.pending_count or 0),
+            "resolved": int(market_status_row.resolved_count or 0),
+        },
+        "market_count_created": {k: int(market_created_row[k] or 0) for k, _ in periods},
+        "market_count_ended": {k: int(market_ended_row[k] or 0) for k, _ in periods},
+        "market_count_resolved": {k: int(market_resolved_row[k] or 0) for k, _ in periods},
+        "total_pi_purchased": {k: float(purchased_pi_row[k] or 0) for k, _ in periods},
+        "total_fee_generated": {k: float(fee_row[k] or 0) for k, _ in periods},
+        "total_pi_claimed": {k: float(claimed_pi_row[k] or 0) for k, _ in periods},
+        "user_count_created": {k: int(users_created_row[k] or 0) for k, _ in periods},
+        "suggestion_count_created": {k: int(suggestions_created_row[k] or 0) for k, _ in periods},
+        "closed_unresolved_markets": [dict(row) for row in unresolved_closed_rows],
     }
