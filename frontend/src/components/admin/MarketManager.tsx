@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowDown, ArrowUp, ArrowUpDown, MoreHorizontal } from "lucide-react";
+import { MoreHorizontal } from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -10,13 +10,17 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetchWithToken } from "@/lib/api";
 import { roundLocale, roundLocalePi } from "@/lib/utils";
+import { MarketCreator } from "@/components/admin/MarketCreator";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { format } from "date-fns";
 import { Market } from "@/lib/types";
 
 type Status = "open" | "pending" | "resolved";
+type SortField = "question" | "status" | "category" | "start_date" | "end_date" | "traders" | "volume";
 
 
 export function MarketManager() {
@@ -28,12 +32,13 @@ export function MarketManager() {
   const [limit] = useState(100);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<"all" | Status>("all");
-  const [sortBy, setSortBy] = useState<string>("created_at");
+  const [sortBy, setSortBy] = useState<SortField>("start_date");
   const [order, setOrder] = useState<"asc" | "desc">("desc");
   const [loading, setLoading] = useState(false);
 
   const [resolveDialogOpen, setResolveDialogOpen] = useState(false);
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [selectedMarketId, setSelectedMarketId] = useState<string | null>(null);
 
   const qs = useMemo(() => {
@@ -46,24 +51,6 @@ export function MarketManager() {
     if (status) params.set("status", status);
     return params.toString();
   }, [page, limit, sortBy, order, search, status]);
-
-  const handleSort = (column: string) => {
-    if (sortBy === column) {
-      setOrder(order === "asc" ? "desc" : "asc");
-    } else {
-      setSortBy(column);
-      setOrder("desc");
-    }
-  };
-
-  const getSortIcon = (column: string) => {
-    if (sortBy !== column) {
-      return <ArrowUpDown className="ml-2 h-4 w-4" />;
-    }
-    return order === "asc"
-      ? <ArrowUp className="ml-2 h-4 w-4" />
-      : <ArrowDown className="ml-2 h-4 w-4" />;
-  };
 
   async function load() {
     setLoading(true);
@@ -111,78 +98,106 @@ export function MarketManager() {
   return (
     <>
       <Card>
-        <CardHeader>
-          <CardTitle>Manage Markets</CardTitle>
-          <CardDescription>View, edit, resolve, and close prediction markets.</CardDescription>
-        </CardHeader>
         <CardContent className="space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <Input
-              placeholder="Search…"
-              value={search}
-              onChange={(e) => { setPage(1); setSearch(e.target.value); }}
-              className="w-64"
-            />
-            <Button variant="outline" onClick={() => setStatus("all")}>All</Button>
-            <Button variant="outline" onClick={() => setStatus("open")}>Open</Button>
-            <Button variant="outline" onClick={() => setStatus("pending")}>Pending</Button>
-            <Button variant="outline" onClick={() => setStatus("resolved")}>Resolved</Button>
-            <div className="ml-auto text-sm opacity-70">
-              {loading ? "Loading…" : `${rows.length} / ${total}`}
+          <CardTitle>Manage Markets</CardTitle>
+          <CardDescription>View, create, edit, resolve, and close markets.</CardDescription>
+          <div className="space-y-2 md:flex md:items-center md:gap-2 md:space-y-0">
+            <div className="grid grid-cols-3 gap-2 md:flex md:items-center md:gap-2">
+              <Input
+                placeholder="Search…"
+                value={search}
+                onChange={(e) => { setPage(1); setSearch(e.target.value); }}
+                className="col-span-2 w-full md:w-64"
+              />
+              <Button
+                className="col-span-1 md:hidden"
+                onClick={() => setCreateDialogOpen(true)}
+              >
+                Create
+              </Button>
+            </div>
+            <div className="grid grid-cols-3 gap-2 md:flex md:items-center md:gap-2">
+              <Select
+                value={status}
+                onValueChange={(value) => {
+                  setPage(1);
+                  setStatus(value as "all" | Status);
+                }}
+              >
+                <SelectTrigger className="w-full md:w-40">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="open">Open</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="resolved">Resolved</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select
+                value={sortBy}
+                onValueChange={(value) => {
+                  setPage(1);
+                  setSortBy(value as SortField);
+                }}
+              >
+                <SelectTrigger className="w-full md:w-44">
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="start_date">Start Date</SelectItem>
+                  <SelectItem value="end_date">End Date</SelectItem>
+                  <SelectItem value="question">Question</SelectItem>
+                  <SelectItem value="status">Status</SelectItem>
+                  <SelectItem value="category">Category</SelectItem>
+                  <SelectItem value="traders">Traders</SelectItem>
+                  <SelectItem value="volume">Volume (PI)</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select
+                value={order}
+                onValueChange={(value) => {
+                  setPage(1);
+                  setOrder(value as "asc" | "desc");
+                }}
+              >
+                <SelectTrigger className="w-full md:w-36">
+                  <SelectValue placeholder="Order" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="desc">DESC</SelectItem>
+                  <SelectItem value="asc">ASC</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="md:ml-auto md:flex md:items-center md:gap-2">
+              <Button
+                className="hidden md:inline-flex"
+                onClick={() => setCreateDialogOpen(true)}
+              >
+                Create
+              </Button>
             </div>
           </div>
 
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>
-                  <Button variant="ghost" className="p-2" onClick={() => handleSort("title")}>
-                    Question
-                    {getSortIcon("title")}
-                  </Button>
-                </TableHead>
-                <TableHead>
-                  <Button variant="ghost" className="p-2" onClick={() => handleSort("status")}>
-                    Status
-                    {getSortIcon("status")}
-                  </Button>
-                </TableHead>
-                <TableHead>
-                  <Button variant="ghost" className="p-2" onClick={() => handleSort("category")}>
-                    Category
-                    {getSortIcon("category")}
-                  </Button>
-                </TableHead>
-                <TableHead>
-                  <Button variant="ghost" className="p-2" onClick={() => handleSort("created_at")}>
-                    Created Date
-                    {getSortIcon("created_at")}
-                  </Button>
-                </TableHead>
-                <TableHead>
-                  <Button variant="ghost" className="p-2" onClick={() => handleSort("end_date")}>
-                    End Date
-                    {getSortIcon("end_date")}
-                  </Button>
-                </TableHead>
-                <TableHead>
-                  <Button variant="ghost" className="p-2" onClick={() => handleSort("traders")}>
-                    Traders
-                    {getSortIcon("traders")}
-                  </Button>
-                </TableHead>
-                <TableHead>
-                  <Button variant="ghost" className="p-2" onClick={() => handleSort("total_pi")}>
-                    Volume (PI)
-                    {getSortIcon("volume")}
-                  </Button>
-                </TableHead>
+                <TableHead>Id</TableHead>
+                <TableHead>Question</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Category</TableHead>
+                <TableHead>Start Date</TableHead>
+                <TableHead>End Date</TableHead>
+                <TableHead>Traders</TableHead>
+                <TableHead>Volume(PI)</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {rows.map((m) => (
                 <TableRow key={m.id}>
+                  <TableCell className="text-center">{m.id}</TableCell>
                   <TableCell className="min-w-60 line-clamp-2">{m.question}</TableCell>
                   <TableCell className="text-center">
                     {m.status}
@@ -282,6 +297,21 @@ export function MarketManager() {
           </AlertDialogContent>
         </AlertDialog>
       )}
+
+      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+        <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto p-0">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Create Market</DialogTitle>
+            <DialogDescription>Create a new prediction market.</DialogDescription>
+          </DialogHeader>
+          <MarketCreator
+            onCreated={() => {
+              setCreateDialogOpen(false);
+              load();
+            }}
+          />
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

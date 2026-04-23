@@ -101,7 +101,11 @@ const commonTimezones = [
   { value: "Pacific/Kiritimati", label: "Pacific/Kiritimati (GMT+14)" },
 ];
 
-export function MarketCreator() {
+type MarketCreatorProps = {
+  onCreated?: () => void;
+};
+
+export function MarketCreator({ onCreated }: MarketCreatorProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -163,6 +167,7 @@ export function MarketCreator() {
         description: `ID: ${res.market?.id ?? "—"}`,
       });
       form.reset();
+      onCreated?.();
     } catch (err: any) {
       toast({
         title: "Error Creating Market",

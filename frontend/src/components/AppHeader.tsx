@@ -33,7 +33,7 @@ export default function AppHeader({ currentUser }: AppHeaderProps) {
   const [isDarkMode, setIsDarkMode] = useState(true);
   const pathname = usePathname();
   const { ppxUser } = useAuth();
-  const hideCategoryMenu = ["/profile", "/leaderboard", "/admin"].some(
+  const hideCategoryMenu = ["/profile", "/leaderboard"].some(
     (basePath) => pathname === basePath || pathname.startsWith(`${basePath}/`)
   );
   const isLoggedIn = Boolean(ppxUser);

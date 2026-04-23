@@ -4,7 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any, List, Literal, Optional, Union
 
-from sqlalchemy import case, func, insert, inspect as sa_inspect, select, text, union_all, update
+from sqlalchemy import case, func, insert, inspect as sa_inspect, or_, select, text, union_all, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -56,6 +56,7 @@ async def list_markets(
     offset: int = 0,
     order: str = "created_at",
     ascending: bool = False,
+    search: Optional[str] = None,
     category: str = "all",
     status: Optional[str] = None,
     closed: Optional[bool] = None,
@@ -91,6 +92,15 @@ async def list_markets(
         conditions.append(Market.end_date >= end_date_min)
     if end_date_max is not None:
         conditions.append(Market.end_date <= end_date_max)
+    if search is not None and search.strip():
+        search_text = f"%{search.strip()}%"
+        conditions.append(
+            or_(
+                Market.question.ilike(search_text),
+                Market.description.ilike(search_text),
+                Market.slug.ilike(search_text),
+            )
+        )
     if category and category.strip().lower() != "all":
         normalized_category = category.strip().lower()
         conditions.append(Market.category.has(func.lower(Category.slug) == normalized_category))
