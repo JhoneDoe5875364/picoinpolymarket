@@ -20,9 +20,9 @@ from app.models.tables.user import User
 from app.models.tables.market_trades import MarketTrade
 from app.models.tables.market_price_candles import MarketPriceCandle
 from app.models.tables.market_position import MarketPosition
-from app.models.tables.leaderboard import Leaderboard
+from app.models.tables.market_volume_agg_state import MarketVolumeAggState
 from app.models.tables.suggestion import Suggestion
-from app.updator import leaderboard_updater
+from app.updator import leaderboard_updater, market_volume_updater
 
 
 async def _ensure_user(session: AsyncSession, **kwargs: object) -> None:
@@ -55,6 +55,10 @@ async def _ensure_market_position(session: AsyncSession, **kwargs: object) -> No
 
 async def _ensure_suggestion(session: AsyncSession, **kwargs: object) -> None:
     session.add(Suggestion(**kwargs))
+
+
+async def _ensure_volume_agg_state(session: AsyncSession, **kwargs: object) -> None:
+    session.add(MarketVolumeAggState(**kwargs))
 
 
 async def _sync_table_sequence(session: AsyncSession, table_name: str, id_column: str = "id") -> None:
@@ -107,6 +111,12 @@ async def run_seeds(session: AsyncSession) -> None:
     await run_seed_market_price_candles(session)
     await session.flush()
     await run_seed_market_positions(session)
+    await session.flush()
+    await run_seed_volume_agg_state(session)
+    await session.flush()
+    await market_volume_updater.refresh_market_volume_1m(session, commit=False)
+    await session.flush()
+    await market_volume_updater.refresh_market_volume_1d(session, commit=False)
     await session.flush()
     # Seed path should run leaderboard aggregation once.
     await leaderboard_updater.rebuild_leaderboards(session, commit=False)
@@ -667,6 +677,15 @@ async def run_seed_market_positions(session: AsyncSession) -> None:
             created_at=now,
             updated_at=now,
         )
+
+
+async def run_seed_volume_agg_state(session: AsyncSession) -> None:
+    await _ensure_volume_agg_state(
+        session,
+        id=1,
+        last_trade_id=0,
+        last_volume_1m_id=0,
+    )
 
 
 

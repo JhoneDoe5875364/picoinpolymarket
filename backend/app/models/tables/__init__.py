@@ -6,6 +6,10 @@ Views (v_*) are queried via repositories using Core/text, not ORM classes.
 from app.models.tables.category import Category
 from app.models.tables.leaderboard import Leaderboard
 from app.models.tables.market import Market
+from app.models.tables.market_stats import MarketStat
+from app.models.tables.market_volume_daily import MarketVolumeDaily
+from app.models.tables.market_volume_minute import MarketVolumeMinute
+from app.models.tables.market_volume_agg_state import MarketVolumeAggState
 from app.models.tables.market_token import MarketToken
 from app.models.tables.market_position import MarketPosition
 from app.models.tables.market_trades import MarketTrade
@@ -19,7 +23,11 @@ __all__ = [
     "Category",
     "Leaderboard",
     "Market",
+    "MarketStat",
     "MarketToken",
+    "MarketVolumeDaily",
+    "MarketVolumeMinute",
+    "MarketVolumeAggState",
     "User",
     "Order",
     "Payment",

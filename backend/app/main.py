@@ -20,6 +20,12 @@ from app.routes import include_all_routers
 from app.updator.market_close_updater import run_periodic_market_close_refresh
 from app.updator.leaderboard_updater import run_periodic_leaderboard_refresh
 from app.updator.market_price_candle_updater import run_periodic_market_price_candle_refresh
+from app.updator.market_volume_updater import (
+    run_periodic_market_stats_24h_refresh,
+    run_periodic_market_stats_extended_refresh,
+    run_periodic_market_volume_daily_refresh,
+    run_periodic_market_volume_refresh,
+)
 
 setup_logger()
 logger = get_logger()
@@ -30,6 +36,10 @@ async def lifespan(app: FastAPI):
     leaderboard_task: asyncio.Task[None] | None = None
     market_candle_task: asyncio.Task[None] | None = None
     market_close_task: asyncio.Task[None] | None = None
+    market_volume_task: asyncio.Task[None] | None = None
+    market_volume_daily_task: asyncio.Task[None] | None = None
+    market_stats_24h_task: asyncio.Task[None] | None = None
+    market_stats_extended_task: asyncio.Task[None] | None = None
     try:
         engine, session_maker = create_engine_and_sessionmaker()
         app.state.async_engine = engine
@@ -53,6 +63,30 @@ async def lifespan(app: FastAPI):
         )
         app.state.market_close_refresh_task = market_close_task
         logger.info("Market close refresh task started")
+        market_volume_task = asyncio.create_task(
+            run_periodic_market_volume_refresh(session_maker),
+            name="market-volume-refresh",
+        )
+        app.state.market_volume_refresh_task = market_volume_task
+        logger.info("Market volume refresh task started")
+        market_volume_daily_task = asyncio.create_task(
+            run_periodic_market_volume_daily_refresh(session_maker),
+            name="market-volume-daily-refresh",
+        )
+        app.state.market_volume_daily_refresh_task = market_volume_daily_task
+        logger.info("Market volume daily refresh task started")
+        market_stats_24h_task = asyncio.create_task(
+            run_periodic_market_stats_24h_refresh(session_maker),
+            name="market-stats-24h-refresh",
+        )
+        app.state.market_stats_24h_refresh_task = market_stats_24h_task
+        logger.info("Market stats 24h refresh task started")
+        market_stats_extended_task = asyncio.create_task(
+            run_periodic_market_stats_extended_refresh(session_maker),
+            name="market-stats-extended-refresh",
+        )
+        app.state.market_stats_extended_refresh_task = market_stats_extended_task
+        logger.info("Market stats extended refresh task started")
     except Exception as e:
         logger.warning("Database not initialized: %s", e)
         app.state.async_engine = None
@@ -60,6 +94,10 @@ async def lifespan(app: FastAPI):
         app.state.leaderboard_refresh_task = None
         app.state.market_candle_refresh_task = None
         app.state.market_close_refresh_task = None
+        app.state.market_volume_refresh_task = None
+        app.state.market_volume_daily_refresh_task = None
+        app.state.market_stats_24h_refresh_task = None
+        app.state.market_stats_extended_refresh_task = None
     yield
     if leaderboard_task is not None:
         leaderboard_task.cancel()
@@ -79,6 +117,30 @@ async def lifespan(app: FastAPI):
             await market_close_task
         except asyncio.CancelledError:
             logger.info("Market close refresh task stopped")
+    if market_volume_task is not None:
+        market_volume_task.cancel()
+        try:
+            await market_volume_task
+        except asyncio.CancelledError:
+            logger.info("Market volume refresh task stopped")
+    if market_volume_daily_task is not None:
+        market_volume_daily_task.cancel()
+        try:
+            await market_volume_daily_task
+        except asyncio.CancelledError:
+            logger.info("Market volume daily refresh task stopped")
+    if market_stats_24h_task is not None:
+        market_stats_24h_task.cancel()
+        try:
+            await market_stats_24h_task
+        except asyncio.CancelledError:
+            logger.info("Market stats 24h refresh task stopped")
+    if market_stats_extended_task is not None:
+        market_stats_extended_task.cancel()
+        try:
+            await market_stats_extended_task
+        except asyncio.CancelledError:
+            logger.info("Market stats extended refresh task stopped")
     await dispose_engine()
     logger.info("Database engine disposed")
 
