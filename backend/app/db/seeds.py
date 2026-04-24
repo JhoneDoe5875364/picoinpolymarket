@@ -6,10 +6,11 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 import random
+import time
 
 from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql.ext import ts_headline
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.market import insert_market_trade, update_market_position, update_market_price
 from app.utils import generate_bigint_64
@@ -24,8 +25,7 @@ from app.models.tables.market_position import MarketPosition
 from app.models.tables.market_volume_agg_state import MarketVolumeAggState
 from app.models.tables.suggestion import Suggestion
 from app.updator import leaderboard_updater, market_volume_updater
-
-
+from app.updator import market_price_candle_updater
 async def _ensure_user(session: AsyncSession, **kwargs: object) -> None:
     session.add(User(**kwargs))
 
@@ -40,10 +40,6 @@ async def _ensure_market(session: AsyncSession, **kwargs: object) -> None:
 
 async def _ensure_market_token(session: AsyncSession, **kwargs: object) -> None:
     session.add(MarketToken(**kwargs))
-
-
-async def _ensure_market_trade(session: AsyncSession, **kwargs: object) -> None:
-    session.add(MarketTrade(**kwargs))
 
 
 async def _ensure_market_price_candle(session: AsyncSession, **kwargs: object) -> None:
@@ -109,15 +105,12 @@ async def run_seeds(session: AsyncSession) -> None:
     await session.flush()
     await run_seed_market_trades(session)
     await session.flush()
-    await run_seed_market_price_candles(session)
-    await session.flush()
     await run_seed_market_volume_agg_state(session)
     await session.flush()
     await market_volume_updater.refresh_market_volume_1m(session, commit=False)
     await session.flush()
     await market_volume_updater.refresh_market_volume_1d(session, commit=False)
     await session.flush()
-    # Seed path should run leaderboard aggregation once.
     await leaderboard_updater.rebuild_leaderboards(session, commit=False)
     await session.flush()
     await _sync_seed_sequences(session)
@@ -322,7 +315,7 @@ async def run_seed_markets(session: AsyncSession) -> None:
         "Resolution notes must include source links and timestamp context."
     )
 
-    market_count = 50
+    market_count = 5
     market_first_id = 100000
     used_slugs: set[str] = set()
     for idx in range(market_count):
@@ -468,6 +461,9 @@ async def run_seed_suggestions(session: AsyncSession) -> None:
 
 
 async def run_seed_market_trades(session: AsyncSession) -> None:
+    started_at = time.perf_counter()
+    inserted_trade_count = 0
+
     token_rows = await session.execute(
         select(
             MarketToken.market_id,
@@ -485,12 +481,20 @@ async def run_seed_market_trades(session: AsyncSession) -> None:
         if "YES" in outcomes and "NO" in outcomes
     ]
     if not market_ids:
-        print("No seeded markets found for trade seeding")
+        elapsed_seconds = time.perf_counter() - started_at
+        print(
+            f"run_seed_market_trades skipped: no markets found "
+            f"(inserted=0, elapsed={elapsed_seconds:.2f}s)"
+        )
         return
 
     user_ids = [user_id for (user_id,) in user_rows.all()]
     if not user_ids:
-        print("No seeded users found for trade seeding")
+        elapsed_seconds = time.perf_counter() - started_at
+        print(
+            f"run_seed_market_trades skipped: no users found "
+            f"(inserted=0, elapsed={elapsed_seconds:.2f}s)"
+        )
         return
 
     now = datetime.now(timezone.utc)
@@ -501,7 +505,7 @@ async def run_seed_market_trades(session: AsyncSession) -> None:
     for day_index in range(total_days):
         day = start_day + timedelta(days=day_index)
         day_start = datetime.combine(day, datetime.min.time(), tzinfo=timezone.utc)
-        trade_count = random.randint(100, 200)
+        trade_count = random.randint(1, 2)
         seconds = sorted(random.randint(0, 86399) for _ in range(trade_count))
 
         for second_of_day in seconds:
@@ -521,6 +525,14 @@ async def run_seed_market_trades(session: AsyncSession) -> None:
             )
             await update_market_price(session, trade)
             await update_market_position(session, trade)
+            await market_price_candle_updater.refresh_market_price_candles_once(session, created_at)
+            inserted_trade_count += 1
+
+    elapsed_seconds = time.perf_counter() - started_at
+    print(
+        f"run_seed_market_trades completed: inserted={inserted_trade_count}, "
+        f"elapsed={elapsed_seconds:.2f}s"
+    )
 
 
 async def run_seed_market_price_candles(session: AsyncSession) -> None:

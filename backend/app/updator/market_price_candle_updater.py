@@ -31,82 +31,84 @@ def _safe_volume(value: Decimal | None) -> Decimal:
 
 
 async def refresh_market_price_candles_once(
-    session_maker: async_sessionmaker[AsyncSession],
+    session: AsyncSession,
+    timestamp: datetime,
 ) -> None:
-    now = datetime.now(timezone.utc)
-    ts_bucket = _floor_to_10m_epoch_seconds(now)
+    ts_bucket = _floor_to_10m_epoch_seconds(timestamp)
 
-    async with session_maker() as session:
-        try:
-            token_rows = await session.execute(
-                select(
-                    MarketToken.market_id,
-                    MarketToken.token,
-                    MarketToken.price,
-                    Market.volume,
-                ).join(Market, Market.id == MarketToken.market_id)
+    token_rows = await session.execute(
+        select(
+            MarketToken.market_id,
+            MarketToken.token,
+            MarketToken.price,
+            Market.volume,
+        ).join(Market, Market.id == MarketToken.market_id)
+    )
+
+    inserted_count = 0
+    updated_count = 0
+    for market_id, token, token_price, market_volume in token_rows.all():
+        price = _safe_price(token_price)
+        volume = _safe_volume(market_volume)
+
+        existing_result = await session.execute(
+            select(MarketPriceCandle).where(
+                MarketPriceCandle.market_id == market_id,
+                MarketPriceCandle.token == token,
+                MarketPriceCandle.ts == ts_bucket,
             )
-
-            inserted_count = 0
-            updated_count = 0
-            for market_id, token, token_price, market_volume in token_rows.all():
-                price = _safe_price(token_price)
-                volume = _safe_volume(market_volume)
-
-                existing_result = await session.execute(
-                    select(MarketPriceCandle).where(
-                        MarketPriceCandle.market_id == market_id,
-                        MarketPriceCandle.token == token,
-                        MarketPriceCandle.ts == ts_bucket,
-                    )
+        )
+        candle = existing_result.scalar_one_or_none()
+        if candle is None:
+            session.add(
+                MarketPriceCandle(
+                    market_id=market_id,
+                    token=token,
+                    ts=ts_bucket,
+                    open_price=price,
+                    high_price=price,
+                    low_price=price,
+                    close_price=price,
+                    volume=volume,
+                    created_at=timestamp,
+                    updated_at=timestamp,
                 )
-                candle = existing_result.scalar_one_or_none()
-                if candle is None:
-                    session.add(
-                        MarketPriceCandle(
-                            market_id=market_id,
-                            token=token,
-                            ts=ts_bucket,
-                            open_price=price,
-                            high_price=price,
-                            low_price=price,
-                            close_price=price,
-                            volume=volume,
-                            created_at=now,
-                            updated_at=now,
-                        )
-                    )
-                    inserted_count += 1
-                    continue
-
-                open_price = candle.open_price or price
-                high_price = candle.high_price or price
-                low_price = candle.low_price or price
-                candle.open_price = _safe_price(open_price)
-                candle.high_price = _safe_price(max(high_price, price))
-                candle.low_price = _safe_price(min(low_price, price))
-                candle.close_price = price
-                candle.volume = volume
-                candle.updated_at = now
-                updated_count += 1
-
-            await session.commit()
-            logger.info(
-                "Market candle refresh complete (bucket=%s inserted=%s updated=%s)",
-                ts_bucket,
-                inserted_count,
-                updated_count,
             )
-        except Exception:
-            await session.rollback()
-            logger.exception("Failed to refresh market price candles")
+            inserted_count += 1
+            continue
+
+        open_price = candle.open_price or price
+        high_price = candle.high_price or price
+        low_price = candle.low_price or price
+        candle.open_price = _safe_price(open_price)
+        candle.high_price = _safe_price(max(high_price, price))
+        candle.low_price = _safe_price(min(low_price, price))
+        candle.close_price = price
+        candle.volume = volume
+        candle.updated_at = timestamp
+        updated_count += 1
+
+    await session.flush()
+    logger.info(
+        "Market price candle refresh complete (bucket=%s inserted=%s updated=%s)",
+        ts_bucket,
+        inserted_count,
+        updated_count,
+    )
 
 
 async def run_periodic_market_price_candle_refresh(
     session_maker: async_sessionmaker[AsyncSession],
     interval_seconds: int = MARKET_CANDLE_REFRESH_INTERVAL_SECONDS,
 ) -> None:
-    await refresh_market_price_candles_once(session_maker)
-    while True:
-        await asyncio.sleep(interval_seconds)
-        await refresh_market_price_candles_once(session_maker)
+    async with session_maker() as session:
+        try:
+            now = datetime.now(timezone.utc)
+            await refresh_market_price_candles_once(session, now)
+            while True:
+                await asyncio.sleep(interval_seconds)
+                now = datetime.now(timezone.utc)
+                await refresh_market_price_candles_once(session, now)
+        except Exception:
+            await session.rollback()
+            logger.exception("Failed to refresh market price candles")
