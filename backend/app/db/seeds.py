@@ -57,7 +57,7 @@ async def _ensure_suggestion(session: AsyncSession, **kwargs: object) -> None:
     session.add(Suggestion(**kwargs))
 
 
-async def _ensure_volume_agg_state(session: AsyncSession, **kwargs: object) -> None:
+async def _ensure_market_volume_agg_state(session: AsyncSession, **kwargs: object) -> None:
     session.add(MarketVolumeAggState(**kwargs))
 
 
@@ -112,7 +112,7 @@ async def run_seeds(session: AsyncSession) -> None:
     await session.flush()
     await run_seed_market_positions(session)
     await session.flush()
-    await run_seed_volume_agg_state(session)
+    await run_seed_market_volume_agg_state(session)
     await session.flush()
     await market_volume_updater.refresh_market_volume_1m(session, commit=False)
     await session.flush()
@@ -679,8 +679,8 @@ async def run_seed_market_positions(session: AsyncSession) -> None:
         )
 
 
-async def run_seed_volume_agg_state(session: AsyncSession) -> None:
-    await _ensure_volume_agg_state(
+async def run_seed_market_volume_agg_state(session: AsyncSession) -> None:
+    await _ensure_market_volume_agg_state(
         session,
         id=1,
         last_trade_id=0,
