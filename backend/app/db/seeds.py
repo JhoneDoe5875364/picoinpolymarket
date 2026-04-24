@@ -7,10 +7,11 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 import random
 
-from sqlalchemy import select, text
+from sqlalchemy import select, text, update
 from sqlalchemy.dialects.postgresql.ext import ts_headline
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.market import amm_price
 from app.utils import generate_bigint_64
 
 from app.models.tables.category import Category
@@ -109,8 +110,6 @@ async def run_seeds(session: AsyncSession) -> None:
     await run_seed_market_trades(session)
     await session.flush()
     await run_seed_market_price_candles(session)
-    await session.flush()
-    await run_seed_market_positions(session)
     await session.flush()
     await run_seed_market_volume_agg_state(session)
     await session.flush()
@@ -349,12 +348,11 @@ async def run_seed_markets(session: AsyncSession) -> None:
             hour=0, minute=0, second=0, microsecond=0
         )
 
-        yes_price_float = round(random.uniform(0.05, 0.95), 4)
-        yes_price = Decimal(f"{yes_price_float:.4f}")
-        no_price = (Decimal("1.0000") - yes_price).quantize(Decimal("0.0001"))
+        yes_price = Decimal("0.5")
+        no_price = Decimal("0.5")
 
         liquidity = Decimal(str(random.randint(5000, 50000)))
-        volume = Decimal(str(random.randint(1000, 500000)))
+        volume = Decimal("0")
 
         await _ensure_market(
             session,
@@ -470,6 +468,7 @@ async def run_seed_suggestions(session: AsyncSession) -> None:
 
 
 async def run_seed_market_trades(session: AsyncSession) -> None:
+    market_rows = await session.execute(select(Market.id, Market.liquidity, Market.volume))
     token_rows = await session.execute(
         select(
             MarketToken.market_id,
@@ -478,81 +477,204 @@ async def run_seed_market_trades(session: AsyncSession) -> None:
             MarketToken.price,
         )
     )
-    market_token_map: dict[int, dict[str, tuple[str, Decimal]]] = defaultdict(dict)
-    for market_id, outcome, token, price in token_rows.all():
-        market_token_map[market_id][outcome] = (token, price if price is not None else Decimal("0.5000"))
-    markets = [
-        (
-            market_id,
-            token_map["YES"][0],
-            token_map["NO"][0],
-            token_map["YES"][1],
-            token_map["NO"][1],
-        )
-        for market_id, token_map in market_token_map.items()
-        if "YES" in token_map and "NO" in token_map
+    user_rows = await session.execute(select(User.id))
+
+    quant = Decimal("0.0001")
+    fee_rate = Decimal("0.02")
+
+    market_state_map: dict[int, dict[str, object]] = {
+        market_id: {
+            "liquidity": liquidity if liquidity is not None else Decimal("0"),
+            "volume": volume if volume is not None else Decimal("0"),
+            "yes_pi_amount": Decimal("0"),
+            "no_pi_amount": Decimal("0"),
+            "yes_token": None,
+            "no_token": None,
+        }
+        for market_id, liquidity, volume in market_rows.all()
+    }
+
+    for market_id, outcome, token, _ in token_rows.all():
+        state = market_state_map.get(market_id)
+        if state is None:
+            continue
+        if outcome == "YES":
+            state["yes_token"] = token
+        elif outcome == "NO":
+            state["no_token"] = token
+
+    market_ids = [
+        market_id
+        for market_id, state in market_state_map.items()
+        if state["yes_token"] is not None and state["no_token"] is not None
     ]
-    if not markets:
+    if not market_ids:
         print("No seeded markets found for trade seeding")
         return
 
-    user_rows = await session.execute(select(User.id))
     user_ids = [user_id for (user_id,) in user_rows.all()]
     if not user_ids:
         print("No seeded users found for trade seeding")
         return
 
-    now: datetime = datetime.now(timezone.utc)
-    fee_rate = Decimal("0.02")
-    min_price = Decimal("0.0100")
-    max_price = Decimal("0.9900")
-    price_step = Decimal("0.0001")
+    position_rows = await session.execute(
+        select(
+            MarketPosition.market_id,
+            MarketPosition.user_id,
+            MarketPosition.side,
+            MarketPosition.outcome,
+            MarketPosition.token,
+            MarketPosition.shares,
+            MarketPosition.pi_amount,
+            MarketPosition.created_at,
+        ).where(MarketPosition.market_id.in_(market_ids))
+    )
+    position_state_map: dict[tuple[int, int, str], dict[str, object]] = {}
+    for market_id, user_id, side, outcome, token, shares, pi_amount, created_at in position_rows.all():
+        position_state_map[(market_id, user_id, outcome)] = {
+            "token": token,
+            "side": side,
+            "shares": shares if shares is not None else Decimal("0"),
+            "pi_amount": pi_amount if pi_amount is not None else Decimal("0"),
+            "created_at": created_at,
+        }
 
-    trade_count = random.randint(500, 1000)
-    for _ in range(trade_count):
-        market_id, token_yes, token_no, yes_base_price, no_base_price = random.choice(markets)
-        outcome = random.choice(["YES", "NO"])
-        token = token_yes if outcome == "YES" else token_no
-        base_price = yes_base_price if outcome == "YES" else no_base_price
-        if base_price is None:
-            base_price = Decimal("0.5000")
+    now = datetime.now(timezone.utc)
+    start_day = (now - timedelta(days=60)).date()
+    end_day = now.date()
+    total_days = (end_day - start_day).days + 1
 
-        jitter = Decimal(str(random.uniform(-0.08, 0.08))).quantize(price_step)
-        price = (base_price + jitter).quantize(price_step)
-        price = min(max(price, min_price), max_price)
+    for day_index in range(total_days):
+        day = start_day + timedelta(days=day_index)
+        day_start = datetime.combine(day, datetime.min.time(), tzinfo=timezone.utc)
+        trade_count = random.randint(100, 200)
+        seconds = sorted(random.randint(0, 86399) for _ in range(trade_count))
 
-        shares = Decimal(str(random.randint(1, 3000)))
-        pi_amount = (price * shares).quantize(price_step)
-        pi_fee = (pi_amount * fee_rate).quantize(price_step)
-        pi_total_amount = (pi_amount + pi_fee).quantize(price_step)
+        for second_of_day in seconds:
+            created_at = day_start + timedelta(seconds=second_of_day)
+            market_id = random.choice(market_ids)
+            state = market_state_map[market_id]
+            liquidity = state["liquidity"]
 
-        taker_user_id = random.choice(user_ids)
-        maker_user_id = random.choice(user_ids)
-        if len(user_ids) > 1:
-            while maker_user_id == taker_user_id:
-                maker_user_id = random.choice(user_ids)
+            outcome = random.choice(["YES", "NO"])
+            shares = Decimal(str(random.randint(10, 10000)))
 
-        created_at = now - timedelta(
-            days=random.randint(0, 30),
-            hours=random.randint(0, 23),
-            minutes=random.randint(0, 59),
-        )
+            yes_price, no_price = amm_price(
+                yes_pi_amount=state["yes_pi_amount"],
+                no_pi_amount=state["no_pi_amount"],
+                liquidity=liquidity,
+            )
+            token = state["yes_token"] if outcome == "YES" else state["no_token"]
+            price = yes_price if outcome == "YES" else no_price
 
-        await _ensure_market_trade(
-            session,
-            token=token,
-            market_id=market_id,
-            taker_user_id=taker_user_id,
-            maker_user_id=maker_user_id,
-            side="BUY",
-            outcome=outcome,
-            price=price,
-            shares=shares,
-            pi_amount=pi_amount,
-            pi_fee=pi_fee,
-            pi_total_amount=pi_total_amount,
-            created_at=created_at,
-        )
+            pi_amount = (price * shares).quantize(quant)
+            pi_fee = (pi_amount * fee_rate).quantize(quant)
+            pi_total_amount = (pi_amount + pi_fee).quantize(quant)
+
+            taker_user_id = random.choice(user_ids)
+            maker_user_id = 1
+
+            await _ensure_market_trade(
+                session,
+                token=token,
+                market_id=market_id,
+                taker_user_id=taker_user_id,
+                maker_user_id=maker_user_id,
+                side="BUY",
+                outcome=outcome,
+                price=price,
+                shares=shares,
+                pi_amount=pi_amount,
+                pi_fee=pi_fee,
+                pi_total_amount=pi_total_amount,
+                created_at=created_at,
+            )
+            await session.flush()
+
+            if outcome == "YES":
+                state["yes_pi_amount"] = (state["yes_pi_amount"] + pi_amount).quantize(quant)
+            else:
+                state["no_pi_amount"] = (state["no_pi_amount"] + pi_amount).quantize(quant)
+
+            next_yes_price, next_no_price = amm_price(
+                yes_pi_amount=state["yes_pi_amount"],
+                no_pi_amount=state["no_pi_amount"],
+                liquidity=liquidity,
+            )
+            await session.execute(
+                update(MarketToken)
+                .where(MarketToken.market_id == market_id, MarketToken.outcome == "YES")
+                .values(price=next_yes_price)
+            )
+            await session.execute(
+                update(MarketToken)
+                .where(MarketToken.market_id == market_id, MarketToken.outcome == "NO")
+                .values(price=next_no_price)
+            )
+            await session.flush()
+
+            state["volume"] = (state["volume"] + pi_amount).quantize(quant)
+            await session.execute(
+                update(Market)
+                .where(Market.id == market_id)
+                .values(volume=state["volume"], updated_at=created_at)
+            )
+            await session.flush()
+
+            position_key = (market_id, taker_user_id, outcome)
+            current_position = position_state_map.get(position_key)
+            if current_position is None:
+                avg_price = (pi_amount / shares).quantize(quant)
+                await _ensure_market_position(
+                    session,
+                    market_id=market_id,
+                    user_id=taker_user_id,
+                    side="BUY",
+                    outcome=outcome,
+                    token=token,
+                    shares=shares,
+                    pi_amount=pi_amount,
+                    avg_price=avg_price,
+                    final_price=None,
+                    is_claimed=False,
+                    created_at=created_at,
+                    updated_at=created_at,
+                )
+                await session.flush()
+                position_state_map[position_key] = {
+                    "token": token,
+                    "side": "BUY",
+                    "shares": shares,
+                    "pi_amount": pi_amount,
+                    "created_at": created_at,
+                }
+                continue
+
+            updated_shares = (current_position["shares"] + shares).quantize(quant)
+            updated_pi_amount = (current_position["pi_amount"] + pi_amount).quantize(quant)
+            updated_avg_price = (updated_pi_amount / updated_shares).quantize(quant)
+            await session.execute(
+                update(MarketPosition)
+                .where(
+                    MarketPosition.market_id == market_id,
+                    MarketPosition.user_id == taker_user_id,
+                    MarketPosition.outcome == outcome,
+                )
+                .values(
+                    side="BUY",
+                    token=token,
+                    shares=updated_shares,
+                    pi_amount=updated_pi_amount,
+                    avg_price=updated_avg_price,
+                    updated_at=created_at,
+                )
+            )
+            await session.flush()
+
+            current_position["token"] = token
+            current_position["side"] = "BUY"
+            current_position["shares"] = updated_shares
+            current_position["pi_amount"] = updated_pi_amount
 
 
 async def run_seed_market_price_candles(session: AsyncSession) -> None:
