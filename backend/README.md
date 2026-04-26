@@ -141,8 +141,6 @@ Create a `.env` file:
 ```env
 NEXT_PUBLIC_API_URL=http://localhost:8001
 NEXT_PUBLIC_PI_APP_ID=your-pi-app-id
-NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 ```
 
 ### Run Dev Server

@@ -16,6 +16,7 @@
 - [Project Structure](#-project-structure)
 - [Prerequisites](#-prerequisites)
 - [Installation & Setup](#-installation--setup)
+- [Deployment (Ubuntu + Nginx + systemd)](#-deployment-ubuntu--nginx--systemd)
 - [API Documentation](#-api-documentation)
 - [Development Guidelines](#-development-guidelines)
 - [License](#-license)
@@ -175,9 +176,11 @@ PredictPix/
 - **Docker & Docker Compose**: For containerized development
 
 git clone <repository-url>
-## 🌍 Deployment (Ubuntu + Nginx)
+## 🌍 Deployment (Ubuntu + Nginx + systemd)
 
-This section describes deploying PredictPix on an **Ubuntu** server using **Nginx** as a reverse proxy. The instructions assume the project will be placed under `/opt/PredictPix` and run as systemd-managed services:
+This section describes deploying PredictPix on an **Ubuntu** server using **Nginx** as a reverse proxy and running both backend/frontend as **systemd services**.
+
+The instructions assume the project will be placed under `/opt/PredictPix`:
 
 - Backend service: `predictpix-api.service` (listens on port `8001`)
 - Frontend service: `predictpix-ui.service` (listens on port `9002`)
@@ -190,17 +193,25 @@ Prerequisites on the Ubuntu server:
 - `git`, `nginx`, `certbot` (for Let's Encrypt), `node` (v18+), `npm` or `pnpm`, `python3.10+`, `pip`, and `virtualenv`.
 - Create a dedicated user for running the services, e.g. `predictpix` (optional but recommended).
 
-1) Clone Repository to `/opt`
+### 1) Clone repository to `/opt/PredictPix`
 
 ```bash
 # on the server (as root or sudo)
-git clone https://github.com/predictpix-team/PredictPix.git
-cd PredictPix
+cd /opt
+sudo git clone https://github.com/predictpix-team/PredictPix.git PredictPix
+cd /opt/PredictPix
 ```
 
-2) Backend setup (system-wide, service-managed)
+### 2) Create runtime user (recommended)
 
-- Create a Python virtualenv and install dependencies under `/opt/PredictPix/backend`. If you prefer to serve the backend with gunicorn directly, run the FastAPI server on port `8001`.
+```bash
+sudo useradd --system --create-home --shell /bin/bash predictpix
+sudo chown -R predictpix:predictpix /opt/05_PredictPix
+```
+
+### 3) Backend setup (service-managed, uvicorn direct)
+
+- Create a Python virtualenv and install dependencies under `/opt/PredictPix/backend`, then run FastAPI with `uvicorn` on port `8001`.
 
 ```bash
 sudo -u predictpix -i
@@ -236,9 +247,6 @@ PI_API_KEY="..................................................."
 # Database URL for SQLAlchemy/asyncpg (or set PGHOST+PGDATABASE+PGUSER in backend .env)
 DATABASE_URL=postgresql://postgres:PASSWORD@db.USERNAME.supabase.co:5432/postgres?sslmode=require
 
-# Admin Pi usernames (comma-separated, case-insensitive)
-PREDICTPIX_ADMIN_PI_USERNAMES=xxxxxxxxxxxxx,yyyyyyyyyy
-
 # JWT lifetimes (minutes)
 ADMIN_JWT_TTL_MIN=15
 USER_JWT_TTL_MIN=360
@@ -246,10 +254,6 @@ JWT_SECRET_KEY="supersecretkey"
 JWT_ISSUER="predictpix"
 JWT_AUDIENCE="predictpix-clients"
 JWT_ALGORITHM="HS256"
-
-# Supabase (frontend anon key + URL)
-EXPO_PUBLIC_SUPABASE_URL=https://xinxaensoubhdomuvptq.supabase.co
-EXPO_PUBLIC_SUPABASE_ANON_KEY=...............................
 
 # Supabase
 PGHOST=db.xinxaensoubhdomuvptq.supabase.co
@@ -275,22 +279,19 @@ sudo chown predictpix:predictpix /opt/PredictPix/backend/server.log
 sudo chmod 600 /opt/PredictPix/backend/server.log
 ```
 
-- Example `systemd` unit for the backend (`/etc/systemd/system/predictpix-api.service`):
+- Example `systemd` unit for the backend (`/etc/systemd/system/predictpix-api.service`, uvicorn direct):
 
 ```ini
 [Unit]
-Description=PredictPiX API (Gunicorn/Uvicorn)
+Description=PredictPiX API (Uvicorn)
 After=network.target
 
 [Service]
 User=predictpix
 Group=predictpix
-WorkingDirectory=/opt/PredictPix/backend
-EnvironmentFile=/opt/PredictPix/backend/.env
-ExecStart=/opt/PredictPix/backend/venv/bin/gunicorn -c /opt/PredictPix/backend/gunicorn.conf.py app.main:app
-# Graceful reload for near-zero downtime deploys:
-ExecReload=/bin/kill -HUP $MAINPID
-# Hard restart fallback:
+WorkingDirectory=/opt/05_PredictPix/backend
+EnvironmentFile=/opt/05_PredictPix/backend/.env
+ExecStart=/opt/05_PredictPix/backend/.venv/bin/uvicorn app.main:app --app-dir /opt/05_PredictPix/backend --host 127.0.0.1 --port 8001 --workers 1 --log-level info --timeout-keep-alive 5
 Restart=always
 RestartSec=10
 KillMode=mixed
@@ -301,7 +302,7 @@ RuntimeDirectoryMode=0750
 WantedBy=multi-user.target
 ```
 
-3) Frontend setup (Next.js)
+### 4) Frontend setup (Next.js)
 
 - Prepare environment file `/opt/PredictPix/frontend/.env` with your production variables. Ensure permissions are restricted:
 
@@ -317,10 +318,6 @@ BACKEND_ORIGIN=https://api.predictpix.com
 
 # ===== Public (safe to expose — browser sees these) ================
 NEXT_PUBLIC_API_BASE=https://api.predictpix.com/api
-
-# Supabase (anon key is safe if Row Level Security is enabled)
-NEXT_PUBLIC_SUPABASE_URL=https://xinxaensoubhdomuvptq.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=......................
 ```
 
 - Install Node dependencies and build
@@ -361,23 +358,44 @@ RestartSec=10
 WantedBy=multi-user.target
 ```
 
-After creating unit files, enable and start the services:
+### 5) Register and run services (enable/start)
 
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable predictpix-api.service --now
 sudo systemctl enable predictpix-ui.service --now
-sudo systemctl status predictpix-api.service
-sudo journalctl -u predictpix-api.service -f
+sudo systemctl status predictpix-api.service predictpix-ui.service
 ```
 
-4) Nginx configuration for separate domains
+### 6) Service operations (start/stop/restart/logs)
+
+```bash
+# Start / Stop
+sudo systemctl start predictpix-api.service
+sudo systemctl stop predictpix-api.service
+sudo systemctl start predictpix-ui.service
+sudo systemctl stop predictpix-ui.service
+
+# Restart after deployment
+sudo systemctl restart predictpix-api.service
+sudo systemctl restart predictpix-ui.service
+
+# Check status
+sudo systemctl status predictpix-api.service
+sudo systemctl status predictpix-ui.service
+
+# Follow logs
+sudo journalctl -u predictpix-api.service -f
+sudo journalctl -u predictpix-ui.service -f
+```
+
+### 7) Nginx configuration for separate domains
 
 PredictPix uses two separate domains:
 - **Backend API**: `api.predictpix.com` (proxies to port 8001)
 - **Frontend UI**: `test.predictpix.com` (proxies to port 9002)
 
-#### 4a) Nginx configuration for Backend (`api.predictpix.com`)
+#### 7a) Nginx configuration for Backend (`api.predictpix.com`)
 
 Create `/etc/nginx/sites-available/api.predictpix.com`:
 
@@ -412,7 +430,7 @@ server {
 }
 ```
 
-#### 4b) Nginx configuration for Frontend (`test.predictpix.com`)
+#### 7b) Nginx configuration for Frontend (`test.predictpix.com`)
 
 Create `/etc/nginx/sites-available/test.predictpix.com`:
 
@@ -447,7 +465,7 @@ server {
 }
 ```
 
-#### 4c) Enable both Nginx sites
+#### 7c) Enable both Nginx sites
 
 ```bash
 sudo ln -s /etc/nginx/sites-available/api.predictpix.com /etc/nginx/sites-enabled/
@@ -456,7 +474,7 @@ sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-5) Firewall (UFW) rules (optional)
+### 8) Firewall (UFW) rules (optional)
 
 ```bash
 sudo ufw allow OpenSSH

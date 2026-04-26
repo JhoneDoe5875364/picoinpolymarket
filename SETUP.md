@@ -25,9 +25,6 @@ Create a `.env` file in the `backend/` directory:
 # PI API KEY
 PI_API_KEY="..................................................."
 
-# Admin Pi usernames (comma-separated, case-insensitive)
-PREDICTPIX_ADMIN_PI_USERNAMES=TestAdmin
-
 # JWT lifetimes (minutes)
 ADMIN_JWT_TTL_MIN=15
 USER_JWT_TTL_MIN=360
