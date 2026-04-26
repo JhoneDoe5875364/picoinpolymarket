@@ -13,6 +13,7 @@ from app.routes.api import (
     attestation,
     leaderboard,
     orders,
+    comments,
 )
 
 
@@ -29,3 +30,4 @@ def include_api_routers(app):
     app.include_router(attestation.router, prefix="/api")
     app.include_router(leaderboard.router, prefix="/api")
     app.include_router(orders.router, prefix="/api")
+    app.include_router(comments.router, prefix="/api")

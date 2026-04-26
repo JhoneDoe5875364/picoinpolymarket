@@ -213,6 +213,25 @@ SEED_MARKET_VOLUME_AGG_STATE_ID = 1
 SEED_MARKET_VOLUME_AGG_STATE_LAST_TRADE_ID = 0
 SEED_MARKET_VOLUME_AGG_STATE_LAST_VOLUME_1M_ID = 0
 
+SEED_COMMENT_ROOT_PER_MARKET_MIN = 3
+SEED_COMMENT_ROOT_PER_MARKET_MAX = 8
+SEED_COMMENT_REPLY_PER_ROOT_MIN = 1
+SEED_COMMENT_REPLY_PER_ROOT_MAX = 5
+SEED_COMMENT_BODY_ROOT_TEMPLATES: tuple[str, ...] = (
+    "This market probability looks undervalued right now.",
+    "Direction is still mixed when looking at current data.",
+    "Volume is rising here, so volatility risk is high.",
+    "Risk and reward profile looks favorable to me.",
+    "If the next headline confirms, probability may reprice quickly.",
+)
+SEED_COMMENT_BODY_REPLY_TEMPLATES: tuple[str, ...] = (
+    "Agreed, recent headlines support this view.",
+    "The opposite case exists, but your rationale is strong.",
+    "Recent trade prints match your short-term bias.",
+    "There are still variables, but the scenario is reasonable.",
+    "I am positioned in a similar direction.",
+)
+
 SEED_TABLES: tuple[str, ...] = (
     "categories",
     "users",
@@ -223,4 +242,5 @@ SEED_TABLES: tuple[str, ...] = (
     "market_price_candles",
     "market_positions",
     "leaderboards",
+    "comments",
 )

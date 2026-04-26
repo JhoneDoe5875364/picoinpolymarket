@@ -15,6 +15,12 @@ from app.core.market import insert_market_trade, update_market_position, update_
 from app.db.config import (
     SEED_ADMIN_USERS,
     SEED_CATEGORY_ROWS,
+    SEED_COMMENT_BODY_REPLY_TEMPLATES,
+    SEED_COMMENT_BODY_ROOT_TEMPLATES,
+    SEED_COMMENT_REPLY_PER_ROOT_MAX,
+    SEED_COMMENT_REPLY_PER_ROOT_MIN,
+    SEED_COMMENT_ROOT_PER_MARKET_MAX,
+    SEED_COMMENT_ROOT_PER_MARKET_MIN,
     SEED_DECIMAL_QUANT,
     SEED_DECIMAL_ZERO,
     SEED_DECIMAL_ZERO_QUANT,
@@ -80,6 +86,8 @@ from app.db.config import (
 from app.utils import generate_bigint_64
 
 from app.models.tables.category import Category
+from app.models.tables.comment import Comment
+from app.models.tables.comment_stat import CommentStat
 from app.models.tables.market import Market
 from app.models.tables.market_token import MarketToken
 from app.models.tables.user import User
@@ -124,6 +132,14 @@ async def _ensure_market_volume_agg_state(session: AsyncSession, **kwargs: objec
     session.add(MarketVolumeAggState(**kwargs))
 
 
+async def _ensure_comment(session: AsyncSession, **kwargs: object) -> None:
+    session.add(Comment(**kwargs))
+
+
+async def _ensure_comment_stat(session: AsyncSession, **kwargs: object) -> None:
+    session.add(CommentStat(**kwargs))
+
+
 async def _sync_table_sequence(session: AsyncSession, table_name: str, id_column: str = "id") -> None:
     await session.execute(
         text(
@@ -148,6 +164,68 @@ async def _sync_seed_sequences(session: AsyncSession) -> None:
         await _sync_table_sequence(session, table_name)
 
 
+async def _ensure_comment_partitions(session: AsyncSession) -> None:
+    await session.execute(
+        text(
+            """
+            DO $body$
+            DECLARE
+              curr_month_start date := date_trunc('month', now())::date;
+              next_month_start date := (date_trunc('month', now()) + interval '1 month')::date;
+              next2_month_start date := (date_trunc('month', now()) + interval '2 month')::date;
+            BEGIN
+              IF EXISTS (
+                SELECT 1
+                FROM pg_partitioned_table p
+                JOIN pg_class c ON c.oid = p.partrelid
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE c.relname = 'comments'
+                  AND n.nspname = current_schema()
+              ) THEN
+                IF NOT EXISTS (
+                  SELECT 1 FROM pg_class c
+                  JOIN pg_namespace n ON n.oid = c.relnamespace
+                  WHERE c.relname = 'comments_default'
+                    AND n.nspname = current_schema()
+                ) THEN
+                  EXECUTE 'CREATE TABLE comments_default PARTITION OF comments DEFAULT';
+                END IF;
+
+                IF NOT EXISTS (
+                  SELECT 1 FROM pg_class c
+                  JOIN pg_namespace n ON n.oid = c.relnamespace
+                  WHERE c.relname = to_char(curr_month_start, '"comments_y"YYYY"m"MM')
+                    AND n.nspname = current_schema()
+                ) THEN
+                  EXECUTE format(
+                    'CREATE TABLE %I PARTITION OF comments FOR VALUES FROM (%L) TO (%L)',
+                    to_char(curr_month_start, '"comments_y"YYYY"m"MM'),
+                    curr_month_start,
+                    next_month_start
+                  );
+                END IF;
+
+                IF NOT EXISTS (
+                  SELECT 1 FROM pg_class c
+                  JOIN pg_namespace n ON n.oid = c.relnamespace
+                  WHERE c.relname = to_char(next_month_start, '"comments_y"YYYY"m"MM')
+                    AND n.nspname = current_schema()
+                ) THEN
+                  EXECUTE format(
+                    'CREATE TABLE %I PARTITION OF comments FOR VALUES FROM (%L) TO (%L)',
+                    to_char(next_month_start, '"comments_y"YYYY"m"MM'),
+                    next_month_start,
+                    next2_month_start
+                  );
+                END IF;
+              END IF;
+            END
+            $body$;
+            """
+        )
+    )
+
+
 async def run_seeds(session: AsyncSession) -> None:
     """Insert seed rows if missing."""
     await run_seed_categories(session)
@@ -157,6 +235,10 @@ async def run_seeds(session: AsyncSession) -> None:
     await run_seed_suggestions(session)
     await session.flush()
     await run_seed_markets(session)
+    await session.flush()
+    await _ensure_comment_partitions(session)
+    await session.flush()
+    await run_seed_comments(session)
     await session.flush()
     await run_seed_market_trades(session)
     await session.flush()
@@ -537,6 +619,75 @@ async def run_seed_market_volume_agg_state(session: AsyncSession) -> None:
         last_trade_id=SEED_MARKET_VOLUME_AGG_STATE_LAST_TRADE_ID,
         last_volume_1m_id=SEED_MARKET_VOLUME_AGG_STATE_LAST_VOLUME_1M_ID,
     )
+
+
+async def run_seed_comments(session: AsyncSession) -> None:
+    market_rows = await session.execute(select(Market.id))
+    markets = [row[0] for row in market_rows.all()]
+    if not markets:
+        return
+
+    user_rows = await session.execute(select(User.id))
+    user_ids = [row[0] for row in user_rows.all()]
+    if not user_ids:
+        return
+
+    now: datetime = datetime.now(timezone.utc)
+    for market_id in markets:
+        root_count = random.randint(
+            SEED_COMMENT_ROOT_PER_MARKET_MIN,
+            SEED_COMMENT_ROOT_PER_MARKET_MAX,
+        )
+        total_reply_count = 0
+        for idx in range(root_count):
+            root_created_at = now - timedelta(minutes=(idx + 1) * random.randint(5, 50))
+            root_comment = Comment(
+                market_id=market_id,
+                player_id=random.choice(user_ids),
+                parent_comment_id=None,
+                root_comment_id=None,
+                depth=0,
+                body=random.choice(SEED_COMMENT_BODY_ROOT_TEMPLATES),
+                status="active",
+                reply_count=0,
+                created_at=root_created_at,
+                updated_at=root_created_at,
+            )
+            session.add(root_comment)
+            await session.flush()
+
+            root_comment.root_comment_id = root_comment.id
+            reply_count = random.randint(
+                SEED_COMMENT_REPLY_PER_ROOT_MIN,
+                SEED_COMMENT_REPLY_PER_ROOT_MAX,
+            )
+            root_comment.reply_count = reply_count
+            total_reply_count += reply_count
+            await session.flush()
+
+            for ridx in range(reply_count):
+                reply_created_at = root_created_at + timedelta(minutes=ridx + 1)
+                await _ensure_comment(
+                    session,
+                    market_id=market_id,
+                    player_id=random.choice(user_ids),
+                    parent_comment_id=root_comment.id,
+                    root_comment_id=root_comment.id,
+                    depth=1,
+                    body=random.choice(SEED_COMMENT_BODY_REPLY_TEMPLATES),
+                    status="active",
+                    reply_count=0,
+                    created_at=reply_created_at,
+                    updated_at=reply_created_at,
+                )
+
+        await _ensure_comment_stat(
+            session,
+            market_id=market_id,
+            root_comment_count=root_count,
+            reply_count=total_reply_count,
+            last_commented_at=now,
+        )
 
 
 

@@ -4,6 +4,8 @@ Views (v_*) are queried via repositories using Core/text, not ORM classes.
 """
 
 from app.models.tables.category import Category
+from app.models.tables.comment import Comment
+from app.models.tables.comment_stat import CommentStat
 from app.models.tables.leaderboard import Leaderboard
 from app.models.tables.market import Market
 from app.models.tables.market_stats import MarketStat
@@ -21,6 +23,8 @@ from app.models.tables.user import User
 
 __all__ = [
     "Category",
+    "Comment",
+    "CommentStat",
     "Leaderboard",
     "Market",
     "MarketStat",
