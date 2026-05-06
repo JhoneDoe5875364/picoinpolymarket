@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, List, Literal, Optional, Union
 
@@ -11,6 +11,7 @@ from sqlalchemy.orm import selectinload
 from app.core.config import Config
 from app.models.tables.category import Category
 from app.models.tables.market import Market
+from app.models.tables.market_stats import MarketStat
 from app.models.tables.market_token import MarketToken
 from app.models.tables.market_position import MarketPosition
 from app.models.tables.market_trades import MarketTrade
@@ -24,6 +25,7 @@ _ORDER_COLUMNS: dict[str, Any] = {
     "start_date": Market.start_date,
     "end_date": Market.end_date,
     "volume": Market.volume,
+    "created_at": Market.created_at,
 }
 
 _TRADE_ORDER_COLUMNS: dict[str, Any] = {
@@ -58,6 +60,7 @@ async def list_markets(
     offset: int = 0,
     order: str = "created_at",
     ascending: bool = False,
+    discovery: Literal["default", "trending", "new", "hot", "ending_soon"] = "default",
     search: Optional[str] = None,
     category: str = "all",
     status: Optional[str] = None,
@@ -71,6 +74,8 @@ async def list_markets(
     end_date_max: Optional[datetime] = None,
 ) -> List[dict[str, Any]]:
     conditions: list[Any] = []
+    now_utc = datetime.now(timezone.utc)
+    new_window_start = now_utc - timedelta(hours=72)
 
     if status is not None and status.strip().lower() != "all":
         conditions.append(Market.status == status)
@@ -107,15 +112,52 @@ async def list_markets(
         normalized_category = category.strip().lower()
         conditions.append(Market.category.has(func.lower(Category.slug) == normalized_category))
 
-    sort_col = _ORDER_COLUMNS.get(order, Market.created_at)
+    if discovery == "new":
+        conditions.append(Market.created_at.is_not(None))
+        conditions.append(Market.created_at >= new_window_start)
+    elif discovery == "ending_soon":
+        conditions.append(Market.end_date.is_not(None))
+        conditions.append(Market.end_date >= now_utc)
+        conditions.append(Market.end_date <= now_utc + timedelta(hours=72))
+
     stmt = (
         select(Market)
         .options(selectinload(Market.category), selectinload(Market.market_tokens))
         .where(*conditions)
-        .order_by(sort_col.asc() if ascending else sort_col.desc())
-        .offset(offset)
-        .limit(limit)
     )
+
+    if discovery in ("trending", "hot"):
+        recent_activity = func.coalesce(MarketStat.activity_24h, 0)
+        volume_score = func.coalesce(Market.volume, 0)
+        stmt = stmt.outerjoin(MarketStat, MarketStat.market_id == Market.id)
+
+        if discovery == "trending":
+            stmt = (
+                stmt.where(recent_activity > 0)
+                .order_by(
+                    func.coalesce(MarketStat.trending_score, 0).desc(),
+                    recent_activity.desc(),
+                    Market.volume.desc(),
+                )
+            )
+        else:
+            stmt = (
+                stmt.where((recent_activity > 0) | (volume_score > 0))
+                .order_by(
+                    func.coalesce(MarketStat.hot_score, 0).desc(),
+                    recent_activity.desc(),
+                    Market.volume.desc(),
+                )
+            )
+    elif discovery == "new":
+        stmt = stmt.order_by(Market.created_at.desc())
+    elif discovery == "ending_soon":
+        stmt = stmt.order_by(Market.end_date.asc())
+    else:
+        sort_col = _ORDER_COLUMNS.get(order, Market.created_at)
+        stmt = stmt.order_by(sort_col.asc() if ascending else sort_col.desc())
+
+    stmt = stmt.offset(offset).limit(limit)
 
     result = await session.execute(stmt)
     rows = result.scalars().all()

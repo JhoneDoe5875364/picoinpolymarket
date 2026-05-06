@@ -96,7 +96,7 @@ from app.models.tables.market_price_candles import MarketPriceCandle
 from app.models.tables.market_position import MarketPosition
 from app.models.tables.market_volume_agg_state import MarketVolumeAggState
 from app.models.tables.suggestion import Suggestion
-from app.updator import leaderboard_updater, market_volume_updater
+from app.updator import leaderboard_updater, market_stats_updator
 from app.updator import market_price_candle_updater
 
 
@@ -244,9 +244,9 @@ async def run_seeds(session: AsyncSession) -> None:
     await session.flush()
     await run_seed_market_volume_agg_state(session)
     await session.flush()
-    await market_volume_updater.refresh_market_volume_1m(session, commit=False)
+    await market_stats_updator.refresh_market_volume_1m(session, commit=False)
     await session.flush()
-    await market_volume_updater.refresh_market_volume_1d(session, commit=False)
+    await market_stats_updator.refresh_market_volume_1d(session, commit=False)
     await session.flush()
     await leaderboard_updater.rebuild_leaderboards(session, commit=False)
     await session.flush()
@@ -359,8 +359,8 @@ async def run_seed_markets(session: AsyncSession) -> None:
             is_archived=False,
             is_resolved=False,
             rules=SEED_MARKET_RULE_TEMPLATE,
-            created_at=now,
-            updated_at=now,
+            created_at=start_date,
+            updated_at=start_date,
         )
         await _ensure_market_token(
             session,

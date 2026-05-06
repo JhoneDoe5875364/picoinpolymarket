@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import MarketCard from "@/components/market/MarketCard";
 import { apiFetch } from "@/lib/api";
 import type { Market } from "@/lib/types";
+import type { MarketDiscoveryKey } from "@/lib/market-categories";
 
 const PAGE_SIZE = 20;
 const LOAD_MORE_SKELETON_COUNT = 4;
@@ -15,16 +16,26 @@ type MarketsApiResponse = {
   data?: Market[];
 };
 
-function buildMarketsQuery(limit: number, offset: number, selectedCategory: string): string {
+function buildMarketsQuery(
+  limit: number,
+  offset: number,
+  selectedCategory: string,
+  selectedDiscovery: MarketDiscoveryKey | "default"
+): string {
   const query = new URLSearchParams({
     limit: limit.toString(),
     offset: offset.toString(),
-    order: "volume",
-    ascending: "false",
+    discovery: selectedDiscovery,
     category: selectedCategory.toLowerCase(),
     closed: "false",
     resolved: "false",
   });
+
+  if (selectedDiscovery === "default") {
+    query.set("order", "volume");
+    query.set("ascending", "false");
+  }
+
   return query.toString();
 }
 
@@ -34,16 +45,24 @@ function mergeUniqueMarkets(existing: Market[], incoming: Market[]): Market[] {
   return [...existing, ...uniqueIncoming];
 }
 
-async function fetchMarketsPage(limit: number, offset: number, selectedCategory: string): Promise<Market[]> {
-  const requestKey = `${selectedCategory}:${limit}:${offset}`;
+async function fetchMarketsPage(
+  limit: number,
+  offset: number,
+  selectedCategory: string,
+  selectedDiscovery: MarketDiscoveryKey | "default"
+): Promise<Market[]> {
+  const requestKey = `${selectedDiscovery}:${selectedCategory}:${limit}:${offset}`;
   const existingRequest = inFlightMarketsRequests.get(requestKey);
   if (existingRequest) {
     return existingRequest;
   }
 
-  const request = apiFetch<MarketsApiResponse>(`/markets?${buildMarketsQuery(limit, offset, selectedCategory)}`, {
-    method: "GET",
-  })
+  const request = apiFetch<MarketsApiResponse>(
+    `/markets?${buildMarketsQuery(limit, offset, selectedCategory, selectedDiscovery)}`,
+    {
+      method: "GET",
+    }
+  )
     .then((res) => res?.data ?? [])
     .finally(() => {
       inFlightMarketsRequests.delete(requestKey);
@@ -65,9 +84,15 @@ function MarketGridSkeleton({ count, prefix }: { count: number; prefix: string }
 
 interface MarketsFeedProps {
   selectedCategory?: string;
+  selectedDiscovery?: MarketDiscoveryKey | "default";
+  selectedLabel?: string;
 }
 
-export default function MarketsFeed({ selectedCategory = "All" }: MarketsFeedProps) {
+export default function MarketsFeed({
+  selectedCategory = "All",
+  selectedDiscovery = "default",
+  selectedLabel,
+}: MarketsFeedProps) {
   const [markets, setMarkets] = useState<Market[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -88,7 +113,7 @@ export default function MarketsFeed({ selectedCategory = "All" }: MarketsFeedPro
         loadingMoreRef.current = false;
         setHasMore(true);
         nextOffsetRef.current = 0;
-        const data = await fetchMarketsPage(PAGE_SIZE, 0, selectedCategory);
+        const data = await fetchMarketsPage(PAGE_SIZE, 0, selectedCategory, selectedDiscovery);
         if (cancelled) return;
 
         setMarkets(data);
@@ -109,7 +134,7 @@ export default function MarketsFeed({ selectedCategory = "All" }: MarketsFeedPro
     return () => {
       cancelled = true;
     };
-  }, [selectedCategory]);
+  }, [selectedCategory, selectedDiscovery]);
 
   useEffect(() => {
     if (loading || loadingMore || !hasMore) {
@@ -132,7 +157,12 @@ export default function MarketsFeed({ selectedCategory = "All" }: MarketsFeedPro
         loadingMoreRef.current = true;
         setLoadingMore(true);
         try {
-          const nextMarkets = await fetchMarketsPage(PAGE_SIZE, nextOffsetRef.current, selectedCategory);
+          const nextMarkets = await fetchMarketsPage(
+            PAGE_SIZE,
+            nextOffsetRef.current,
+            selectedCategory,
+            selectedDiscovery
+          );
           setMarkets((prev) => mergeUniqueMarkets(prev, nextMarkets));
           nextOffsetRef.current += nextMarkets.length;
           setHasMore(nextMarkets.length === PAGE_SIZE);
@@ -156,7 +186,9 @@ export default function MarketsFeed({ selectedCategory = "All" }: MarketsFeedPro
     return () => {
       observerRef.current?.disconnect();
     };
-  }, [hasMore, loading, loadingMore, selectedCategory]);
+  }, [hasMore, loading, loadingMore, selectedCategory, selectedDiscovery]);
+
+  const selectedTitle = selectedLabel ?? (selectedCategory === "All" ? "All Markets" : selectedCategory);
 
   return (
     <div className="container py-4 px-4 sm:px-8 lg:px-8">
@@ -166,7 +198,7 @@ export default function MarketsFeed({ selectedCategory = "All" }: MarketsFeedPro
         </h1>
         <p className="text-white/80 mt-3 sm:mt-4">Browse and forecast on a variety of markets.</p>*/}
         <p className="text-md text-muted-foreground mt-2">
-          <span className="text-foreground font-semibold">{selectedCategory === "All" ? "All Markets" : selectedCategory}</span>
+          <span className="text-foreground font-semibold">{selectedTitle}</span>
         </p>
       </section>
       <section className="mx-auto max-w-[1400px] px-0 sm:px-0">

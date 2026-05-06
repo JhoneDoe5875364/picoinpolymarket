@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import MarketsFeed from "@/components/market/MarketsFeed";
-import { slugToCategory } from "@/lib/market-categories";
+import { slugToCategory, slugToDiscovery } from "@/lib/market-categories";
 
 interface CategoryPageProps {
   params: Promise<{ category: string }>;
@@ -8,6 +8,18 @@ interface CategoryPageProps {
 
 export default async function CategoryPage({ params }: CategoryPageProps) {
   const { category } = await params;
+  const selectedDiscovery = slugToDiscovery(category);
+
+  if (selectedDiscovery) {
+    return (
+      <MarketsFeed
+        selectedCategory="All"
+        selectedDiscovery={selectedDiscovery.key}
+        selectedLabel={selectedDiscovery.label}
+      />
+    );
+  }
+
   const selectedCategory = slugToCategory(category);
 
   if (!selectedCategory) {

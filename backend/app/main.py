@@ -20,7 +20,8 @@ from app.routes import include_all_routers
 from app.updator.market_close_updater import run_periodic_market_close_refresh
 from app.updator.leaderboard_updater import run_periodic_leaderboard_refresh
 from app.updator.market_price_candle_updater import run_periodic_market_price_candle_refresh
-from app.updator.market_volume_updater import (
+from app.updator.market_stats_updator import (
+    run_periodic_market_discovery_refresh,
     run_periodic_market_stats_24h_refresh,
     run_periodic_market_stats_extended_refresh,
     run_periodic_market_volume_daily_refresh,
@@ -40,6 +41,7 @@ async def lifespan(app: FastAPI):
     market_volume_daily_task: asyncio.Task[None] | None = None
     market_stats_24h_task: asyncio.Task[None] | None = None
     market_stats_extended_task: asyncio.Task[None] | None = None
+    market_discovery_task: asyncio.Task[None] | None = None
     try:
         engine, session_maker = create_engine_and_sessionmaker()
         app.state.async_engine = engine
@@ -87,6 +89,12 @@ async def lifespan(app: FastAPI):
         )
         app.state.market_stats_extended_refresh_task = market_stats_extended_task
         logger.info("Market stats extended refresh task started")
+        market_discovery_task = asyncio.create_task(
+            run_periodic_market_discovery_refresh(session_maker),
+            name="market-discovery-refresh",
+        )
+        app.state.market_discovery_refresh_task = market_discovery_task
+        logger.info("Market discovery refresh task started")
     except Exception as e:
         logger.warning("Database not initialized: %s", e)
         app.state.async_engine = None
@@ -98,6 +106,7 @@ async def lifespan(app: FastAPI):
         app.state.market_volume_daily_refresh_task = None
         app.state.market_stats_24h_refresh_task = None
         app.state.market_stats_extended_refresh_task = None
+        app.state.market_discovery_refresh_task = None
     yield
     if leaderboard_task is not None:
         leaderboard_task.cancel()
@@ -141,6 +150,12 @@ async def lifespan(app: FastAPI):
             await market_stats_extended_task
         except asyncio.CancelledError:
             logger.info("Market stats extended refresh task stopped")
+    if market_discovery_task is not None:
+        market_discovery_task.cancel()
+        try:
+            await market_discovery_task
+        except asyncio.CancelledError:
+            logger.info("Market discovery refresh task stopped")
     await dispose_engine()
     logger.info("Database engine disposed")
 
