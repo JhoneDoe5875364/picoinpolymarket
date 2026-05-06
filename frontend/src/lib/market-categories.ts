@@ -18,6 +18,7 @@ export const MARKET_DISCOVERY_MENUS = [
   { key: "new", label: "New", slug: "new" },
   { key: "hot", label: "Hot", slug: "hot" },
   { key: "ending_soon", label: "Ending Soon", slug: "ending-soon" },
+  { key: "most_discussed", label: "Most Discussed", slug: "most-discussed" },
 ] as const;
 
 export type MarketDiscoveryKey = (typeof MARKET_DISCOVERY_MENUS)[number]["key"];

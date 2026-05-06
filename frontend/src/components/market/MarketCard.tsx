@@ -22,6 +22,37 @@ function iconOf(m: Market | any) {
   return typeof m?.icon === "string" && m.icon.trim().length > 0 ? m.icon : null;
 }
 
+function MiniSparkline({ values }: { values: number[] }) {
+  if (!values || values.length < 2) {
+    return null;
+  }
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const points = values
+    .map((value, index) => {
+      const x = (index / (values.length - 1)) * 100;
+      const y = 100 - ((value - min) / range) * 100;
+      return `${x},${y}`;
+    })
+    .join(" ");
+  return (
+    <div className="mt-2 h-8 w-full rounded-sm border border-border/60 bg-card/40 px-1 py-1">
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="h-full w-full">
+        <polyline
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="4"
+          points={points}
+          className="text-primary/80"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </div>
+  );
+}
+
 export function MarketCard({ market }: { market: Market | any }) {
   const volume = market?.volume ?? 0;
   const yesPrice = market?.outcome_price_yes ?? 0.5;
@@ -30,6 +61,16 @@ export function MarketCard({ market }: { market: Market | any }) {
   const pathname = usePathname();
   const yesProbability = Math.round(yesPrice * 100);
   const noProbability = Math.round(noPrice * 100);
+  const labels = Array.isArray(market?.labels) ? market.labels.slice(0, 3) : [];
+  const trades24h = Number(market?.trades_24h ?? 0);
+  const comments24h = Number(market?.comments_24h ?? 0);
+  const priceMove24h = Number(market?.price_move_24h ?? 0);
+  const signalParts = [
+    trades24h > 0 ? `${fmtNum(trades24h)} trades today` : null,
+    comments24h > 0 ? `${fmtNum(comments24h)} comments` : null,
+    market?.is_ending_soon ? "ending soon" : null,
+    priceMove24h > 0 ? `price move ${(priceMove24h * 100).toFixed(1)}%` : null,
+  ].filter(Boolean) as string[];
 
   const [outcome, setOutcome] = React.useState<null | "YES" | "NO">(null);
   const [modalOpen, setModalOpen] = React.useState(false);
@@ -80,8 +121,21 @@ export function MarketCard({ market }: { market: Market | any }) {
                 </CardTitle>
               </div>
             </div>
+            {labels.length > 0 && (
+              <div className="mb-2 flex flex-wrap gap-1">
+                {labels.map((label: string) => (
+                  <span
+                    key={label}
+                    className="rounded-full border border-border/60 bg-secondary/70 px-2 py-0.5 text-[10px] font-semibold text-foreground/90"
+                  >
+                    {label}
+                  </span>
+                ))}
+              </div>
+            )}
 
             <MarketProbability implied={yesPrice} />
+            <MiniSparkline values={Array.isArray(market?.sparkline) ? market.sparkline : []} />
             
             <div className="grid grid-cols-2 gap-3 mt-3">
               <button
@@ -111,6 +165,9 @@ export function MarketCard({ market }: { market: Market | any }) {
                 {isNoHovered ? `${noProbability}%` : "No"}
               </button>
             </div>
+            {signalParts.length > 0 && (
+              <p className="mt-2 line-clamp-1 text-[11px] text-muted-foreground">{signalParts.join(" · ")}</p>
+            )}
             <div className="mt-2 flex justify-between text-xs text-muted-foreground md:mt-4">
               <span>Volume: <span className="font-semibold">{fmtNum(volume)} π</span></span>
               <span>End Date: {fmtShortDate(market?.end_date)}</span>

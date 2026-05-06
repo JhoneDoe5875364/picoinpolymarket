@@ -34,7 +34,7 @@ async def list_markets(
     offset: int = Query(default=0, ge=0),
     order: str = Query(default="created_at"),
     ascending: bool = Query(default=False),
-    discovery: Literal["default", "trending", "new", "hot", "ending_soon"] = Query(default="default"),
+    discovery: Literal["default", "trending", "new", "hot", "ending_soon", "most_discussed"] = Query(default="default"),
     search: Optional[str] = Query(default=None),
     category: str = Query(default="all", min_length=1),
     status: Optional[str] = Query(default=None),

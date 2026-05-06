@@ -53,6 +53,39 @@ def market_to_dict(m: Market) -> dict[str, Any]:
     return d
 
 
+def _build_market_labels(
+    row: dict[str, Any],
+    *,
+    now_utc: datetime,
+    new_window_start: datetime,
+    ending_soon_window_end: datetime,
+) -> list[str]:
+    labels: list[str] = []
+    created_at = row.get("created_at")
+    end_date = row.get("end_date")
+    trending_score = float(row.get("trending_score") or 0)
+    hot_score = float(row.get("hot_score") or 0)
+
+    if created_at:
+        try:
+            if created_at >= new_window_start:
+                labels.append("New")
+        except TypeError:
+            pass
+    if trending_score > 0:
+        labels.append("Trending")
+    if hot_score > 0:
+        labels.append("Hot")
+    if end_date:
+        try:
+            if now_utc <= end_date <= ending_soon_window_end:
+                labels.append("Ending Soon")
+        except TypeError:
+            pass
+
+    return labels
+
+
 async def list_markets(
     session: AsyncSession,
     *,
@@ -60,7 +93,7 @@ async def list_markets(
     offset: int = 0,
     order: str = "created_at",
     ascending: bool = False,
-    discovery: Literal["default", "trending", "new", "hot", "ending_soon"] = "default",
+    discovery: Literal["default", "trending", "new", "hot", "ending_soon", "most_discussed"] = "default",
     search: Optional[str] = None,
     category: str = "all",
     status: Optional[str] = None,
@@ -76,6 +109,7 @@ async def list_markets(
     conditions: list[Any] = []
     now_utc = datetime.now(timezone.utc)
     new_window_start = now_utc - timedelta(hours=72)
+    ending_soon_window_end = now_utc + timedelta(hours=72)
 
     if status is not None and status.strip().lower() != "all":
         conditions.append(Market.status == status)
@@ -118,18 +152,18 @@ async def list_markets(
     elif discovery == "ending_soon":
         conditions.append(Market.end_date.is_not(None))
         conditions.append(Market.end_date >= now_utc)
-        conditions.append(Market.end_date <= now_utc + timedelta(hours=72))
+        conditions.append(Market.end_date <= ending_soon_window_end)
 
     stmt = (
-        select(Market)
+        select(Market, MarketStat)
         .options(selectinload(Market.category), selectinload(Market.market_tokens))
+        .outerjoin(MarketStat, MarketStat.market_id == Market.id)
         .where(*conditions)
     )
 
-    if discovery in ("trending", "hot"):
+    if discovery in ("trending", "hot", "most_discussed"):
         recent_activity = func.coalesce(MarketStat.activity_24h, 0)
         volume_score = func.coalesce(Market.volume, 0)
-        stmt = stmt.outerjoin(MarketStat, MarketStat.market_id == Market.id)
 
         if discovery == "trending":
             stmt = (
@@ -139,6 +173,12 @@ async def list_markets(
                     recent_activity.desc(),
                     Market.volume.desc(),
                 )
+            )
+        elif discovery == "most_discussed":
+            stmt = stmt.order_by(
+                func.coalesce(MarketStat.comments_24h, 0).desc(),
+                func.coalesce(MarketStat.activity_24h, 0).desc(),
+                Market.volume.desc(),
             )
         else:
             stmt = (
@@ -160,8 +200,41 @@ async def list_markets(
     stmt = stmt.offset(offset).limit(limit)
 
     result = await session.execute(stmt)
-    rows = result.scalars().all()
-    return [market_to_dict(m) for m in rows]
+    rows = result.all()
+    payload: list[dict[str, Any]] = []
+    featured_counter = 0
+    for idx, pair in enumerate(rows):
+        market, stats = pair
+        item = market_to_dict(market)
+        item["trades_24h"] = int(getattr(stats, "trades_24h", 0) or 0)
+        item["comments_24h"] = int(getattr(stats, "comments_24h", 0) or 0)
+        item["activity_24h"] = int(getattr(stats, "activity_24h", 0) or 0)
+        item["price_move_24h"] = float(getattr(stats, "price_move_24h", 0) or 0)
+        item["trending_score"] = float(getattr(stats, "trending_score", 0) or 0)
+        item["hot_score"] = float(getattr(stats, "hot_score", 0) or 0)
+        is_ending_soon = False
+        if item.get("end_date"):
+            try:
+                is_ending_soon = bool(
+                    item["end_date"] >= now_utc
+                    and item["end_date"] <= ending_soon_window_end
+                )
+            except TypeError:
+                is_ending_soon = False
+        item["is_ending_soon"] = is_ending_soon
+        item["labels"] = _build_market_labels(
+            item,
+            now_utc=now_utc,
+            new_window_start=new_window_start,
+            ending_soon_window_end=ending_soon_window_end,
+        )
+        if offset == 0 and idx < 5:
+            featured_counter += 1
+            item["featured_rank"] = featured_counter
+        else:
+            item["featured_rank"] = None
+        payload.append(item)
+    return payload
 
 
 async def market_status_summary(

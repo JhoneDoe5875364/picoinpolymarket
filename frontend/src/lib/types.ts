@@ -41,6 +41,16 @@ export interface Market {
   created_at?: string | null;
   updated_at?: string | null;
   category?: string;
+  labels?: string[];
+  trades_24h?: number;
+  comments_24h?: number;
+  activity_24h?: number;
+  price_move_24h?: number;
+  trending_score?: number;
+  hot_score?: number;
+  is_ending_soon?: boolean;
+  featured_rank?: number | null;
+  sparkline?: number[];
 
   // Compatibility fields used by current frontend responses/components.
   traders?: number;
