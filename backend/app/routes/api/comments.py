@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from fastapi.encoders import jsonable_encoder
 
 from app.core.logger import get_logger
-from app.core.security import verify_token
+from app.core.security import optional_verify_token, verify_token
 from app.db.deps import DbSession
 from app.repositories import comments as comments_repo
 
@@ -24,6 +26,16 @@ def _get_user_id(user: dict) -> int:
     return user_id
 
 
+def _optional_viewer_user_id(viewer: Optional[dict]) -> Optional[int]:
+    if not viewer:
+        return None
+    raw_sub = viewer.get("sub")
+    try:
+        return int(raw_sub) if raw_sub is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
 @router.get("/markets/{market_id:int}", summary="List market comments")
 async def list_market_comments(
     db: DbSession,
@@ -31,13 +43,21 @@ async def list_market_comments(
     offset: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     include_deleted: bool = Query(default=False),
+    sort: str = Query("newest", description="newest or most_liked"),
+    viewer: Optional[dict] = Depends(optional_verify_token),
 ):
+    sort_key = (sort or "newest").lower()
+    if sort_key not in ("newest", "most_liked"):
+        raise HTTPException(status_code=400, detail="sort must be newest or most_liked")
+    viewer_user_id = _optional_viewer_user_id(viewer)
     rows = await comments_repo.list_market_comments(
         db,
         market_id=market_id,
         offset=offset,
         limit=limit,
         include_deleted=include_deleted,
+        sort=sort_key,
+        viewer_user_id=viewer_user_id,
     )
     return {
         "ok": True,
@@ -147,6 +167,28 @@ async def create_reply(
         raise HTTPException(status_code=500, detail="Failed to create reply") from exc
 
     return {"ok": True, "data": jsonable_encoder(row)}
+
+
+@router.post("/{comment_id:int}/like", summary="Toggle like on a root comment")
+async def toggle_comment_like(
+    db: DbSession,
+    comment_id: int = Path(..., ge=1),
+    user=Depends(verify_token),
+):
+    user_id = _get_user_id(user)
+    try:
+        async with db.begin():
+            data = await comments_repo.toggle_comment_like(
+                db,
+                comment_id=comment_id,
+                user_id=user_id,
+            )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.error("Error toggling like for comment %s: %s", comment_id, exc)
+        raise HTTPException(status_code=500, detail="Failed to toggle like") from exc
+    return {"ok": True, "data": jsonable_encoder(data)}
 
 
 @router.get("/{comment_id:int}", summary="Get comment by id")

@@ -3,11 +3,12 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from sqlalchemy import and_, func, inspect as sa_inspect, or_, select, update
+from sqlalchemy import and_, delete, desc, exists, false, func, inspect as sa_inspect, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.tables.comment import Comment
+from app.models.tables.comment_like import CommentLike
 from app.models.tables.comment_stat import CommentStat
 from app.models.tables.market import Market
 from app.models.tables.user import User
@@ -70,29 +71,106 @@ async def list_market_comments(
     offset: int,
     limit: int,
     include_deleted: bool = False,
+    sort: str = "newest",
+    viewer_user_id: Optional[int] = None,
 ) -> dict[str, Any]:
     conditions = [Comment.market_id == market_id, Comment.depth == 0]
     if not include_deleted:
         conditions.append(Comment.status == "active")
 
+    like_count_sq = (
+        select(func.count())
+        .select_from(CommentLike)
+        .where(CommentLike.comment_id == Comment.id)
+        .correlate(Comment)
+        .scalar_subquery()
+    )
+    like_count_label = like_count_sq.label("like_count")
+
+    if viewer_user_id is not None:
+        viewer_liked_label = exists(
+            select(CommentLike.user_id).where(
+                CommentLike.comment_id == Comment.id,
+                CommentLike.user_id == viewer_user_id,
+            ).correlate(Comment)
+        ).label("viewer_has_liked")
+    else:
+        viewer_liked_label = false().label("viewer_has_liked")
+
     stmt = (
-        select(Comment, User.pi_username)
+        select(Comment, User.pi_username, like_count_label, viewer_liked_label)
         .outerjoin(User, User.id == Comment.player_id)
         .where(*conditions)
-        .order_by(Comment.created_at.desc(), Comment.id.desc())
-        .offset(offset)
-        .limit(limit)
     )
+    sort_key = (sort or "newest").lower()
+    if sort_key == "most_liked":
+        stmt = stmt.order_by(desc(like_count_label), Comment.created_at.desc(), Comment.id.desc())
+    else:
+        stmt = stmt.order_by(Comment.created_at.desc(), Comment.id.desc())
+
+    stmt = stmt.offset(offset).limit(limit)
     rows = await session.execute(stmt)
-    items = [
-        _comment_to_dict(comment_row, username=username)
-        for comment_row, username in rows.all()
-    ]
+    items: list[dict[str, Any]] = []
+    for comment_row, username, like_cnt, viewer_liked in rows.all():
+        payload = _comment_to_dict(comment_row, username=username)
+        payload["like_count"] = int(like_cnt or 0)
+        payload["viewer_has_liked"] = bool(viewer_liked)
+        items.append(payload)
 
     total_stmt = select(func.count(Comment.id)).where(*conditions)
     total_row = await session.execute(total_stmt)
     total = int(total_row.scalar_one() or 0)
     return {"items": items, "total": total}
+
+
+async def toggle_comment_like(
+    session: AsyncSession,
+    *,
+    comment_id: int,
+    user_id: int,
+) -> dict[str, Any]:
+    root_stmt = select(Comment).where(
+        Comment.id == comment_id,
+        Comment.depth == 0,
+        Comment.status == "active",
+    )
+    root_row = await session.execute(root_stmt)
+    root = root_row.scalar_one_or_none()
+    if root is None:
+        raise LookupError("Comment not found")
+
+    existing = await session.execute(
+        select(CommentLike).where(
+            CommentLike.comment_id == comment_id,
+            CommentLike.user_id == user_id,
+        )
+    )
+    liked_row = existing.scalar_one_or_none()
+    now_utc = datetime.now(timezone.utc)
+    if liked_row is not None:
+        await session.execute(
+            delete(CommentLike).where(
+                CommentLike.comment_id == comment_id,
+                CommentLike.user_id == user_id,
+            )
+        )
+        liked = False
+    else:
+        session.add(
+            CommentLike(
+                comment_id=comment_id,
+                user_id=user_id,
+                created_at=now_utc,
+            )
+        )
+        liked = True
+    await session.flush()
+
+    count_row = await session.execute(
+        select(func.count()).select_from(CommentLike).where(CommentLike.comment_id == comment_id)
+    )
+    like_count = int(count_row.scalar_one() or 0)
+    return {"liked": liked, "like_count": like_count, "comment_id": comment_id}
 
 
 async def list_replies(

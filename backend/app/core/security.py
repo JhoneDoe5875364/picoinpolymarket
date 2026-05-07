@@ -64,6 +64,40 @@ async def verify_token(request: Request):
         raise HTTPException(status_code=401, detail="Invalid token")
 
 
+async def optional_verify_token(request: Request) -> Optional[dict]:
+    """
+    Return JWT payload when a valid Bearer token is present; otherwise None.
+    Never raises (unlike verify_token), so public routes can enrich responses for logged-in users.
+    """
+    if Config.ENVIRONMENT == "development":
+        return {
+            "sub": "1",
+            "username": "superadmin",
+            "role": "superadmin",
+        }
+
+    auth_header = request.headers.get("authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return None
+
+    token = auth_header.split(" ", 1)[1].strip()
+    if not token:
+        return None
+
+    try:
+        payload = jwt.decode(
+            token,
+            JWT_SECRET_KEY,
+            algorithms=[JWT_ALGORITHM],
+            audience=JWT_AUDIENCE,
+        )
+        if payload.get("exp", 0) < time.time():
+            return None
+        return payload
+    except Exception:
+        return None
+
+
 def mint_jwt_token(user_id, username, role, pi_access_token):
     now = int(time.time())
     if role == "superadmin":
