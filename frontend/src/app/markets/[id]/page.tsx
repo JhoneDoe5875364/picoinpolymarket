@@ -18,7 +18,7 @@ async function loadMarketDetail(id: string): Promise<Market> {
   return res?.data ?? [];
 }
 
-export default async function MarketDetailsPage({ params }: { params: { id: string } }) {
+export default async function MarketDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
 
   const market = await loadMarketDetail(id)
@@ -39,7 +39,7 @@ export default async function MarketDetailsPage({ params }: { params: { id: stri
           <MarketParticipants market={market} />
         </div>
 
-        <div className="lg:col-span-1 xl:col-span-1 space-y-6">
+        <div className="lg:col-span-1 xl:col-span-1 space-y-6 lg:sticky lg:top-20 lg:self-start">
           <PredictionPanel market={market} />
         </div>
       </div>

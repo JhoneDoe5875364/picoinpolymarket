@@ -45,6 +45,11 @@ class Market(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     rules: Optional[str] = None
+    yes_criteria: Optional[str] = None
+    no_criteria: Optional[str] = None
+    edge_cases: Optional[str] = None
+    market_context: Optional[str] = None
+    resolution_time: Optional[datetime] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

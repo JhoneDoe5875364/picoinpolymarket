@@ -20,7 +20,13 @@ const marketSchema = z.object({
   question: z.string().min(10, "Question must be at least 10 characters long."),
   slug: z.string().min(1, "Slug is required."),
   description: z.string().min(20, "Description must be at least 20 characters long."),
-  rules: z.string().min(10, "Rules must be at least 10 characters long."),
+  yesCriteria: z.string().min(10, "Yes criteria must be at least 10 characters long."),
+  noCriteria: z.string().min(10, "No criteria must be at least 10 characters long."),
+  resolutionSource: z.string().min(5, "Resolution source must be at least 5 characters long."),
+  edgeCases: z.string().min(10, "Edge cases must be at least 10 characters long."),
+  marketContext: z.string().min(10, "Market context must be at least 10 characters long."),
+  resolutionTime: z.string().optional(),
+  rules: z.string().optional(),
   category: z.string().min(1, "Category is required."),
   startDate: z.string().min(1, "Start date is required."),
   endDate: z.string().min(1, "End date is required."),
@@ -52,6 +58,12 @@ export function MarketCreator({ onCreated }: MarketCreatorProps) {
       question: "",
       slug: "",
       description: "",
+      yesCriteria: "",
+      noCriteria: "",
+      resolutionSource: "",
+      edgeCases: "",
+      marketContext: "",
+      resolutionTime: "",
       rules: "",
       category: "",
       startDate: "",
@@ -144,12 +156,21 @@ export function MarketCreator({ onCreated }: MarketCreatorProps) {
   async function onSubmit(data: MarketFormData) {
     const start = new Date(data.startDate);
     const end = new Date(data.endDate);
+    const resolutionTime = data.resolutionTime ? new Date(data.resolutionTime) : null;
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
       form.setError("startDate", { type: "manual", message: "Start/end date is invalid." });
       return;
     }
+    if (resolutionTime && Number.isNaN(resolutionTime.getTime())) {
+      form.setError("resolutionTime", { type: "manual", message: "Resolution time is invalid." });
+      return;
+    }
     if (end <= start) {
       form.setError("endDate", { type: "manual", message: "End date must be after start date." });
+      return;
+    }
+    if (resolutionTime && resolutionTime < start) {
+      form.setError("resolutionTime", { type: "manual", message: "Resolution time must be after start date." });
       return;
     }
 
@@ -159,7 +180,13 @@ export function MarketCreator({ onCreated }: MarketCreatorProps) {
         question: data.question.trim(),
         slug: data.slug.trim(),
         description: data.description.trim(),
-        rules: data.rules.trim(),
+        rules: data.rules?.trim() || null,
+        yes_criteria: data.yesCriteria.trim(),
+        no_criteria: data.noCriteria.trim(),
+        resolution_source: data.resolutionSource.trim(),
+        edge_cases: data.edgeCases.trim(),
+        market_context: data.marketContext.trim(),
+        resolution_time: resolutionTime ? resolutionTime.toISOString() : null,
         category: data.category.trim(),
         start_date: start.toISOString(),
         end_date: end.toISOString(),
@@ -184,6 +211,12 @@ export function MarketCreator({ onCreated }: MarketCreatorProps) {
         question: "",
         slug: "",
         description: "",
+        yesCriteria: "",
+        noCriteria: "",
+        resolutionSource: "",
+        edgeCases: "",
+        marketContext: "",
+        resolutionTime: "",
         rules: "",
         category: categories[0]?.slug || "",
         startDate: "",
@@ -208,7 +241,7 @@ export function MarketCreator({ onCreated }: MarketCreatorProps) {
       <CardHeader className="space-y-1 px-5 pb-3 pt-4">
         <CardTitle>Create a New Market</CardTitle>
         <CardDescription>
-          Fill in question, description, rules, category, dates, liquidity, and market image.
+          Fill in question, structured resolution rules, context, category, dates, liquidity, and market image.
         </CardDescription>
       </CardHeader>
       <CardContent className="px-5 pb-4 pt-0">
@@ -261,13 +294,113 @@ export function MarketCreator({ onCreated }: MarketCreatorProps) {
 
             <FormField
               control={form.control}
+              name="yesCriteria"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>What Counts as Yes</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder="Define explicit conditions that resolve this market as YES."
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="noCriteria"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>What Counts as No</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder="Define explicit conditions that resolve this market as NO."
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="resolutionSource"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Resolution Source</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="e.g., Official league website, government data portal"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="resolutionTime"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Resolution Time (optional)</FormLabel>
+                    <FormControl>
+                      <Input type="datetime-local" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <FormField
+              control={form.control}
+              name="edgeCases"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Edge Cases</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder="Explain cancellations, delays, missing data, and ambiguity handling."
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="marketContext"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Market Context</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder="Neutral context only. Avoid wording that pushes users toward YES/NO."
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
               name="rules"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Rules</FormLabel>
+                  <FormLabel>Legacy Rules (optional)</FormLabel>
                   <FormControl>
                     <Textarea
-                      placeholder="List detailed participation and resolution rules."
+                      placeholder="Optional free-form rules text for backward compatibility."
                       {...field}
                     />
                   </FormControl>

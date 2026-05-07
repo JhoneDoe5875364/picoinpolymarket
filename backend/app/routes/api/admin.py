@@ -45,6 +45,20 @@ def _parse_iso_datetime(value: str, field_name: str) -> datetime:
     return parsed
 
 
+def _parse_optional_iso_datetime(value: str, field_name: str) -> Optional[datetime]:
+    raw = value.strip()
+    if not raw:
+        return None
+    return _parse_iso_datetime(raw, field_name)
+
+
+def _normalize_optional_text(value: object) -> Optional[str]:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
 def _safe_image_name(filename: str) -> str:
     stem = FsPath(filename).name
     ext = FsPath(stem).suffix.lower()
@@ -73,6 +87,12 @@ async def create_market(request: Request, db: DbSession, user=Depends(verify_tok
     slug = data.get("slug")
     description = data.get("description")
     rules = data.get("rules")
+    yes_criteria = _normalize_optional_text(data.get("yes_criteria"))
+    no_criteria = _normalize_optional_text(data.get("no_criteria"))
+    edge_cases = _normalize_optional_text(data.get("edge_cases"))
+    market_context = _normalize_optional_text(data.get("market_context"))
+    resolution_source = _normalize_optional_text(data.get("resolution_source"))
+    resolution_time_raw = data.get("resolution_time")
     category_slug = data.get("category")
     category_id_raw = data.get("category_id")
     start_date_raw = data.get("start_date")
@@ -89,8 +109,25 @@ async def create_market(request: Request, db: DbSession, user=Depends(verify_tok
 
     start_date = _parse_iso_datetime(str(start_date_raw or ""), "start_date")
     end_date = _parse_iso_datetime(str(end_date_raw or ""), "end_date")
+    resolution_time = _parse_optional_iso_datetime(str(resolution_time_raw or ""), "resolution_time")
     if end_date <= start_date:
         raise HTTPException(status_code=400, detail="end_date must be after start_date")
+    if resolution_time is not None and resolution_time < start_date:
+        raise HTTPException(status_code=400, detail="resolution_time must be after start_date")
+
+    required_rules_fields = {
+        "yes_criteria": yes_criteria,
+        "no_criteria": no_criteria,
+        "resolution_source": resolution_source,
+        "edge_cases": edge_cases,
+    }
+    populated_required_fields = [key for key, value in required_rules_fields.items() if value]
+    if populated_required_fields and len(populated_required_fields) != len(required_rules_fields):
+        missing = [key for key, value in required_rules_fields.items() if not value]
+        raise HTTPException(
+            status_code=400,
+            detail=f"Missing required structured rule fields: {', '.join(missing)}",
+        )
 
     liquidity: Optional[Decimal] = None
     if liquidity_raw not in (None, ""):
@@ -126,6 +163,12 @@ async def create_market(request: Request, db: DbSession, user=Depends(verify_tok
                 category_id=resolved_cat,
                 description=description,
                 rules=rules,
+                yes_criteria=yes_criteria,
+                no_criteria=no_criteria,
+                edge_cases=edge_cases,
+                market_context=market_context,
+                resolution_source=resolution_source,
+                resolution_time=resolution_time,
                 start_date_naive=start_date,
                 end_date_naive=end_date,
                 liquidity=liquidity,
@@ -157,6 +200,12 @@ async def update_market(
     slug = str(data.get("slug") or "").strip()
     description = data.get("description")
     rules = data.get("rules")
+    yes_criteria = _normalize_optional_text(data.get("yes_criteria"))
+    no_criteria = _normalize_optional_text(data.get("no_criteria"))
+    edge_cases = _normalize_optional_text(data.get("edge_cases"))
+    market_context = _normalize_optional_text(data.get("market_context"))
+    resolution_source = _normalize_optional_text(data.get("resolution_source"))
+    resolution_time_raw = data.get("resolution_time")
     category_slug = data.get("category")
     category_id_raw = data.get("category_id")
     start_date_raw = data.get("start_date")
@@ -173,8 +222,25 @@ async def update_market(
 
     start_date = _parse_iso_datetime(str(start_date_raw or ""), "start_date")
     end_date = _parse_iso_datetime(str(end_date_raw or ""), "end_date")
+    resolution_time = _parse_optional_iso_datetime(str(resolution_time_raw or ""), "resolution_time")
     if end_date <= start_date:
         raise HTTPException(status_code=400, detail="end_date must be after start_date")
+    if resolution_time is not None and resolution_time < start_date:
+        raise HTTPException(status_code=400, detail="resolution_time must be after start_date")
+
+    required_rules_fields = {
+        "yes_criteria": yes_criteria,
+        "no_criteria": no_criteria,
+        "resolution_source": resolution_source,
+        "edge_cases": edge_cases,
+    }
+    populated_required_fields = [key for key, value in required_rules_fields.items() if value]
+    if populated_required_fields and len(populated_required_fields) != len(required_rules_fields):
+        missing = [key for key, value in required_rules_fields.items() if not value]
+        raise HTTPException(
+            status_code=400,
+            detail=f"Missing required structured rule fields: {', '.join(missing)}",
+        )
 
     liquidity: Optional[Decimal] = None
     if liquidity_raw not in (None, ""):
@@ -211,6 +277,12 @@ async def update_market(
                 category_id=resolved_cat,
                 description=description,
                 rules=rules,
+                yes_criteria=yes_criteria,
+                no_criteria=no_criteria,
+                edge_cases=edge_cases,
+                market_context=market_context,
+                resolution_source=resolution_source,
+                resolution_time=resolution_time,
                 start_date_naive=start_date,
                 end_date_naive=end_date,
                 liquidity=liquidity,

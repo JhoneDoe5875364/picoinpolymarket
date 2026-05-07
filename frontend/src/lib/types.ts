@@ -33,6 +33,11 @@ export interface Market {
   is_archived?: boolean;
   is_resolved?: boolean;
   rules?: string | null;
+  yes_criteria?: string | null;
+  no_criteria?: string | null;
+  edge_cases?: string | null;
+  market_context?: string | null;
+  resolution_time?: string | null;
   resolved_at?: string | null;
   resolved_outcome?: OutcomeSide | "cancelled" | null;
   resolved_by_user_id?: string | null;

@@ -338,6 +338,28 @@ async def run_seed_markets(session: AsyncSession) -> None:
 
         liquidity = Decimal(str(random.randint(SEED_MARKET_LIQUIDITY_MIN, SEED_MARKET_LIQUIDITY_MAX)))
         volume = SEED_MARKET_DEFAULT_VOLUME
+        resolution_time = end_date + timedelta(hours=random.randint(6, 48))
+
+        yes_criteria = (
+            f"Resolved YES if credible reporting confirms that {subject} {predicate} {target} {period} "
+            f"by the market close time."
+        )
+        no_criteria = (
+            f"Resolved NO if credible reporting confirms that the YES condition did not occur "
+            f"by the market close time."
+        )
+        edge_cases = (
+            "If the event is delayed, the market may remain pending until an official update is available. "
+            "If official sources conflict or the outcome remains ambiguous for an extended period, admin may "
+            "resolve using the most authoritative source listed in Resolution Source."
+        )
+        market_context = (
+            f"This market tracks whether {subject} {predicate} {target} {period}. "
+            "This context is informational only and does not suggest a YES or NO position."
+        )
+        resolution_source = (
+            "Official organizer announcement, government/public data releases, and widely recognized news wires."
+        )
 
         await _ensure_market(
             session,
@@ -359,6 +381,12 @@ async def run_seed_markets(session: AsyncSession) -> None:
             is_archived=False,
             is_resolved=False,
             rules=SEED_MARKET_RULE_TEMPLATE,
+            yes_criteria=yes_criteria,
+            no_criteria=no_criteria,
+            edge_cases=edge_cases,
+            market_context=market_context,
+            resolution_source=resolution_source,
+            resolution_time=resolution_time,
             created_at=start_date,
             updated_at=start_date,
         )

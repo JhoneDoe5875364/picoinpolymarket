@@ -18,6 +18,11 @@ class MarketCreate(BaseModel):
     resolution_source: Optional[str] = None
     description: Optional[str] = None
     rules: Optional[str] = None
+    yes_criteria: Optional[str] = None
+    no_criteria: Optional[str] = None
+    edge_cases: Optional[str] = None
+    market_context: Optional[str] = None
+    resolution_time: Optional[datetime] = None
     sources: List[Dict[str, Any]] = Field(default_factory=list)
     tags: List[str] = Field(default_factory=list)
 
@@ -37,6 +42,11 @@ class MarketUpdate(BaseModel):
     is_archived: Optional[bool] = None
     description: Optional[str] = None
     rules: Optional[str] = None
+    yes_criteria: Optional[str] = None
+    no_criteria: Optional[str] = None
+    edge_cases: Optional[str] = None
+    market_context: Optional[str] = None
+    resolution_time: Optional[datetime] = None
     sources: Optional[List[Dict[str, Any]]] = None
     tags: Optional[List[str]] = None
 
