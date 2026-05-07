@@ -51,6 +51,13 @@ export interface Market {
   is_ending_soon?: boolean;
   featured_rank?: number | null;
   sparkline?: number[];
+  price_history?: { timestamp?: number | string | null; probability?: number | string | null }[];
+  featured_comments?: {
+    id: number;
+    body?: string | null;
+    pi_username?: string | null;
+    created_at?: string | null;
+  }[];
 
   // Compatibility fields used by current frontend responses/components.
   traders?: number;

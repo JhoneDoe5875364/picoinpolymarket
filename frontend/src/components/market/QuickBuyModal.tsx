@@ -77,70 +77,70 @@ export default function QuickBuyModal({ open, marketId, outcome, marketQuestion,
 
   return (
     <div className="fixed inset-0 z-[60] flex items-end md:items-center justify-center bg-black/60 p-3 pb-[calc(env(safe-area-inset-bottom)+4.5rem)] md:pb-3">
-      <div className="w-full max-w-sm rounded-2xl bg-[#121212] border border-white/10 shadow-xl">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+      <div className="w-full max-w-sm rounded-2xl border border-border bg-card text-foreground shadow-xl">
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <h2 className="text-lg font-semibold">Quick Buy — {outcome}</h2>
-          <button onClick={onClose} className="text-sm opacity-80 hover:opacity-100">✕</button>
+          <button onClick={onClose} className="text-sm text-muted-foreground hover:text-foreground">✕</button>
         </div>
 
         <div className="p-4 space-y-3">
           {marketQuestion && (
-            <p className="text-sm text-white/80 leading-snug line-clamp-2">{marketQuestion}</p>
+            <p className="line-clamp-2 text-sm leading-snug text-muted-foreground">{marketQuestion}</p>
           )}
           <div className="flex justify-between items-center">
-            <label className="text-sm opacity-80">Shares</label>
+            <label className="text-sm text-muted-foreground">Shares</label>
             <input
               type="number"
               inputMode="decimal"
               step="0.01"
               min={0}
-              className="mt-1 w-[250px] rounded-xl bg-black/40 border border-white/15 px-3 py-2 outline-none"
+              className="mt-1 w-[250px] rounded-xl border border-border bg-background px-3 py-2 text-foreground outline-none"
               placeholder="e.g., 5"
               value={sharesInput}
               onChange={(e) => setSharesInput(e.target.value)}
             />
           </div>
-          <div className="space-y-2 rounded-xl border border-white/10 bg-black/20 p-3 text-sm">
+          <div className="space-y-2 rounded-xl border border-border/80 bg-muted/20 p-3 text-sm">
             <div className="flex justify-between">
-              <span className="text-white/70">price</span>
+              <span className="text-muted-foreground">price</span>
               <span>{price.toFixed(2)} π</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-white/70">shares</span>
+              <span className="text-muted-foreground">shares</span>
               <span>{shares.toFixed(2)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-white/70">piAmount</span>
+              <span className="text-muted-foreground">piAmount</span>
               <span>{piAmount.toFixed(2)} π</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-white/70">piFee</span>
+              <span className="text-muted-foreground">piFee</span>
               <span>{piFee.toFixed(2)} π</span>
             </div>
             <div className="flex justify-between font-semibold">
-              <span className="text-white/90">piTotalAmount</span>
+              <span className="text-foreground">piTotalAmount</span>
               <span>{piTotalAmount.toFixed(2)} π</span>
             </div>
             <div className="flex justify-between font-semibold">
-              <span className="text-white/90">potentialProfit</span>
+              <span className="text-foreground">potentialProfit</span>
               <span>{potentialProfit.toFixed(2)} π</span>
             </div>
           </div>
-          {msg && <div className="text-sm opacity-80 text-red-500">{msg}</div>}
+          {msg && <div className="text-sm text-destructive">{msg}</div>}
         </div>
 
-        <div className="px-4 py-3 flex items-center justify-end gap-2 border-t border-white/10">
+        <div className="flex items-center justify-end gap-2 border-t border-border px-4 py-3">
           <button
-            className="px-4 py-2 rounded-xl border border-white/20 hover:bg-white/5"
+            className="rounded-xl border border-border px-4 py-2 text-foreground hover:bg-muted/40"
             onClick={onClose}
             disabled={loading}
           >
             Cancel
           </button>
           <button
-            className={`px-4 py-2 rounded-md text-white ${
-              outcome === "YES" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-red-600 hover:bg-red-700"
-            } glowing-focus`}
+            className={`rounded-md px-4 py-2 text-white glowing-focus ${outcome === "YES" ? "btn-yes" : "btn-no"} ${
+              loading ? "opacity-80" : ""
+            }`}
             onClick={handlePay}
             disabled={loading}
           >

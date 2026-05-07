@@ -7,21 +7,21 @@ import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 
 export default function PlacePrediction({ marketId }: { marketId: string }) {
-  const [side, setSide] = useState<null | "yes" | "no">(null);
+  const [outcome, setOutcome] = useState<"YES" | "NO" | null>(null);
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
   // If the pathname changes, reset the modal and buy side states
   useEffect(() => {
     setOpen(false);
-    setSide(null);
+    setOutcome(null);
   }, [pathname]);
 
   // When the component unmounts, reset the modal and buy side states
   useEffect(() => {
     return () => {
       setOpen(false);
-      setSide(null);
+      setOutcome(null);
     };
   }, []);
 
@@ -32,7 +32,7 @@ export default function PlacePrediction({ marketId }: { marketId: string }) {
         <Button
           className="btn-yes glowing-focus"
           onClick={() => {
-            setSide("yes");
+            setOutcome("YES");
             setOpen(true);
           }}
         >
@@ -41,7 +41,7 @@ export default function PlacePrediction({ marketId }: { marketId: string }) {
         <Button
           className="btn-no glowing-focus"
           onClick={() => {
-            setSide("no");
+            setOutcome("NO");
             setOpen(true);
           }}
         >
@@ -49,18 +49,18 @@ export default function PlacePrediction({ marketId }: { marketId: string }) {
         </Button>
       </div>
 
-      {side && (
+      {outcome && (
         <QuickBuyModal
           open={open}
           marketId={marketId}
-          side={side}
+          outcome={outcome}
           onClose={() => {
             setOpen(false);
-            setSide(null);
+            setOutcome(null);
           }}
           onDone={() => {
             setOpen(false);
-            setSide(null);
+            setOutcome(null);
             // optional: fire a revalidation or SWR mutate here if you use it
           }}
         />

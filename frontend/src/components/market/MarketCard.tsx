@@ -8,14 +8,14 @@ import type { Market } from "@/lib/types";
 import { fmtShortDate } from "@/lib/dates";
 import MarketProbability from "@/components/market/MarketProbability";
 import QuickBuyModal from "@/components/market/QuickBuyModal";
-import { cn } from "@/lib/utils";
+import { cn, roundLocalePi } from "@/lib/utils";
 // -----------------------------------------------------
 const DEFAULT_MARKET_ICON = "/images/markets/market-default.png";
 
 function fmtNum(n: unknown, fallback = "0") {
-  if (typeof n === "number" && Number.isFinite(n)) return n.toLocaleString();
+  if (typeof n === "number" && Number.isFinite(n)) return Math.trunc(n).toLocaleString();
   const num = typeof n === "string" ? Number(n) : NaN;
-  return Number.isFinite(num) ? num.toLocaleString() : fallback;
+  return Number.isFinite(num) ? Math.trunc(num).toLocaleString() : fallback;
 }
 function titleOf(m: Market | any) { return m?.question ?? "Untitled market"; }
 function iconOf(m: Market | any) {
@@ -169,8 +169,8 @@ export function MarketCard({ market }: { market: Market | any }) {
               <p className="mt-2 line-clamp-1 text-[11px] text-muted-foreground">{signalParts.join(" · ")}</p>
             )}
             <div className="mt-2 flex justify-between text-xs text-muted-foreground md:mt-4">
-              <span>Volume: <span className="font-semibold">{fmtNum(volume)} π</span></span>
-              <span>End Date: {fmtShortDate(market?.end_date)}</span>
+              <span>· Volume: <span className="font-semibold">{roundLocalePi(volume)}</span></span>
+              <span>· End Date: <span className="font-semibold">{fmtShortDate(market?.end_date)}</span></span>
             </div>
           </CardContent>
         </Card>

@@ -69,6 +69,18 @@ async def list_markets(
     return {"ok": True, "data": jsonable_encoder(rows)}
 
 
+@router.get("/featured", summary="List featured markets")
+async def list_featured_markets(
+    db: DbSession,
+    limit: int = Query(default=5, ge=1, le=20),
+):
+    rows = await markets_repo.list_featured_markets(
+        db,
+        limit=limit,
+    )
+    return {"ok": True, "data": jsonable_encoder(rows)}
+
+
 @router.get("/summary", summary="Get market status summary")
 async def get_market_status_summary(
     db: DbSession,

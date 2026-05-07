@@ -119,11 +119,11 @@
 
 @layer components {
   .btn-yes {
-    background-color: #2e5cff;
+    background-color: #059669;
     @apply text-white font-bold hover:opacity-90 transition-opacity;
   }
   .btn-no {
-    background-color: #000000;
+    background-color: #dc2626;
     @apply text-white font-bold hover:opacity-90 transition-opacity;
   }
   .glowing-focus {

@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.config import Config
+from app.repositories import comments as comments_repo
 from app.models.tables.category import Category
 from app.models.tables.market import Market
 from app.models.tables.market_stats import MarketStat
@@ -276,6 +277,87 @@ async def market_status_summary(
         "pending": int(row.pending_count or 0),
         "resolved": int(row.resolved_count or 0),
     }
+
+
+async def list_featured_markets(
+    session: AsyncSession,
+    *,
+    limit: int = 5,
+) -> List[dict[str, Any]]:
+    now_utc = datetime.now(timezone.utc)
+    new_window_start = now_utc - timedelta(hours=72)
+    ending_soon_window_end = now_utc + timedelta(hours=72)
+
+    stmt = (
+        select(Market, MarketStat)
+        .options(selectinload(Market.category), selectinload(Market.market_tokens))
+        .outerjoin(MarketStat, MarketStat.market_id == Market.id)
+        .where(
+            Market.is_active == True,
+            Market.is_closed == False,
+            Market.is_resolved == False,
+        )
+        .order_by(
+            func.coalesce(MarketStat.trending_score, 0).desc(),
+            func.coalesce(MarketStat.hot_score, 0).desc(),
+            func.coalesce(MarketStat.activity_24h, 0).desc(),
+            Market.volume.desc(),
+            Market.created_at.desc(),
+        )
+        .limit(limit)
+    )
+
+    result = await session.execute(stmt)
+    rows = result.all()
+    payload: list[dict[str, Any]] = []
+    featured_comments_limit = 12
+    for idx, pair in enumerate(rows):
+        market, stats = pair
+        item = market_to_dict(market)
+        item["trades_24h"] = int(getattr(stats, "trades_24h", 0) or 0)
+        item["comments_24h"] = int(getattr(stats, "comments_24h", 0) or 0)
+        item["activity_24h"] = int(getattr(stats, "activity_24h", 0) or 0)
+        item["price_move_24h"] = float(getattr(stats, "price_move_24h", 0) or 0)
+        item["trending_score"] = float(getattr(stats, "trending_score", 0) or 0)
+        item["hot_score"] = float(getattr(stats, "hot_score", 0) or 0)
+        is_ending_soon = False
+        if item.get("end_date"):
+            try:
+                is_ending_soon = bool(
+                    item["end_date"] >= now_utc
+                    and item["end_date"] <= ending_soon_window_end
+                )
+            except TypeError:
+                is_ending_soon = False
+        item["is_ending_soon"] = is_ending_soon
+        item["labels"] = _build_market_labels(
+            item,
+            now_utc=now_utc,
+            new_window_start=new_window_start,
+            ending_soon_window_end=ending_soon_window_end,
+        )
+        price_history = await market_prices_history(
+            session,
+            market.id,
+            interval="1D",
+        )
+        item["price_history"] = price_history
+        item["sparkline"] = [
+            float(point.get("probability", 0))
+            for point in price_history
+            if point.get("probability") is not None
+        ]
+        comments_rows = await comments_repo.list_market_comments(
+            session,
+            market_id=market.id,
+            offset=0,
+            limit=featured_comments_limit,
+            include_deleted=False,
+        )
+        item["featured_comments"] = comments_rows.get("items", [])
+        item["featured_rank"] = idx + 1
+        payload.append(item)
+    return payload
 
 
 async def get_market_by_id(session: AsyncSession, market_id: int) -> Optional[dict[str, Any]]:
