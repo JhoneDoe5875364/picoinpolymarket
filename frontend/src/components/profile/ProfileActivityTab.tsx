@@ -6,6 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn, toPriceLabel } from '@/lib/utils';
 import { apiFetchWithToken } from '@/lib/api';
+import { TRADE_TERMS } from '@/lib/trade/tradeTerms';
 
 export type TradeRow = {
   id: string;
@@ -190,7 +191,7 @@ export function ProfileActivityTab({
                 <TableRow className="hover:bg-transparent">
                   <TableHead className="w-28 uppercase tracking-wide text-xs">Type</TableHead>
                   <TableHead className="uppercase tracking-wide text-xs">Market</TableHead>
-                  <TableHead className="w-20 md:w-40 text-right uppercase tracking-wide text-xs">Amount</TableHead>
+                  <TableHead className="w-20 md:w-40 text-right uppercase tracking-wide text-xs">{TRADE_TERMS.amount}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -241,6 +242,7 @@ export function ProfileActivityTab({
                       </TableCell>
                       <TableCell className="text-right">
                         <p className="text-sm font-bold leading-none">{trade.piAmount.toFixed(2)} π</p>
+                        <p className="mt-1 text-[11px] text-muted-foreground">{TRADE_TERMS.amount}</p>
                         <p className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground">
                           {toRelativeTimeLabel(trade.createdAt)}
                         </p>

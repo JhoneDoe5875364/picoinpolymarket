@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { cn, toPercentLabel, toPriceLabel, toSignedMoney } from '@/lib/utils';
 import { PositionsToolbar } from '@/components/profile/PositionsToolbar';
 import { apiFetchWithToken } from '@/lib/api';
+import { TRADE_TERMS } from '@/lib/trade/tradeTerms';
 
 export type PositionRow = {
   id: string;
@@ -27,7 +28,7 @@ const SORT_OPTIONS = [
   'Alphabetically',
   'Average Price',
   'Current Price',
-  'Pi Amount',
+  'Amount',
 ] as const;
 
 const PAGE_SIZE = 10;
@@ -80,7 +81,7 @@ function mapSortOptionToApi(sortBy: (typeof SORT_OPTIONS)[number]): string {
       return 'avg_price';
     case 'Current Price':
       return 'current_price';
-    case 'Pi Amount':
+    case 'Amount':
       return 'pi_amount';
     default:
       return 'pnl';
@@ -338,6 +339,7 @@ export function ProfilePositionsTab({
                       </TableCell>
                       <TableCell className="text-right">
                         <p className="text-sm md:text-md font-bold leading-none">{position.currentPiAmount.toFixed(2)}π</p>
+                        <p className="mt-1 text-[11px] text-muted-foreground">{TRADE_TERMS.amount}</p>
                         <p className={cn('mt-1 text-xs font-semibold', pnlClass)}>
                           {toSignedMoney(position.pnl)} ({toPercentLabel(position.pnlPercent)})
                         </p>

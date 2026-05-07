@@ -4,9 +4,14 @@ import { useMemo, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import type { Market } from "@/lib/types";
-import { FEE } from "@/lib/constants";
-import { executeBuyTrade } from "@/lib/trade/executeBuyTrade";
+import {
+  executeBuyTrade,
+  type ExecuteBuyTradeResult,
+  type TradeFailureReason,
+  type TradeProgressStage,
+} from "@/lib/trade/executeBuyTrade";
 import { Card, CardContent } from "../ui/card";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -15,6 +20,12 @@ import { RadioGroup, RadioGroupItem } from "../ui/radio-group";
 import { Separator } from "../ui/separator";
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  calculateTradeBreakdown,
+  formatPi,
+  sanitizeShares,
+  TRADE_TERMS,
+} from "@/lib/trade/tradeTerms";
 
 
 interface PredictionPanelProps {
@@ -29,6 +40,9 @@ export function PredictionPanel({ market }: PredictionPanelProps) {
   const [outcome, setOutcome] = useState<"YES" | "NO">("YES");
   const [busy, setBusy] = useState(false);
   const [shares, setShares] = useState<number>(1);
+  const [stage, setStage] = useState<TradeProgressStage | null>(null);
+  const [failureReason, setFailureReason] = useState<TradeFailureReason | null>(null);
+  const [tradeResult, setTradeResult] = useState<ExecuteBuyTradeResult | null>(null);
   const yesPrice = market?.outcome_price_yes ?? 0.5;
   const noPrice = market?.outcome_price_no ?? 0.5;
 
@@ -37,10 +51,29 @@ export function PredictionPanel({ market }: PredictionPanelProps) {
     [outcome, yesPrice, noPrice]
   );
 
-  const piAmount = useMemo(() => selectedPrice * shares, [selectedPrice, shares]);
-  const piFee = useMemo(() => piAmount * FEE, [piAmount]);
-  const piTotalAmount = useMemo(() => piAmount + piFee, [piAmount, piFee]);
-  const potentialProfit = useMemo(() => shares, [shares]);
+  const safeShares = useMemo(() => sanitizeShares(shares), [shares]);
+  const breakdown = useMemo(
+    () => calculateTradeBreakdown(selectedPrice, safeShares),
+    [selectedPrice, safeShares]
+  );
+
+  const stageLabelMap: Record<TradeProgressStage, string> = {
+    preparing_payment: "Preparing payment",
+    awaiting_pi_confirmation: "Awaiting Pi confirmation",
+    payment_detected: "Payment detected",
+    position_recorded: "Position recorded",
+    prediction_confirmed: "Prediction confirmed",
+  };
+
+  const failureGuideMap: Record<TradeFailureReason, string> = {
+    payment_cancelled: "Payment was cancelled. Re-open the wallet approval and try again.",
+    payment_pending: "Payment is still pending. Refresh this page in a moment to check status.",
+    payment_detected_position_not_recorded:
+      "Payment was detected but position recording failed. Contact support with your reference ID.",
+    position_recorded_confirmation_delayed:
+      "Position may be recorded, but confirmation is delayed. Check your profile positions shortly.",
+    network_error: "Network error occurred. Verify your connection and retry.",
+  };
 
   const handlePay = async () => {
     if (!ppxUser) {
@@ -52,20 +85,38 @@ export function PredictionPanel({ market }: PredictionPanelProps) {
       return;
     }
 
+    if (safeShares <= 0) {
+      toast({
+        title: "Invalid amount",
+        description: "Enter a valid amount before placing a prediction.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setStage("preparing_payment");
+    setFailureReason(null);
+    setTradeResult(null);
     setBusy(true);
 
     try {
-      await executeBuyTrade({
+      const result = await executeBuyTrade({
         userId: ppxUser.id,
         marketId: market.id,
         outcome,
         price: selectedPrice,
-        shares,
+        shares: safeShares,
         toast,
         onPositionCreated: () => router.refresh(),
+        onStageChange: setStage,
       });
+      setTradeResult(result);
+      if (!result.success) {
+        setFailureReason(result.failureReason ?? "payment_pending");
+      }
     } catch (error) {
       console.error(error);
+      setFailureReason("network_error");
       toast({
         title: "Deposit Failed",
         description: "The deposit was cancelled or failed. Please try again.",
@@ -130,7 +181,7 @@ export function PredictionPanel({ market }: PredictionPanelProps) {
                 type="number"
                 min={1}
                 value={shares}
-                onChange={(e) => setShares(+e.target.value)}
+                onChange={(e) => setShares(Number(e.target.value))}
                 className="h-8 w-1/2 text-right text-foreground"
               />
             </div>
@@ -139,26 +190,64 @@ export function PredictionPanel({ market }: PredictionPanelProps) {
           <div className="space-y-2 text-sm">
             <Separator />
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Actual Pi Amount (excl. fee)</span>
-              <span>{piAmount.toFixed(2)} π</span>
+              <span className="text-muted-foreground">{TRADE_TERMS.amount}</span>
+              <span>{formatPi(breakdown.amount)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Transaction Fee ({(FEE * 100).toFixed(0)}%)</span>
-              <span>{piFee.toFixed(2)} π</span>
+              <span className="text-muted-foreground">{TRADE_TERMS.fee}</span>
+              <span>{formatPi(breakdown.fee)}</span>
+            </div>
+            <div className="flex justify-between font-semibold">
+              <span>{TRADE_TERMS.totalCost}</span>
+              <span>{formatPi(breakdown.totalCost)}</span>
             </div>
           </div>
 
           <div className="space-y-2 text-sm">
             <Separator />
             <div className="flex justify-between font-semibold">
-              <span>Total Pi Amount (incl. fee)</span>
-              <span>{piTotalAmount.toFixed(2)} π</span>
+              <span>{TRADE_TERMS.estimatedReturn} (if correct)</span>
+              <span>{formatPi(breakdown.estimatedReturn)}</span>
             </div>
             <div className="flex justify-between font-semibold">
-              <span>Potential Profit</span>
-              <span>{potentialProfit.toFixed(2)} π</span>
+              <span>{TRADE_TERMS.netResult} after cost</span>
+              <span>{formatPi(breakdown.netResult)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">{TRADE_TERMS.lossIfIncorrect}</span>
+              <span>{formatPi(breakdown.lossIfIncorrect)}</span>
             </div>
           </div>
+
+          {stage && (
+            <div className="rounded-md border border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">Status:</span> {stageLabelMap[stage]}
+            </div>
+          )}
+
+          {failureReason && (
+            <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+              {failureGuideMap[failureReason]}
+            </div>
+          )}
+
+          {tradeResult?.success && (
+            <div className="rounded-md border border-emerald-500/40 bg-emerald-500/5 p-3 text-xs">
+              <p className="font-semibold text-foreground">Prediction submitted successfully.</p>
+              <div className="mt-2 space-y-1 text-muted-foreground">
+                <p>{market.question}</p>
+                <p>Side: {outcome}</p>
+                <p>{TRADE_TERMS.amount}: {formatPi(breakdown.amount)}</p>
+                <p>{TRADE_TERMS.fee}: {formatPi(breakdown.fee)}</p>
+                <p>Reference ID: {tradeResult.txid || tradeResult.paymentId || "Pending"}</p>
+                <p>Wallet status: {tradeResult.status === "confirmed" ? "Confirmed" : "Pending"}</p>
+                <p>Expected resolution: {market.resolution_time || market.end_date || "Pending"}</p>
+              </div>
+              <Link href="/profile" className="mt-2 inline-block font-medium text-primary underline">
+                View position in profile
+              </Link>
+            </div>
+          )}
 
           <Button
             onClick={handlePay}
@@ -166,6 +255,7 @@ export function PredictionPanel({ market }: PredictionPanelProps) {
               "w-full text-lg font-bold tracking-wider",
               "bg-primary text-primary-foreground hover:bg-primary/90 shadow-none"
             )}
+            disabled={busy}
           >
             {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Trade

@@ -19,6 +19,32 @@ type ExecuteBuyTradeParams = {
   shares: number;
   toast: ToastLike;
   onPositionCreated?: () => void;
+  onStageChange?: (stage: TradeProgressStage) => void;
+};
+
+export type TradeProgressStage =
+  | "preparing_payment"
+  | "awaiting_pi_confirmation"
+  | "payment_detected"
+  | "position_recorded"
+  | "prediction_confirmed";
+
+export type TradeFailureReason =
+  | "payment_cancelled"
+  | "payment_pending"
+  | "payment_detected_position_not_recorded"
+  | "position_recorded_confirmation_delayed"
+  | "network_error";
+
+export type ExecuteBuyTradeResult = {
+  success: boolean;
+  status: "confirmed" | "cancelled" | "failed";
+  paymentId?: string;
+  txid?: string;
+  orderCreated: boolean;
+  paymentCreated: boolean;
+  positionRecorded: boolean;
+  failureReason?: TradeFailureReason;
 };
 
 export async function executeBuyTrade({
@@ -29,10 +55,13 @@ export async function executeBuyTrade({
   shares,
   toast,
   onPositionCreated,
+  onStageChange,
 }: ExecuteBuyTradeParams) {
   if (!Number.isFinite(shares) || shares <= 0) {
     throw new Error("Invalid shares amount");
   }
+
+  onStageChange?.("preparing_payment");
 
   const scopes = ["payments"];
   const onIncompletePaymentFound = async (payment: unknown) => {
@@ -68,7 +97,8 @@ export async function executeBuyTrade({
     }),
   });
 
-  if (orderRes.ok) {
+  const orderCreated = Boolean(orderRes.ok);
+  if (orderCreated) {
     toast({
       title: "Order created",
       description: "Order created successfully",
@@ -89,7 +119,8 @@ export async function executeBuyTrade({
     }),
   });
 
-  if (paymentRes.ok) {
+  const paymentCreated = Boolean(paymentRes.ok);
+  if (paymentCreated) {
     toast({
       title: "Payment created",
       description: "Payment created successfully",
@@ -101,6 +132,16 @@ export async function executeBuyTrade({
     });
   }
 
+  onStageChange?.("awaiting_pi_confirmation");
+
+  let paymentIdRef: string | undefined;
+  let txidRef: string | undefined;
+  let positionRecorded = false;
+  let succeeded = false;
+  let failureReason: TradeFailureReason | undefined;
+  let status: ExecuteBuyTradeResult["status"];
+  status = "failed";
+
   await pi.createPayment(
     {
       amount: shares,
@@ -109,6 +150,7 @@ export async function executeBuyTrade({
     },
     {
       onReadyForServerApproval: async (paymentId: string) => {
+        paymentIdRef = paymentId;
         await apiFetchWithToken(`/pi/payments/approve`, {
           method: "POST",
           headers: {
@@ -118,6 +160,10 @@ export async function executeBuyTrade({
         });
       },
       onReadyForServerCompletion: async (paymentId: string, txid: string) => {
+        paymentIdRef = paymentId;
+        txidRef = txid;
+        onStageChange?.("payment_detected");
+
         const completeRes = await apiFetchWithToken<{ status?: string }>(`/pi/payments/complete`, {
           method: "POST",
           headers: {
@@ -137,21 +183,41 @@ export async function executeBuyTrade({
           });
 
           if (positionRes.ok) {
+            positionRecorded = true;
+            onStageChange?.("position_recorded");
             onPositionCreated?.();
-          }
+            onStageChange?.("prediction_confirmed");
+            succeeded = true;
+            status = "confirmed";
 
-          toast({
-            title: "Deposit Successful",
-            description: `Successfully deposited ${shares} π from your wallet.`,
-          });
+            toast({
+              title: "Deposit Successful",
+              description: `Successfully deposited ${shares} π from your wallet.`,
+            });
+          } else {
+            failureReason = "payment_detected_position_not_recorded";
+            status = "failed";
+            toast({
+              title: "Position Recording Failed",
+              description: "Payment was detected, but we could not record your position.",
+              variant: "destructive",
+            });
+          }
         } else {
+          failureReason = "position_recorded_confirmation_delayed";
+          status = "failed";
           toast({
             title: "Deposit Failed",
-            description: `Failed deposited ${shares} π from your wallet.`,
+            description: `Could not complete ${shares} π deposit confirmation.`,
+            variant: "destructive",
           });
         }
       },
       onCancel: async (paymentId: string) => {
+        paymentIdRef = paymentId;
+        failureReason = "payment_cancelled";
+        status = "cancelled";
+
         const cancelRes = await apiFetchWithToken<{ status?: string }>(`/pi/payments/cancel`, {
           method: "POST",
           headers: {
@@ -170,6 +236,9 @@ export async function executeBuyTrade({
       },
       onError: (error: unknown) => {
         console.error(error);
+        failureReason = "network_error";
+        status = "failed";
+
         toast({
           title: "Deposit Failed",
           description: "An error occurred during the deposit. Please try again.",
@@ -178,4 +247,17 @@ export async function executeBuyTrade({
       },
     }
   );
+
+  return {
+    success: succeeded,
+    status,
+    paymentId: paymentIdRef,
+    txid: txidRef,
+    orderCreated,
+    paymentCreated,
+    positionRecorded,
+    failureReason:
+      failureReason ??
+      (succeeded ? undefined : "payment_pending"),
+  } satisfies ExecuteBuyTradeResult;
 }

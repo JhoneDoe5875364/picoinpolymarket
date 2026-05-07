@@ -292,19 +292,19 @@ export function AdminMetricsDashboard() {
           selectedPeriod={selectedPeriod}
         />
         <MetricPeriodTable
-          title="User Purchased PI"
+          title="Total Cost Collected"
           values={data.total_pi_purchased}
           selectedPeriod={selectedPeriod}
           format={roundLocalePi}
         />
         <MetricPeriodTable
-          title="Generated Fees"
+          title="Fee Generated"
           values={data.total_fee_generated}
           selectedPeriod={selectedPeriod}
           format={roundLocalePi}
         />
         <MetricPeriodTable
-          title="Settled PI"
+          title="Estimated Return Settled"
           values={data.total_pi_claimed}
           selectedPeriod={selectedPeriod}
           format={roundLocalePi}
