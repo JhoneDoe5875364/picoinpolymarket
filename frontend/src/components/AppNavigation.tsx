@@ -77,10 +77,9 @@ export function AppNavigation({ currentUser: _currentUser }: AppNavigationProps)
               <span className="mx-2 text-muted-foreground/60 select-none" aria-hidden="true">
                 |
               </span>
-              {categoryMenuItems.map((category) => {
-                const isAll = category === "All";
-                const href = isAll ? "/" : `/${categoryToSlug(category)}`;
-                const isActive = isAll ? pathname === "/" : selectedCategory === category;
+              {MARKET_CATEGORIES.map((category) => {
+                const href = categoryToSlug(category);
+                const isActive = selectedCategory === category;
 
                 return (
                   <Link

@@ -14,7 +14,7 @@ export const MARKET_CATEGORIES = [
 export type MarketCategory = (typeof MARKET_CATEGORIES)[number];
 
 export const MARKET_DISCOVERY_MENUS = [
-  { key: "trending", label: "Trending", slug: "trending" },
+  { key: "trending", label: "Trending", slug: "" },
   { key: "new", label: "New", slug: "new" },
   { key: "hot", label: "Hot", slug: "hot" },
   { key: "ending_soon", label: "Ending Soon", slug: "ending-soon" },
