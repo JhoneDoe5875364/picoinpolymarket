@@ -27,12 +27,11 @@ export function AppNavigation({ currentUser: _currentUser }: AppNavigationProps)
   const pathSegment = pathname.split("/")[1] ?? "";
   const selectedCategory = pathname === "/" ? "All" : slugToCategory(pathSegment);
   const selectedDiscovery = slugToDiscovery(pathSegment);
-  const categoryMenuItems = ["All" as const, ...MARKET_CATEGORIES];
   const adminMenuItems = [
+    { label: "Metrics", href: "/admin/metrics", section: "metrics" },
     { label: "Markets", href: "/admin/markets", section: "markets" },
     { label: "Suggestions", href: "/admin/suggestions", section: "suggestions" },
     { label: "Users", href: "/admin/users", section: "users" },
-    { label: "Metrics", href: "/admin/metrics", section: "metrics" },
   ] as const;
 
   return (
