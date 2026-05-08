@@ -8,7 +8,6 @@ import { ArrowLeft, Calendar, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
-import { CardDescription, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -313,18 +312,36 @@ export function MarketEditor({ marketId }: MarketEditorProps) {
         <Button variant="ghost" onClick={() => router.push("/admin/markets")} className="mb-2 p-2">
           <ArrowLeft className="h-4 w-4 mr-2" /> Manage Markets
         </Button>
-        <div>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      </div>
+      <h2 className="text-xl font-semibold leading-none tracking-tight">Edit Market</h2>
+      <p className="text-xs text-muted-foreground">
+        Update question text, resolution criteria, dates, liquidity, and image for this market.
+      </p>
+
+      {isLoading ? (
+        <p className="text-xs text-muted-foreground">Loading market editor...</p>
+      ) : null}
+
+      <div className="space-y-4">
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <div className="grid grid-cols-1 gap-2">
               <FormField
                 control={form.control}
                 name="question"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-xs text-muted-foreground">Question</FormLabel>
-                    <FormControl>
-                      <Input className="text-xs" placeholder="e.g., Will X happen by Y date?" {...field} />
-                    </FormControl>
+                    <div className="flex items-center gap-3 md:block md:space-y-0">
+                      <FormLabel className="w-24 shrink-0 md:w-auto text-xs text-muted-foreground">Question</FormLabel>
+                      <FormControl>
+                        <Input
+                          className="text-xs focus-visible:outline-none focus-visible:ring-0 w-full"
+                          placeholder="e.g., Will X happen by Y date?"
+                          {...field}
+                          disabled={isLoading || isSubmitting}
+                        />
+                      </FormControl>
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -335,10 +352,17 @@ export function MarketEditor({ marketId }: MarketEditorProps) {
                 name="slug"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-xs text-muted-foreground">Slug</FormLabel>
-                    <FormControl>
-                      <Input className="text-xs" placeholder="e.g., will-btc-hit-100k-by-2026" {...field} />
-                    </FormControl>
+                    <div className="flex items-center gap-3 md:block md:space-y-0">
+                      <FormLabel className="w-24 shrink-0 md:w-auto text-xs text-muted-foreground">Slug</FormLabel>
+                      <FormControl>
+                        <Input
+                          className="text-xs focus-visible:outline-none focus-visible:ring-0 w-full"
+                          placeholder="e.g., will-btc-hit-100k-by-2026"
+                          {...field}
+                          disabled={isLoading || isSubmitting}
+                        />
+                      </FormControl>
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -349,14 +373,17 @@ export function MarketEditor({ marketId }: MarketEditorProps) {
                 name="description"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-xs text-muted-foreground">Description</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        className="text-xs"
-                        placeholder="Describe the market context and settlement reference details..."
-                        {...field}
-                      />
-                    </FormControl>
+                    <div className="flex items-center gap-3 md:block md:space-y-0">
+                      <FormLabel className="w-24 shrink-0 md:w-auto text-xs text-muted-foreground">Description</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          className="text-xs focus-visible:outline-none focus-visible:ring-0 w-full"
+                          placeholder="Describe the market context and settlement reference details..."
+                          {...field}
+                          disabled={isLoading || isSubmitting}
+                        />
+                      </FormControl>
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -367,14 +394,17 @@ export function MarketEditor({ marketId }: MarketEditorProps) {
                 name="yesCriteria"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-xs text-muted-foreground">What Counts as Yes</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        className="text-xs"
-                        placeholder="Define explicit conditions that resolve this market as YES."
-                        {...field}
-                      />
-                    </FormControl>
+                    <div className="flex items-center gap-3 md:block md:space-y-0">
+                      <FormLabel className="w-24 shrink-0 md:w-auto text-xs text-muted-foreground">Yes Criteria</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          className="text-xs focus-visible:outline-none focus-visible:ring-0 w-full"
+                          placeholder="Define explicit conditions that resolve this market as YES."
+                          {...field}
+                          disabled={isLoading || isSubmitting}
+                        />
+                      </FormControl>
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -385,65 +415,85 @@ export function MarketEditor({ marketId }: MarketEditorProps) {
                 name="noCriteria"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-xs text-muted-foreground">What Counts as No</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        className="text-xs"
-                        placeholder="Define explicit conditions that resolve this market as NO."
-                        {...field}
-                      />
-                    </FormControl>
+                    <div className="flex items-center gap-3 md:block md:space-y-0">
+                      <FormLabel className="w-24 shrink-0 md:w-auto text-xs text-muted-foreground">No Criteria</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          className="text-xs focus-visible:outline-none focus-visible:ring-0 w-full"
+                          placeholder="Define explicit conditions that resolve this market as NO."
+                          {...field}
+                          disabled={isLoading || isSubmitting}
+                        />
+                      </FormControl>
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+            </div>
 
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <FormField
-                  control={form.control}
-                  name="resolutionSource"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-xs text-muted-foreground">Resolution Source</FormLabel>
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="resolutionSource"
+                render={({ field }) => (
+                  <FormItem>
+                    <div className="flex items-center gap-3 md:block md:space-y-0">
+                      <FormLabel className="w-24 shrink-0 md:w-auto text-xs text-muted-foreground">Resolution Source</FormLabel>
                       <FormControl>
                         <Input
-                          className="text-xs"
+                          className="text-xs focus-visible:outline-none focus-visible:ring-0 w-full"
                           placeholder="e.g., Official league website, government data portal"
                           {...field}
+                          disabled={isLoading || isSubmitting}
                         />
                       </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="resolutionTime"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-xs text-muted-foreground">Resolution Time (optional)</FormLabel>
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="resolutionTime"
+                render={({ field }) => (
+                  <FormItem>
+                    <div className="flex items-center gap-3 md:block md:space-y-0">
+                      <FormLabel className="w-24 shrink-0 md:w-auto text-xs text-muted-foreground">
+                        Resolution Time (optional)
+                      </FormLabel>
                       <FormControl>
-                        <Input className="text-xs" type="datetime-local" {...field} />
+                        <Input
+                          className="text-xs focus-visible:outline-none focus-visible:ring-0 w-full"
+                          type="datetime-local"
+                          {...field}
+                          disabled={isLoading || isSubmitting}
+                        />
                       </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
+            <div className="grid grid-cols-1 gap-2">
               <FormField
                 control={form.control}
                 name="edgeCases"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-xs text-muted-foreground">Edge Cases</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        className="text-xs"
-                        placeholder="Explain cancellations, delays, missing data, and ambiguity handling."
-                        {...field}
-                      />
-                    </FormControl>
+                    <div className="flex items-center gap-3 md:block md:space-y-0">
+                      <FormLabel className="w-24 shrink-0 md:w-auto text-xs text-muted-foreground">Edge Cases</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          className="text-xs focus-visible:outline-none focus-visible:ring-0 w-full"
+                          placeholder="Explain cancellations, delays, missing data, and ambiguity handling."
+                          {...field}
+                          disabled={isLoading || isSubmitting}
+                        />
+                      </FormControl>
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -454,14 +504,17 @@ export function MarketEditor({ marketId }: MarketEditorProps) {
                 name="marketContext"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-xs text-muted-foreground">Market Context</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        className="text-xs"
-                        placeholder="Neutral context only. Avoid wording that pushes users toward YES/NO."
-                        {...field}
-                      />
-                    </FormControl>
+                    <div className="flex items-center gap-3 md:block md:space-y-0">
+                      <FormLabel className="w-24 shrink-0 md:w-auto text-xs text-muted-foreground">Market Context</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          className="text-xs focus-visible:outline-none focus-visible:ring-0 w-full"
+                          placeholder="Neutral context only. Avoid wording that pushes users toward YES/NO."
+                          {...field}
+                          disabled={isLoading || isSubmitting}
+                        />
+                      </FormControl>
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -472,30 +525,39 @@ export function MarketEditor({ marketId }: MarketEditorProps) {
                 name="rules"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-xs text-muted-foreground">Legacy Rules (optional)</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        className="text-xs"
-                        placeholder="Optional free-form rules text for backward compatibility."
-                        {...field}
-                      />
-                    </FormControl>
+                    <div className="flex items-center gap-3 md:block md:space-y-0">
+                      <FormLabel className="w-24 shrink-0 md:w-auto text-xs text-muted-foreground">Legacy Rules</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          className="text-xs focus-visible:outline-none focus-visible:ring-0 w-full"
+                          placeholder="Optional free-form rules text for backward compatibility."
+                          {...field}
+                          disabled={isLoading || isSubmitting}
+                        />
+                      </FormControl>
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+            </div>
 
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <FormField
-                  control={form.control}
-                  name="category"
-                  render={({ field }) => (
-                    <FormItem className="grid grid-cols-[92px_1fr] items-center gap-2 md:block">
-                      <FormLabel className="m-0 text-xs text-muted-foreground">Category</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-4">
+              <FormField
+                control={form.control}
+                name="category"
+                render={({ field }) => (
+                  <FormItem>
+                    <div className="flex items-center gap-3 md:block md:space-y-0">
+                      <FormLabel className="w-24 shrink-0 md:w-auto text-xs text-muted-foreground">Category</FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                        disabled={isLoading || isSubmitting}
+                      >
                         <FormControl>
-                          <SelectTrigger className="w-full text-xs">
-                            <SelectValue placeholder="Select a category" />
+                          <SelectTrigger className="flex-1 md:w-full">
+                            <SelectValue className="text-xs" placeholder="Select category" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
@@ -506,17 +568,19 @@ export function MarketEditor({ marketId }: MarketEditorProps) {
                           ))}
                         </SelectContent>
                       </Select>
-                      <FormMessage className="col-span-2 md:col-span-1" />
-                    </FormItem>
-                  )}
-                />
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-                <FormField
-                  control={form.control}
-                  name="liquidity"
-                  render={({ field }) => (
-                    <FormItem className="grid grid-cols-[92px_1fr] items-center gap-2 md:block">
-                      <FormLabel className="m-0 text-xs text-muted-foreground">Liquidity</FormLabel>
+              <FormField
+                control={form.control}
+                name="liquidity"
+                render={({ field }) => (
+                  <FormItem>
+                    <div className="flex items-center gap-3 md:block md:space-y-0">
+                      <FormLabel className="w-24 shrink-0 md:w-auto text-xs text-muted-foreground">Liquidity</FormLabel>
                       <FormControl>
                         <Input
                           className="text-xs"
@@ -525,23 +589,26 @@ export function MarketEditor({ marketId }: MarketEditorProps) {
                           step="0.0001"
                           value={field.value}
                           onChange={(e) => field.onChange(Number(e.target.value))}
+                          disabled={isLoading || isSubmitting}
                         />
                       </FormControl>
-                      <FormMessage className="col-span-2 md:col-span-1" />
-                    </FormItem>
-                  )}
-                />
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-                <FormField
-                  control={form.control}
-                  name="startDate"
-                  render={({ field }) => {
-                    const { ref, ...fieldProps } = field;
-                    return (
-                      <FormItem className="grid grid-cols-[92px_1fr] items-center gap-2 md:block">
-                        <FormLabel className="m-0 text-xs text-muted-foreground">Start Date</FormLabel>
+              <FormField
+                control={form.control}
+                name="startDate"
+                render={({ field }) => {
+                  const { ref, ...fieldProps } = field;
+                  return (
+                    <FormItem>
+                      <div className="flex items-center gap-3 md:block md:space-y-0">
+                        <FormLabel className="w-24 shrink-0 md:w-auto text-xs text-muted-foreground">Start Date</FormLabel>
                         <FormControl>
-                          <div className="relative">
+                          <div className="relative flex-1">
                             <Input
                               type="datetime-local"
                               className="ppx-datetime-input pr-10 text-xs"
@@ -550,6 +617,7 @@ export function MarketEditor({ marketId }: MarketEditorProps) {
                                 ref(el);
                                 startDateInputRef.current = el;
                               }}
+                              disabled={isLoading || isSubmitting}
                             />
                             <button
                               type="button"
@@ -564,27 +632,30 @@ export function MarketEditor({ marketId }: MarketEditorProps) {
                                   input.focus();
                                 }
                               }}
+                              disabled={isLoading || isSubmitting}
                             >
                               <Calendar className="h-4 w-4" />
                             </button>
                           </div>
                         </FormControl>
-                        <FormMessage className="col-span-2 md:col-span-1" />
-                      </FormItem>
-                    );
-                  }}
-                />
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  );
+                }}
+              />
 
-                <FormField
-                  control={form.control}
-                  name="endDate"
-                  render={({ field }) => {
-                    const { ref, ...fieldProps } = field;
-                    return (
-                      <FormItem className="grid grid-cols-[92px_1fr] items-center gap-2 md:block">
-                        <FormLabel className="m-0 text-xs text-muted-foreground">End Date</FormLabel>
+              <FormField
+                control={form.control}
+                name="endDate"
+                render={({ field }) => {
+                  const { ref, ...fieldProps } = field;
+                  return (
+                    <FormItem>
+                      <div className="flex items-center gap-3 md:block md:space-y-0">
+                        <FormLabel className="w-24 shrink-0 md:w-auto text-xs text-muted-foreground">End Date</FormLabel>
                         <FormControl>
-                          <div className="relative">
+                          <div className="relative flex-1">
                             <Input
                               type="datetime-local"
                               className="ppx-datetime-input pr-10 text-xs"
@@ -593,6 +664,7 @@ export function MarketEditor({ marketId }: MarketEditorProps) {
                                 ref(el);
                                 endDateInputRef.current = el;
                               }}
+                              disabled={isLoading || isSubmitting}
                             />
                             <button
                               type="button"
@@ -607,42 +679,44 @@ export function MarketEditor({ marketId }: MarketEditorProps) {
                                   input.focus();
                                 }
                               }}
+                              disabled={isLoading || isSubmitting}
                             >
                               <Calendar className="h-4 w-4" />
                             </button>
                           </div>
                         </FormControl>
-                        <FormMessage className="col-span-2 md:col-span-1" />
-                      </FormItem>
-                    );
-                  }}
-                />
-              </div>
-
-              <MarketImagePickerField
-                selectedIcon={selectedIcon}
-                images={images}
-                isUploadingImage={isUploadingImage}
-                onUploadImage={uploadImage}
-                onSelectImage={(url) => form.setValue("icon", url, { shouldValidate: true })}
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  );
+                }}
               />
+            </div>
 
-              {isLoading && (
-                <p className="text-sm text-muted-foreground">Loading market, categories, and images...</p>
-              )}
+            <MarketImagePickerField
+              selectedIcon={selectedIcon}
+              images={images}
+              isUploadingImage={isUploadingImage}
+              onUploadImage={uploadImage}
+              onSelectImage={(url) => form.setValue("icon", url, { shouldValidate: true })}
+            />
 
-              <div className="flex items-center gap-2">
-                <Button type="submit" disabled={isSubmitting || isLoading}>
-                  {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Save Changes
-                </Button>
-                <Button type="button" variant="outline" onClick={() => router.push("/admin/markets")}>
-                  Cancel
-                </Button>
-              </div>
-            </form>
-          </Form>
-        </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => router.push("/admin/markets")}
+                disabled={isSubmitting}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSubmitting || isLoading}>
+                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Save Changes
+              </Button>
+            </div>
+          </form>
+        </Form>
       </div>
     </section>
   );

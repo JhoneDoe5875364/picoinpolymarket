@@ -270,7 +270,7 @@ export function SuggestionEditor({ suggestionId }: SuggestionEditorProps) {
       {isLoading ? <p className="text-xs text-muted-foreground">Loading suggestion editor...</p> : null}
 
       <div className="space-y-4">
-        <div className="grid grid-cols-1 gap-4">
+        <div className="grid grid-cols-1 gap-2">
           <div className="flex items-center gap-3 md:block md:space-y-0">
             <Label htmlFor="suggestion-question" className="w-24 shrink-0 md:w-auto text-xs text-muted-foreground">Question</Label>
             <Input
