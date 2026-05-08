@@ -226,28 +226,6 @@ export function AdminMetricsDashboard() {
 
   return (
     <div className="space-y-2">
-      <div>
-        <span className="text-base">Market Status Overview</span>
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 pt-2">
-          <div className="rounded-md border p-2 flex justify-between items-center">
-            <p className="text-xs text-muted-foreground">Total Markets</p>
-            <p className="text-md font-semibold">{formatNumber(marketStatus.total)}</p>
-          </div>
-          <div className="rounded-md border p-2 flex justify-between items-center">
-            <p className="text-xs text-muted-foreground">Open</p>
-            <p className="text-md font-semibold">{formatNumber(marketStatus.open)}</p>
-          </div>
-          <div className="rounded-md border p-2 flex justify-between items-center">
-            <p className="text-xs text-muted-foreground">Pending</p>
-            <p className="text-md font-semibold">{formatNumber(marketStatus.pending)}</p>
-          </div>
-          <div className="rounded-md border p-2 flex justify-between items-center">
-            <p className="text-xs text-muted-foreground">Resolved</p>
-            <p className="text-md font-semibold">{formatNumber(marketStatus.resolved)}</p>
-          </div>
-        </div>
-      </div>
-
       <div className="pt-2 text-right">
         <div className="inline-flex items-center rounded-2xl border border-border overflow-hidden">
         {PERIOD_TABS.map((period) => (

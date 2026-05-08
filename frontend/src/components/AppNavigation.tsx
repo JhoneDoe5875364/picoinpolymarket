@@ -30,8 +30,8 @@ export function AppNavigation({ currentUser: _currentUser }: AppNavigationProps)
   const adminMenuItems = [
     { label: "Metrics", href: "/admin/metrics", section: "metrics" },
     { label: "Markets", href: "/admin/markets", section: "markets" },
-    { label: "Suggestions", href: "/admin/suggestions", section: "suggestions" },
     { label: "Users", href: "/admin/users", section: "users" },
+    { label: "Suggestions", href: "/admin/suggestions", section: "suggestions" },
   ] as const;
 
   return (

@@ -229,246 +229,248 @@ export function MarketManager() {
   return (
     <>
       <section className="space-y-3">
+        <div className="space-y-1">
           <h2 className="text-lg font-semibold leading-none tracking-tight">Manage Markets</h2>
           <p className="text-xs text-muted-foreground">View, create, edit, resolve, and close markets.</p>
-          <div className="grid grid-cols-2 gap-1 md:gap-2 xl:grid-cols-4">
-            <div className="rounded-lg border p-2">
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-muted-foreground">Total Markets</p>
-                <Layers3 className="h-4 w-4 text-muted-foreground" />
-              </div>
-              <div className="mt-2 flex items-center justify-between gap-2">
-                <p className="text-md font-semibold">{summaryLoading ? "..." : roundLocale(summary.total)}</p>
-                <Badge variant="outline">100%</Badge>
-              </div>
+        </div>
+        <div className="grid grid-cols-2 gap-1 md:gap-2 xl:grid-cols-4">
+          <div className="rounded-lg border p-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">Total Markets</p>
+              <Layers3 className="h-4 w-4 text-muted-foreground" />
             </div>
-            <div className="rounded-lg border p-2">
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-muted-foreground">Open</p>
-                <CircleDot className="h-4 w-4 text-primary" />
-              </div>
-              <div className="mt-2 flex items-center justify-between gap-2">
-                <p className="text-md font-semibold">{summaryLoading ? "..." : roundLocale(summary.open)}</p>
-                <Badge variant="default">{openRate}%</Badge>
-              </div>
-            </div>
-            <div className="rounded-lg border p-2">
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-muted-foreground">Unresolved</p>
-                <Clock3 className="h-4 w-4 text-orange-500" />
-              </div>
-              <div className="mt-2 flex items-center justify-between gap-2">
-                <p className="text-md font-semibold">{summaryLoading ? "..." : roundLocale(summary.pending)}</p>
-                <Badge variant="secondary">{pendingRate}%</Badge>
-              </div>
-            </div>
-            <div className="rounded-lg border p-2">
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-muted-foreground">Resolved</p>
-                <CheckCircle2 className="h-4 w-4 text-green-500" />
-              </div>
-              <div className="mt-2 flex items-center justify-between gap-2">
-                <p className="text-md font-semibold">{summaryLoading ? "..." : roundLocale(summary.resolved)}</p>
-                <Badge variant="success">{resolvedRate}%</Badge>
-              </div>
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <p className="text-md font-semibold">{summaryLoading ? "..." : roundLocale(summary.total)}</p>
+              <Badge variant="outline">100%</Badge>
             </div>
           </div>
-          <div className="space-y-2 md:flex md:items-center md:gap-2 md:space-y-0">
-            <div className="grid grid-cols-3 gap-1 md:flex md:items-center md:gap-2">
-              <Input
-                placeholder="Search…"
-                value={search}
-                onChange={(e) => { setSearch(e.target.value); }}
-                className="col-span-2 w-full md:w-64 text-xs"
-              />
-              <Button
-                className="col-span-1 md:hidden text-xs"
-                onClick={() => setCreateDialogOpen(true)}
-              >
-                Create
-              </Button>
+          <div className="rounded-lg border p-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">Open</p>
+              <CircleDot className="h-4 w-4 text-primary" />
             </div>
-            <div className="grid grid-cols-4 md:flex md:items-center gap-1 md:gap-2">
-              <Select
-                value={category}
-                onValueChange={(value) => {
-                  setCategory(value as "all" | Category);
-                }}
-              >
-                <SelectTrigger className="w-full md:w-40 text-xs">
-                  <SelectValue placeholder="Category" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all" className="text-xs">All</SelectItem>
-                  <SelectItem value="politics" className="text-xs">Politics</SelectItem>
-                  <SelectItem value="sports" className="text-xs">Sports</SelectItem>
-                  <SelectItem value="crypto" className="text-xs">Crypto</SelectItem>
-                  <SelectItem value="esports" className="text-xs">Esports</SelectItem>
-                  <SelectItem value="finance" className="text-xs">Finance</SelectItem>
-                  <SelectItem value="geopolitics" className="text-xs">Geopolitics</SelectItem>
-                  <SelectItem value="tech" className="text-xs">Tech</SelectItem>
-                  <SelectItem value="culture" className="text-xs">Culture</SelectItem>
-                  <SelectItem value="economy" className="text-xs">Economy</SelectItem>
-                  <SelectItem value="weather" className="text-xs">Weather</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select
-                value={status}
-                onValueChange={(value) => {
-                  setStatus(value as "all" | Status);
-                }}
-              >
-                <SelectTrigger className="w-full md:w-40 text-xs">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all" className="text-xs">All</SelectItem>
-                  <SelectItem value="open" className="text-xs">Open</SelectItem>
-                  <SelectItem value="pending" className="text-xs">Unresolved</SelectItem>
-                  <SelectItem value="resolved" className="text-xs">Resolved</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select
-                value={order}
-                onValueChange={(value) => {
-                  setOrder(value as SortField);
-                }}
-              >
-                <SelectTrigger className="w-full md:w-44 text-xs">
-                  <SelectValue placeholder="Sort by" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="id" className="text-xs hidden">#</SelectItem>
-                  <SelectItem value="start_date" className="text-xs hidden">Start Date</SelectItem>
-                  <SelectItem value="end_date" className="text-xs">End Date</SelectItem>
-                  <SelectItem value="question" className="text-xs">Question</SelectItem>
-                  <SelectItem value="status" className="text-xs hidden">Status</SelectItem>
-                  <SelectItem value="category" className="text-xs">Category</SelectItem>
-                  <SelectItem value="traders" className="text-xs">Traders</SelectItem>
-                  <SelectItem value="volume" className="text-xs">Volume (π)</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select
-                value={ascending}
-                onValueChange={(value) => {
-                  setAscending(value as "ASC" | "DESC");
-                }}
-              >
-                <SelectTrigger className="w-full md:w-36 text-xs">
-                  <SelectValue placeholder="Order" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="DESC" className="text-xs">DESC</SelectItem>
-                  <SelectItem value="ASC" className="text-xs">ASC</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="md:ml-auto md:flex md:items-center md:gap-2">
-              <Button
-                className="hidden md:inline-flex"
-                onClick={() => setCreateDialogOpen(true)}
-              >
-                Create
-              </Button>
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <p className="text-md font-semibold">{summaryLoading ? "..." : roundLocale(summary.open)}</p>
+              <Badge variant="default">{openRate}%</Badge>
             </div>
           </div>
+          <div className="rounded-lg border p-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">Unresolved</p>
+              <Clock3 className="h-4 w-4 text-orange-500" />
+            </div>
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <p className="text-md font-semibold">{summaryLoading ? "..." : roundLocale(summary.pending)}</p>
+              <Badge variant="secondary">{pendingRate}%</Badge>
+            </div>
+          </div>
+          <div className="rounded-lg border p-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">Resolved</p>
+              <CheckCircle2 className="h-4 w-4 text-green-500" />
+            </div>
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <p className="text-md font-semibold">{summaryLoading ? "..." : roundLocale(summary.resolved)}</p>
+              <Badge variant="success">{resolvedRate}%</Badge>
+            </div>
+          </div>
+        </div>
+        <div className="space-y-2 md:flex md:items-center md:gap-2 md:space-y-0">
+          <div className="grid grid-cols-3 gap-1 md:flex md:items-center md:gap-2">
+            <Input
+              placeholder="Search…"
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); }}
+              className="col-span-2 w-full md:w-64 text-xs"
+            />
+            <Button
+              className="col-span-1 md:hidden text-xs"
+              onClick={() => setCreateDialogOpen(true)}
+            >
+              Create
+            </Button>
+          </div>
+          <div className="grid grid-cols-4 md:flex md:items-center gap-1 md:gap-2">
+            <Select
+              value={category}
+              onValueChange={(value) => {
+                setCategory(value as "all" | Category);
+              }}
+            >
+              <SelectTrigger className="w-full md:w-40 text-xs">
+                <SelectValue placeholder="Category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all" className="text-xs">All</SelectItem>
+                <SelectItem value="politics" className="text-xs">Politics</SelectItem>
+                <SelectItem value="sports" className="text-xs">Sports</SelectItem>
+                <SelectItem value="crypto" className="text-xs">Crypto</SelectItem>
+                <SelectItem value="esports" className="text-xs">Esports</SelectItem>
+                <SelectItem value="finance" className="text-xs">Finance</SelectItem>
+                <SelectItem value="geopolitics" className="text-xs">Geopolitics</SelectItem>
+                <SelectItem value="tech" className="text-xs">Tech</SelectItem>
+                <SelectItem value="culture" className="text-xs">Culture</SelectItem>
+                <SelectItem value="economy" className="text-xs">Economy</SelectItem>
+                <SelectItem value="weather" className="text-xs">Weather</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select
+              value={status}
+              onValueChange={(value) => {
+                setStatus(value as "all" | Status);
+              }}
+            >
+              <SelectTrigger className="w-full md:w-40 text-xs">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all" className="text-xs">All</SelectItem>
+                <SelectItem value="open" className="text-xs">Open</SelectItem>
+                <SelectItem value="pending" className="text-xs">Unresolved</SelectItem>
+                <SelectItem value="resolved" className="text-xs">Resolved</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select
+              value={order}
+              onValueChange={(value) => {
+                setOrder(value as SortField);
+              }}
+            >
+              <SelectTrigger className="w-full md:w-44 text-xs">
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="id" className="text-xs hidden">#</SelectItem>
+                <SelectItem value="start_date" className="text-xs hidden">Start Date</SelectItem>
+                <SelectItem value="end_date" className="text-xs">End Date</SelectItem>
+                <SelectItem value="question" className="text-xs">Question</SelectItem>
+                <SelectItem value="status" className="text-xs hidden">Status</SelectItem>
+                <SelectItem value="category" className="text-xs">Category</SelectItem>
+                <SelectItem value="traders" className="text-xs">Traders</SelectItem>
+                <SelectItem value="volume" className="text-xs">Volume (π)</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select
+              value={ascending}
+              onValueChange={(value) => {
+                setAscending(value as "ASC" | "DESC");
+              }}
+            >
+              <SelectTrigger className="w-full md:w-36 text-xs">
+                <SelectValue placeholder="Order" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="DESC" className="text-xs">DESC</SelectItem>
+                <SelectItem value="ASC" className="text-xs">ASC</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="md:ml-auto md:flex md:items-center md:gap-2">
+            <Button
+              className="hidden md:inline-flex"
+              onClick={() => setCreateDialogOpen(true)}
+            >
+              Create
+            </Button>
+          </div>
+        </div>
 
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="text-xs hidden">Id</TableHead>
-                <TableHead className="text-xs">Question</TableHead>
-                <TableHead className="text-xs hidden">Status</TableHead>
-                <TableHead className="text-xs hidden">Category</TableHead>
-                <TableHead className="text-xs hidden">Start Date</TableHead>
-                <TableHead className="text-xs">End Date</TableHead>
-                <TableHead className="text-xs hidden">Traders</TableHead>
-                <TableHead className="text-xs">Volume</TableHead>
-                <TableHead className="text-xs">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((m) => (
-                <TableRow key={m.id}>
-                  <TableCell className="text-center text-xs hidden">{m.id}</TableCell>
-                  <TableCell className="min-w-40">
-                    <div className="flex items-start items-center gap-1 md:gap-2">
-                      <div className="h-8 w-8 shrink-0 overflow-hidden rounded-md border bg-muted/20">
-                        <img
-                          src={typeof m.icon === "string" && m.icon.trim().length > 0 ? m.icon : DEFAULT_MARKET_ICON}
-                          alt={m.question ?? "Market image"}
-                          className="h-full w-full object-cover"
-                          loading="lazy"
-                          onError={(e) => {
-                            if (e.currentTarget.src !== DEFAULT_MARKET_ICON) {
-                              e.currentTarget.src = DEFAULT_MARKET_ICON;
-                            }
-                          }}
-                        />
-                      </div>
-                      <p className="line-clamp-2 text-xs">{m.question}</p>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="text-xs hidden">Id</TableHead>
+              <TableHead className="text-xs">Question</TableHead>
+              <TableHead className="text-xs hidden">Status</TableHead>
+              <TableHead className="text-xs hidden">Category</TableHead>
+              <TableHead className="text-xs hidden">Start Date</TableHead>
+              <TableHead className="text-xs">End Date</TableHead>
+              <TableHead className="text-xs hidden">Traders</TableHead>
+              <TableHead className="text-xs">Volume</TableHead>
+              <TableHead className="text-xs">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((m) => (
+              <TableRow key={m.id}>
+                <TableCell className="text-center text-xs hidden">{m.id}</TableCell>
+                <TableCell className="min-w-40">
+                  <div className="flex items-start items-center gap-1 md:gap-2">
+                    <div className="h-8 w-8 shrink-0 overflow-hidden rounded-md border bg-muted/20">
+                      <img
+                        src={typeof m.icon === "string" && m.icon.trim().length > 0 ? m.icon : DEFAULT_MARKET_ICON}
+                        alt={m.question ?? "Market image"}
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                        onError={(e) => {
+                          if (e.currentTarget.src !== DEFAULT_MARKET_ICON) {
+                            e.currentTarget.src = DEFAULT_MARKET_ICON;
+                          }
+                        }}
+                      />
                     </div>
-                  </TableCell>
-                  <TableCell className="text-xs hidden">
-                    {m.status}
-                  </TableCell>
-                  <TableCell className="text-xs hidden">
-                    {m.category}
-                  </TableCell>
-                  <TableCell className="text-xs hidden">{format(new Date(m.start_date ?? ""), "MM/dd/yyyy")}</TableCell>
-                  <TableCell className="text-xs">{format(new Date(m.end_date ?? ""), "MM/dd/yyyy")}</TableCell>
-                  <TableCell className="text-xs hidden">{roundLocale(m.traders ?? 0)}</TableCell>
-                  <TableCell className="text-xs">{roundLocalePi(m.volume ?? 0)}</TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="h-8 w-8 p-0">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem><Link href={`/admin/markets/detail/${m.id}`}>View Market Metrics</Link></DropdownMenuItem>
-                        <DropdownMenuItem><Link href={`/admin/markets/${m.id}`}>Edit Market</Link></DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="text-green-500"
-                          onClick={() => {
-                            setSelectedMarketId(m.id.toString());
-                            setResolveDialogOpen(true);
-                          }}
-                        >
-                          Resolve Market
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="text-red-500"
-                          onClick={() => {
-                            setSelectedMarketId(m.id.toString());
-                            setCloseDialogOpen(true);
-                          }}
-                        >
-                          Close Market
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                    <p className="line-clamp-2 text-xs">{m.question}</p>
+                  </div>
+                </TableCell>
+                <TableCell className="text-xs hidden">
+                  {m.status}
+                </TableCell>
+                <TableCell className="text-xs hidden">
+                  {m.category}
+                </TableCell>
+                <TableCell className="text-xs hidden">{format(new Date(m.start_date ?? ""), "MM/dd/yyyy")}</TableCell>
+                <TableCell className="text-xs">{format(new Date(m.end_date ?? ""), "MM/dd/yyyy")}</TableCell>
+                <TableCell className="text-xs hidden">{roundLocale(m.traders ?? 0)}</TableCell>
+                <TableCell className="text-xs">{roundLocalePi(m.volume ?? 0)}</TableCell>
+                <TableCell>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" className="h-8 w-8 p-0">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem><Link href={`/admin/markets/detail/${m.id}`}>View Market Metrics</Link></DropdownMenuItem>
+                      <DropdownMenuItem><Link href={`/admin/markets/${m.id}`}>Edit Market</Link></DropdownMenuItem>
+                      <DropdownMenuItem
+                        className="text-green-500"
+                        onClick={() => {
+                          setSelectedMarketId(m.id.toString());
+                          setResolveDialogOpen(true);
+                        }}
+                      >
+                        Resolve Market
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        className="text-red-500"
+                        onClick={() => {
+                          setSelectedMarketId(m.id.toString());
+                          setCloseDialogOpen(true);
+                        }}
+                      >
+                        Close Market
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
 
 
-          {isInitialLoading && (
-            <p className="text-sm text-muted-foreground">Loading markets...</p>
-          )}
-          {!isInitialLoading && rows.length === 0 && (
-            <p className="text-sm text-muted-foreground">No markets found.</p>
-          )}
-          {rows.length > 0 && (
-            <div className="space-y-1">
-              <div ref={loadMoreRef} className="h-1 w-full" />
-              {isLoadingMore && <p className="text-sm text-muted-foreground">Loading more markets...</p>}
-              {!hasMore && total > 0 && <p className="text-sm text-muted-foreground">All markets loaded.</p>}
-            </div>
-          )}
+        {isInitialLoading && (
+          <p className="text-sm text-muted-foreground">Loading markets...</p>
+        )}
+        {!isInitialLoading && rows.length === 0 && (
+          <p className="text-sm text-muted-foreground">No markets found.</p>
+        )}
+        {rows.length > 0 && (
+          <div className="space-y-1">
+            <div ref={loadMoreRef} className="h-1 w-full" />
+            {isLoadingMore && <p className="text-sm text-muted-foreground">Loading more markets...</p>}
+            {!hasMore && total > 0 && <p className="text-sm text-muted-foreground">All markets loaded.</p>}
+          </div>
+        )}
       </section>
 
       {/* Resolve dialog */}

@@ -12,7 +12,7 @@ import { format } from 'date-fns';
 import { apiFetchWithToken } from '@/lib/api';
 import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { roundLocale } from '@/lib/utils';
+import { cn, roundLocale } from '@/lib/utils';
 
 type UserSummary = {
   total: number;
@@ -137,29 +137,29 @@ export function UserManager() {
 
   return (
     <>
-      <section className="space-y-4">
+      <section className="space-y-3">
         <div className="space-y-1">
-          <h2 className="text-xl font-semibold tracking-tight">User Management</h2>
-          <p className="text-sm text-muted-foreground">View, manage, and take action on user accounts.</p>
+          <h2 className="text-lg font-semibold leading-none tracking-tight">User Management</h2>
+          <p className="text-xs text-muted-foreground">View, manage, and take action on user accounts.</p>
         </div>
         <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
           <div className="rounded-lg border p-3">
             <div className="flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">Total Users</p>
+              <p className="text-xs text-muted-foreground">Total Users</p>
               <Layers3 className="h-4 w-4 text-muted-foreground" />
             </div>
             <div className="mt-2 flex items-center justify-between gap-2">
-              <p className="text-xl font-semibold">{summaryLoading ? "..." : roundLocale(summary.total)}</p>
+              <p className="text-md font-semibold">{summaryLoading ? "..." : roundLocale(summary.total)}</p>
               <Badge className={getStatusBadgeClassName('ALL')}>100%</Badge>
             </div>
           </div>
           <div className="rounded-lg border p-3">
             <div className="flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">Active</p>
+              <p className="text-xs text-muted-foreground">Active</p>
               <UserCheck className="h-4 w-4 text-primary" />
             </div>
             <div className="mt-2 flex items-center justify-between gap-2">
-              <p className="text-xl font-semibold">{summaryLoading ? "..." : roundLocale(summary.active)}</p>
+              <p className="text-md font-semibold">{summaryLoading ? "..." : roundLocale(summary.active)}</p>
               <Badge className={getStatusBadgeClassName('ACTIVE')}>
                 {activeRate}%
               </Badge>
@@ -167,11 +167,11 @@ export function UserManager() {
           </div>
           <div className="rounded-lg border p-3">
             <div className="flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">Suspended</p>
+              <p className="text-xs text-muted-foreground">Suspended</p>
               <UserMinus className="h-4 w-4 text-orange-500" />
             </div>
             <div className="mt-2 flex items-center justify-between gap-2">
-              <p className="text-xl font-semibold">{summaryLoading ? "..." : roundLocale(summary.suspended)}</p>
+              <p className="text-md font-semibold">{summaryLoading ? "..." : roundLocale(summary.suspended)}</p>
               <Badge className={getStatusBadgeClassName('SUSPENDED')}>
                 {suspendedRate}%
               </Badge>
@@ -179,11 +179,11 @@ export function UserManager() {
           </div>
           <div className="rounded-lg border p-3">
             <div className="flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">Banned</p>
+              <p className="text-xs text-muted-foreground">Banned</p>
               <UserX className="h-4 w-4 text-red-500" />
             </div>
             <div className="mt-2 flex items-center justify-between gap-2">
-              <p className="text-xl font-semibold">{summaryLoading ? "..." : roundLocale(summary.banned)}</p>
+              <p className="text-md font-semibold">{summaryLoading ? "..." : roundLocale(summary.banned)}</p>
               <Badge className={getStatusBadgeClassName('BANNED')}>
                 {bannedRate}%
               </Badge>
@@ -191,92 +191,94 @@ export function UserManager() {
           </div>
         </div>
         <div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="md:flex md:justify-between md:items-center gap-1 md:gap-2">
             <Input
               placeholder="Search…"
               value={search}
               onChange={(e) => { setOffset(0); setSearch(e.target.value); }}
-              className="w-64"
+              className="w-full md:w-64 text-xs mb-2 md:mb-0"
             />
-            <div className="flex items-center gap-2">
-              <Select
-                value={statusFilter}
-                onValueChange={(value: "ALL" | "ACTIVE" | "SUSPENDED" | "BANNED") => {
-                  setOffset(0);
-                  setStatusFilter(value);
-                }}
-              >
-                <SelectTrigger className="w-36">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">All Status</SelectItem>
-                  <SelectItem value="ACTIVE">Active</SelectItem>
-                  <SelectItem value="SUSPENDED">Suspended</SelectItem>
-                  <SelectItem value="BANNED">Banned</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-center gap-2">
-              <Select
-                value={sortBy}
-                onValueChange={(value: "pi_username" | "created_at" | "balance" | "status") => {
-                  setOffset(0);
-                  setSortBy(value);
-                }}
-              >
-                <SelectTrigger className="w-40">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="created_at">Member Since</SelectItem>
-                  <SelectItem value="pi_username">Username</SelectItem>
-                  <SelectItem value="status">Status</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-center gap-2">
-              <Select
-                value={order}
-                onValueChange={(value: "ASC" | "DESC") => {
-                  setOffset(0);
-                  setOrder(value);
-                }}
-              >
-                <SelectTrigger className="w-28">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="DESC">Desc</SelectItem>
-                  <SelectItem value="ASC">Asc</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-3 md:flex md:items-center gap-1 md:gap-2">
+              <div className="flex items-center gap-2">
+                <Select
+                  value={statusFilter}
+                  onValueChange={(value: "ALL" | "ACTIVE" | "SUSPENDED" | "BANNED") => {
+                    setOffset(0);
+                    setStatusFilter(value);
+                  }}
+                >
+                  <SelectTrigger className="min-w-28 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">All Status</SelectItem>
+                    <SelectItem value="ACTIVE">Active</SelectItem>
+                    <SelectItem value="SUSPENDED">Suspended</SelectItem>
+                    <SelectItem value="BANNED">Banned</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2">
+                <Select
+                  value={sortBy}
+                  onValueChange={(value: "pi_username" | "created_at" | "balance" | "status") => {
+                    setOffset(0);
+                    setSortBy(value);
+                  }}
+                >
+                  <SelectTrigger className="min-w-28 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="created_at">Member Since</SelectItem>
+                    <SelectItem value="pi_username">Username</SelectItem>
+                    <SelectItem value="status">Status</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2">
+                <Select
+                  value={order}
+                  onValueChange={(value: "ASC" | "DESC") => {
+                    setOffset(0);
+                    setOrder(value);
+                  }}
+                >
+                  <SelectTrigger className="min-w-28 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="DESC">Desc</SelectItem>
+                    <SelectItem value="ASC">Asc</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
           
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className='truncate'>User ID</TableHead>
-                <TableHead>Username</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className='truncate'>Created Date</TableHead>
-                <TableHead>Actions</TableHead>
+                <TableHead className='truncate text-xs'>#</TableHead>
+                <TableHead className='text-xs'>Username</TableHead>
+                <TableHead className='text-xs'>Status</TableHead>
+                <TableHead className='truncate text-xs'>Created Date</TableHead>
+                <TableHead className='text-xs'>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {users.map((user) => (
                 <TableRow key={user.id}>
                   <TableCell className="font-mono text-xs truncate text-center">{user.id}</TableCell>
-                  <TableCell className="font-medium">{user.pi_username}</TableCell>
+                  <TableCell className="font-medium text-xs">{user.pi_username}</TableCell>
                   <TableCell>
                     <Badge
-                      className={getStatusBadgeClassName(user.status)}
+                      className={cn(getStatusBadgeClassName(user.status), 'text-xs')}
                     >
                       {user.status}
                     </Badge>
                   </TableCell>
-                  <TableCell className='truncate'>{format(new Date(user.created_at), 'P')}</TableCell>
+                  <TableCell className='truncate text-xs'>{format(new Date(user.created_at), 'P')}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
                       {user.status !== 'BANNED' ? (
@@ -286,8 +288,7 @@ export function UserManager() {
                           size="sm"
                           onClick={async () => handleUpdateStatus(user.id, 'BANNED')}
                         >
-                          <ShieldOff className="mr-2 h-4 w-4 text-red-500" />
-                          Ban
+                          <ShieldOff className="h-4 w-4 text-red-500" />
                         </Button>
                       ) : (
                         <Button
@@ -296,8 +297,7 @@ export function UserManager() {
                           size="sm"
                           onClick={async () => handleUpdateStatus(user.id, 'ACTIVE')}
                         >
-                          <ShieldCheck className="mr-2 h-4 w-4 text-green-500" />
-                          Unban
+                          <ShieldCheck className="h-4 w-4 text-green-500" />
                         </Button>
                       )}
                     </div>
