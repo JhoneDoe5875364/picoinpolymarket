@@ -3,16 +3,24 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Pencil, Ban } from "lucide-react";
+import { Ban, CheckCircle2, Clock, Layers3, Pencil } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import type { Suggestion } from "@/lib/types";
 import { Badge } from "../ui/badge";
+import { roundLocale } from "@/lib/utils";
 import { format } from "date-fns";
 import { apiFetchWithToken } from "@/lib/api";
 
 type SuggestionListResult = { items: Suggestion[]; total: number };
+
+type SuggestionSummary = {
+  total: number;
+  pending: number;
+  published: number;
+  rejected: number;
+};
 
 const listCache = new Map<string, SuggestionListResult>();
 const listInFlight = new Map<string, Promise<SuggestionListResult>>();
@@ -49,6 +57,13 @@ export function SuggestionManager() {
   const [limit] = useState(25);
   const [loading, setLoading] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [summary, setSummary] = useState<SuggestionSummary>({
+    total: 0,
+    pending: 0,
+    published: 0,
+    rejected: 0,
+  });
+  const [summaryLoading, setSummaryLoading] = useState(false);
 
   const qs = useMemo(() => {
     const params = new URLSearchParams();
@@ -58,6 +73,25 @@ export function SuggestionManager() {
     return params.toString();
   }, [page, limit]);
 
+  async function loadSummary() {
+    setSummaryLoading(true);
+    try {
+      const res = await apiFetchWithToken(`/suggestions/summary`, { method: "GET" });
+      if (res.ok && res.data) {
+        setSummary({
+          total: Number(res.data.total ?? 0),
+          pending: Number(res.data.pending ?? 0),
+          published: Number(res.data.published ?? 0),
+          rejected: Number(res.data.rejected ?? 0),
+        });
+      }
+    } catch (e: any) {
+      toast({ title: "Summary load failed", description: e.message, variant: "destructive" });
+    } finally {
+      setSummaryLoading(false);
+    }
+  }
+
   const refreshList = async () => {
     listCache.delete(qs);
     setLoading(true);
@@ -65,6 +99,7 @@ export function SuggestionManager() {
       const payload = await fetchSuggestionList(qs);
       setSuggestions(payload.items);
       setTotal(payload.total);
+      void loadSummary();
     } catch (e: any) {
       toast({ title: "Load failed", description: e.message, variant: "destructive" });
     } finally {
@@ -96,6 +131,10 @@ export function SuggestionManager() {
     };
   }, [qs, toast]);
 
+  useEffect(() => {
+    void loadSummary();
+  }, []);
+
   async function rejectSuggestion(suggestion: Suggestion) {
     const confirmed = window.confirm("Reject this suggestion?");
     if (!confirmed) return;
@@ -123,6 +162,26 @@ export function SuggestionManager() {
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
+  const getSummaryBadgeClassName = (kind: "TOTAL" | "PENDING" | "PUBLISHED" | "REJECTED") => {
+    switch (kind) {
+      case "TOTAL":
+        return "border-blue-500 bg-blue-500 text-white hover:bg-blue-500/90";
+      case "PENDING":
+        return "border-orange-500 bg-orange-500 text-white hover:bg-orange-500/90";
+      case "PUBLISHED":
+        return "border-green-500 bg-green-500 text-white hover:bg-green-500/90";
+      case "REJECTED":
+        return "border-red-500 bg-red-500 text-white hover:bg-red-500/90";
+      default:
+        return "";
+    }
+  };
+
+  const totalForRate = summary.total > 0 ? summary.total : 1;
+  const pendingRate = Math.round((summary.pending / totalForRate) * 100);
+  const publishedRate = Math.round((summary.published / totalForRate) * 100);
+  const rejectedRate = Math.round((summary.rejected / totalForRate) * 100);
+
   return (
     <section className="space-y-3">
       <div className="space-y-1">
@@ -130,6 +189,48 @@ export function SuggestionManager() {
         <p className="text-xs text-muted-foreground">
           Review user suggestions and move to the detail editor for approval.
         </p>
+      </div>
+      <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
+        <div className="rounded-lg border p-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">Total Suggestions</p>
+            <Layers3 className="h-4 w-4 text-blue-500" />
+          </div>
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <p className="text-md font-semibold">{summaryLoading ? "..." : roundLocale(summary.total)}</p>
+            <Badge className={getSummaryBadgeClassName("TOTAL")}>100%</Badge>
+          </div>
+        </div>
+        <div className="rounded-lg border p-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">Pending Suggestions</p>
+            <Clock className="h-4 w-4 text-orange-500" />
+          </div>
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <p className="text-md font-semibold">{summaryLoading ? "..." : roundLocale(summary.pending)}</p>
+            <Badge className={getSummaryBadgeClassName("PENDING")}>{pendingRate}%</Badge>
+          </div>
+        </div>
+        <div className="rounded-lg border p-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">Published Suggestions</p>
+            <CheckCircle2 className="h-4 w-4 text-green-500" />
+          </div>
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <p className="text-md font-semibold">{summaryLoading ? "..." : roundLocale(summary.published)}</p>
+            <Badge className={getSummaryBadgeClassName("PUBLISHED")}>{publishedRate}%</Badge>
+          </div>
+        </div>
+        <div className="rounded-lg border p-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">Rejected Suggestions</p>
+            <Ban className="h-4 w-4 text-red-500" />
+          </div>
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <p className="text-md font-semibold">{summaryLoading ? "..." : roundLocale(summary.rejected)}</p>
+            <Badge className={getSummaryBadgeClassName("REJECTED")}>{rejectedRate}%</Badge>
+          </div>
+        </div>
       </div>
       <div className="space-y-4">
         {loading ? <p className="text-sm text-muted-foreground">Loading suggestions...</p> : null}

@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, List, Optional, Tuple
 
-from sqlalchemy import func, inspect as sa_inspect, select, text
+from sqlalchemy import case, func, inspect as sa_inspect, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.tables.category import Category
@@ -63,6 +63,34 @@ async def list_suggestions(
     total_result = await session.execute(count_stmt)
     total = int(total_result.scalar_one() or 0)
     return rows, total
+
+
+async def get_suggestions_summary(session: AsyncSession) -> dict[str, int]:
+    stmt = select(
+        func.count(Suggestion.id).label("total"),
+        func.coalesce(
+            func.sum(case((func.lower(Suggestion.status) == "pending", 1), else_=0)),
+            0,
+        ).label("pending"),
+        func.coalesce(
+            func.sum(case((func.lower(Suggestion.status) == "approved", 1), else_=0)),
+            0,
+        ).label("published"),
+        func.coalesce(
+            func.sum(case((func.lower(Suggestion.status) == "rejected", 1), else_=0)),
+            0,
+        ).label("rejected"),
+    )
+    result = await session.execute(stmt)
+    row = result.mappings().first()
+    if not row:
+        return {"total": 0, "pending": 0, "published": 0, "rejected": 0}
+    return {
+        "total": int(row["total"] or 0),
+        "pending": int(row["pending"] or 0),
+        "published": int(row["published"] or 0),
+        "rejected": int(row["rejected"] or 0),
+    }
 
 
 async def list_categories(session: AsyncSession) -> List[dict[str, Any]]:

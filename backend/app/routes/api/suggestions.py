@@ -50,6 +50,15 @@ async def list_suggestion_categories(db: DbSession):
     return {"ok": True, "data": jsonable_encoder(rows)}
 
 
+@router.get("/summary", summary="Count suggestions by status")
+async def get_suggestions_summary(db: DbSession, user=Depends(verify_token)):
+    role = user.get("role", "")
+    if role not in ("superadmin", "admin"):
+        raise HTTPException(status_code=403, detail="HasNotAdminRole")
+    summary = await suggestions_repo.get_suggestions_summary(db)
+    return {"ok": True, "data": jsonable_encoder(summary)}
+
+
 @router.get("/", summary="List market suggestions", operation_id="list_suggestions")
 async def list_suggestions(
     db: DbSession,

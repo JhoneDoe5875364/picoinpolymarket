@@ -226,6 +226,23 @@ export function MarketManager() {
     [rows, selectedMarketId],
   );
 
+  const getMarketSummaryBadgeClassName = (
+    kind: "TOTAL" | "OPEN" | "PENDING" | "RESOLVED",
+  ) => {
+    switch (kind) {
+      case "TOTAL":
+        return "border-blue-500 bg-blue-500 text-white hover:bg-blue-500/90";
+      case "OPEN":
+        return "border-green-500 bg-green-500 text-white hover:bg-green-500/90";
+      case "PENDING":
+        return "border-orange-500 bg-orange-500 text-white hover:bg-orange-500/90";
+      case "RESOLVED":
+        return "border-teal-500 bg-teal-500 text-white hover:bg-teal-500/90";
+      default:
+        return "";
+    }
+  };
+
   return (
     <>
       <section className="space-y-3">
@@ -233,45 +250,45 @@ export function MarketManager() {
           <h2 className="text-lg font-semibold leading-none tracking-tight">Manage Markets</h2>
           <p className="text-xs text-muted-foreground">View, create, edit, resolve, and close markets.</p>
         </div>
-        <div className="grid grid-cols-2 gap-1 md:gap-2 xl:grid-cols-4">
-          <div className="rounded-lg border p-2">
+        <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
+          <div className="rounded-lg border p-3">
             <div className="flex items-center justify-between">
               <p className="text-xs text-muted-foreground">Total Markets</p>
-              <Layers3 className="h-4 w-4 text-muted-foreground" />
+              <Layers3 className="h-4 w-4 text-blue-500" />
             </div>
             <div className="mt-2 flex items-center justify-between gap-2">
               <p className="text-md font-semibold">{summaryLoading ? "..." : roundLocale(summary.total)}</p>
-              <Badge variant="outline">100%</Badge>
+              <Badge className={getMarketSummaryBadgeClassName("TOTAL")}>100%</Badge>
             </div>
           </div>
-          <div className="rounded-lg border p-2">
+          <div className="rounded-lg border p-3">
             <div className="flex items-center justify-between">
               <p className="text-xs text-muted-foreground">Open</p>
-              <CircleDot className="h-4 w-4 text-primary" />
+              <CircleDot className="h-4 w-4 text-green-500" />
             </div>
             <div className="mt-2 flex items-center justify-between gap-2">
               <p className="text-md font-semibold">{summaryLoading ? "..." : roundLocale(summary.open)}</p>
-              <Badge variant="default">{openRate}%</Badge>
+              <Badge className={getMarketSummaryBadgeClassName("OPEN")}>{openRate}%</Badge>
             </div>
           </div>
-          <div className="rounded-lg border p-2">
+          <div className="rounded-lg border p-3">
             <div className="flex items-center justify-between">
               <p className="text-xs text-muted-foreground">Unresolved</p>
               <Clock3 className="h-4 w-4 text-orange-500" />
             </div>
             <div className="mt-2 flex items-center justify-between gap-2">
               <p className="text-md font-semibold">{summaryLoading ? "..." : roundLocale(summary.pending)}</p>
-              <Badge variant="secondary">{pendingRate}%</Badge>
+              <Badge className={getMarketSummaryBadgeClassName("PENDING")}>{pendingRate}%</Badge>
             </div>
           </div>
-          <div className="rounded-lg border p-2">
+          <div className="rounded-lg border p-3">
             <div className="flex items-center justify-between">
               <p className="text-xs text-muted-foreground">Resolved</p>
-              <CheckCircle2 className="h-4 w-4 text-green-500" />
+              <CheckCircle2 className="h-4 w-4 text-teal-500" />
             </div>
             <div className="mt-2 flex items-center justify-between gap-2">
               <p className="text-md font-semibold">{summaryLoading ? "..." : roundLocale(summary.resolved)}</p>
-              <Badge variant="success">{resolvedRate}%</Badge>
+              <Badge className={getMarketSummaryBadgeClassName("RESOLVED")}>{resolvedRate}%</Badge>
             </div>
           </div>
         </div>
@@ -395,7 +412,7 @@ export function MarketManager() {
                 <TableCell className="text-center text-xs hidden">{m.id}</TableCell>
                 <TableCell className="min-w-40">
                   <div className="flex items-start items-center gap-1 md:gap-2">
-                    <div className="h-8 w-8 shrink-0 overflow-hidden rounded-md border bg-muted/20">
+                    <div className="h-8 w-8 md:h-12 md:w-12 shrink-0 overflow-hidden rounded-md border bg-muted/20">
                       <img
                         src={typeof m.icon === "string" && m.icon.trim().length > 0 ? m.icon : DEFAULT_MARKET_ICON}
                         alt={m.question ?? "Market image"}

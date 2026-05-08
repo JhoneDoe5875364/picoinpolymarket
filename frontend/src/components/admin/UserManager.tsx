@@ -130,6 +130,16 @@ export function UserManager() {
     }
   };
 
+  const getStatusTextColorClassName = (status: User['status']) => {
+    switch (status) {
+      case 'ALL': return 'text-blue-500';
+      case 'ACTIVE': return 'text-green-500';
+      case 'SUSPENDED': return 'text-orange-500';
+      case 'BANNED': return 'text-red-500';
+      default: return '';
+    }
+  };
+
   const totalForRate = summary.total > 0 ? summary.total : 1;
   const activeRate = Math.round((summary.active / totalForRate) * 100);
   const suspendedRate = Math.round((summary.suspended / totalForRate) * 100);
@@ -146,7 +156,7 @@ export function UserManager() {
           <div className="rounded-lg border p-3">
             <div className="flex items-center justify-between">
               <p className="text-xs text-muted-foreground">Total Users</p>
-              <Layers3 className="h-4 w-4 text-muted-foreground" />
+              <Layers3 className="h-4 w-4 text-blue-500" />
             </div>
             <div className="mt-2 flex items-center justify-between gap-2">
               <p className="text-md font-semibold">{summaryLoading ? "..." : roundLocale(summary.total)}</p>
@@ -156,7 +166,7 @@ export function UserManager() {
           <div className="rounded-lg border p-3">
             <div className="flex items-center justify-between">
               <p className="text-xs text-muted-foreground">Active</p>
-              <UserCheck className="h-4 w-4 text-primary" />
+              <UserCheck className="h-4 w-4 text-green-500" />
             </div>
             <div className="mt-2 flex items-center justify-between gap-2">
               <p className="text-md font-semibold">{summaryLoading ? "..." : roundLocale(summary.active)}</p>
@@ -259,7 +269,7 @@ export function UserManager() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className='truncate text-xs'>#</TableHead>
+                <TableHead className='truncate text-xs hidden'>#</TableHead>
                 <TableHead className='text-xs'>Username</TableHead>
                 <TableHead className='text-xs'>Status</TableHead>
                 <TableHead className='truncate text-xs'>Created Date</TableHead>
@@ -269,14 +279,10 @@ export function UserManager() {
             <TableBody>
               {users.map((user) => (
                 <TableRow key={user.id}>
-                  <TableCell className="font-mono text-xs truncate text-center">{user.id}</TableCell>
+                  <TableCell className="font-mono text-xs truncate text-center hidden">{user.id}</TableCell>
                   <TableCell className="font-medium text-xs">{user.pi_username}</TableCell>
-                  <TableCell>
-                    <Badge
-                      className={cn(getStatusBadgeClassName(user.status), 'text-xs')}
-                    >
-                      {user.status}
-                    </Badge>
+                  <TableCell className="font-medium text-xs">
+                    <span className={getStatusTextColorClassName(user.status)}>{user.status}</span>
                   </TableCell>
                   <TableCell className='truncate text-xs'>{format(new Date(user.created_at), 'P')}</TableCell>
                   <TableCell>
