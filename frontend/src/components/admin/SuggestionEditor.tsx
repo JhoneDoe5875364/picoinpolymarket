@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Calendar, Loader2 } from "lucide-react";
+import { ArrowLeft, Calendar, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
@@ -257,48 +257,55 @@ export function SuggestionEditor({ suggestionId }: SuggestionEditorProps) {
 
   return (
     <section className="space-y-4">
-      <header className="space-y-1">
-        <h2 className="text-xl font-semibold leading-none tracking-tight">Edit Suggestion</h2>
-        <p className="text-sm text-muted-foreground">
-          Finalize question, rules, dates, liquidity, and image before creating the market.
-        </p>
-      </header>
+      <div>
+        <Button variant="ghost" onClick={() => router.push("/admin/suggestions")} className="mb-2 p-2">
+          <ArrowLeft className="h-4 w-4 mr-2" /> Manage Suggestions
+        </Button>
+      </div>
+      <h2 className="text-xl font-semibold leading-none tracking-tight">Edit Suggestion</h2>
+      <p className="text-xs text-muted-foreground">
+        Finalize question, rules, dates, liquidity, and image before creating the market.
+      </p>
 
-      {isLoading ? <p className="text-sm text-muted-foreground">Loading suggestion editor...</p> : null}
+      {isLoading ? <p className="text-xs text-muted-foreground">Loading suggestion editor...</p> : null}
 
       <div className="space-y-4">
         <div className="grid grid-cols-1 gap-4">
-          <div>
-            <Label htmlFor="suggestion-question">Question</Label>
+          <div className="flex items-center gap-3 md:block md:space-y-0">
+            <Label htmlFor="suggestion-question" className="w-24 shrink-0 md:w-auto text-xs text-muted-foreground">Question</Label>
             <Input
               id="suggestion-question"
+              className="text-xs focus-visible:outline-none focus-visible:ring-0 w-full"
               value={form.question}
               onChange={(e) => setForm((prev) => ({ ...prev, question: e.target.value }))}
               disabled={isLoading || isSubmitting}
             />
           </div>
-          <div>
-            <Label htmlFor="suggestion-slug">Slug</Label>
+          <div className="flex items-center gap-3 md:block md:space-y-0">
+            <Label htmlFor="suggestion-slug" className="w-24 shrink-0 md:w-auto text-xs text-muted-foreground">Slug</Label>
             <Input
               id="suggestion-slug"
+              className="text-xs focus-visible:outline-none focus-visible:ring-0 w-full"
               value={form.slug}
               onChange={(e) => setForm((prev) => ({ ...prev, slug: e.target.value }))}
               disabled={isLoading || isSubmitting}
             />
           </div>
-          <div>
-            <Label htmlFor="suggestion-description">Description</Label>
+          <div className="flex items-center gap-3 md:block md:space-y-0">
+            <Label htmlFor="suggestion-description" className="w-24 shrink-0 md:w-auto text-xs text-muted-foreground">Description</Label>
             <Textarea
               id="suggestion-description"
+              className="text-xs focus-visible:outline-none focus-visible:ring-0 w-full"
               value={form.description}
               onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
               disabled={isLoading || isSubmitting}
             />
           </div>
-          <div>
-            <Label htmlFor="suggestion-rules">Rules</Label>
+          <div className="flex items-center gap-3 md:block md:space-y-0">
+            <Label htmlFor="suggestion-rules" className="w-24 shrink-0 md:w-auto text-xs text-muted-foreground">Rules</Label>
             <Textarea
               id="suggestion-rules"
+              className="text-xs focus-visible:outline-none focus-visible:ring-0 w-full"
               value={form.rules}
               onChange={(e) => setForm((prev) => ({ ...prev, rules: e.target.value }))}
               disabled={isLoading || isSubmitting}
@@ -308,18 +315,18 @@ export function SuggestionEditor({ suggestionId }: SuggestionEditorProps) {
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
           <div className="flex items-center gap-3 md:block md:space-y-0">
-            <Label className="w-24 shrink-0 md:w-auto">Category</Label>
+            <Label className="w-24 shrink-0 md:w-auto text-xs text-muted-foreground">Category</Label>
             <Select
               value={form.category}
               onValueChange={(value) => setForm((prev) => ({ ...prev, category: value }))}
               disabled={isLoading || isSubmitting}
             >
               <SelectTrigger className="flex-1 md:w-full">
-                <SelectValue placeholder="Select category" />
+                <SelectValue className="text-xs" placeholder="Select category" />
               </SelectTrigger>
               <SelectContent>
                 {categories.map((category) => (
-                  <SelectItem key={category.slug} value={category.slug}>
+                  <SelectItem key={category.slug} value={category.slug} className="text-xs">
                     {category.name}
                   </SelectItem>
                 ))}
@@ -327,29 +334,29 @@ export function SuggestionEditor({ suggestionId }: SuggestionEditorProps) {
             </Select>
           </div>
           <div className="flex items-center gap-3 md:block md:space-y-0">
-            <Label htmlFor="suggestion-liquidity" className="w-24 shrink-0 md:w-auto">
+            <Label htmlFor="suggestion-liquidity" className="w-24 shrink-0 md:w-auto text-xs text-muted-foreground">
               Liquidity
             </Label>
             <Input
               id="suggestion-liquidity"
+              className="text-xs"
               type="number"
               min={0}
-              step="0.0001"
-              className="flex-1"
+              step="1"
               value={form.liquidity}
               onChange={(e) => setForm((prev) => ({ ...prev, liquidity: e.target.value }))}
               disabled={isLoading || isSubmitting}
             />
           </div>
           <div className="flex items-center gap-3 md:block md:space-y-0">
-            <Label htmlFor="suggestion-start-date" className="w-24 shrink-0 md:w-auto">
+            <Label htmlFor="suggestion-start-date" className="w-24 shrink-0 md:w-auto text-xs text-muted-foreground">
               Start Date
             </Label>
             <div className="relative flex-1">
               <Input
                 id="suggestion-start-date"
                 type="datetime-local"
-                className="ppx-datetime-input pr-10"
+                className="ppx-datetime-input pr-10 text-xs"
                 value={form.startDate}
                 onChange={(e) => setForm((prev) => ({ ...prev, startDate: e.target.value }))}
                 ref={startDateInputRef}
@@ -375,14 +382,14 @@ export function SuggestionEditor({ suggestionId }: SuggestionEditorProps) {
             </div>
           </div>
           <div className="flex items-center gap-3 md:block md:space-y-0">
-            <Label htmlFor="suggestion-end-date" className="w-24 shrink-0 md:w-auto">
+            <Label htmlFor="suggestion-end-date" className="w-24 shrink-0 md:w-auto text-xs text-muted-foreground">
               End Date
             </Label>
             <div className="relative flex-1">
               <Input
                 id="suggestion-end-date"
                 type="datetime-local"
-                className="ppx-datetime-input pr-10"
+                className="ppx-datetime-input pr-10 text-xs"
                 value={form.endDate}
                 onChange={(e) => setForm((prev) => ({ ...prev, endDate: e.target.value }))}
                 ref={endDateInputRef}

@@ -11,7 +11,7 @@ type MarketLike = {
   title?: string | null;
   description?: string | null;
   category?: string | null;
-  status?: "open" | "resolved" | "pending_resolution" | string | null;
+  status?: "open" | "resolved" | "unresolved" | string | null;
   // your schema field; use whatever you store for the resolve/end time
   resolves_at?: string | null;
   resolution_date?: string | null;

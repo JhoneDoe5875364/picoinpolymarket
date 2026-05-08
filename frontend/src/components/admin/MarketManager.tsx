@@ -20,6 +20,7 @@ import { Market } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 
 type Status = "open" | "pending" | "resolved";
+type Category = "all" | "politics" | "economy" | "tech" | "sports" | "crypto" | "esports" | "finance" | "geopolitics" | "culture" | "weather";
 type SortField = "id" | "question" | "status" | "category" | "start_date" | "end_date" | "traders" | "volume";
 type MarketSummary = {
   total: number;
@@ -40,7 +41,8 @@ export function MarketManager() {
   const [hasMore, setHasMore] = useState(true);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<"all" | Status>("all");
-  const [order, setOrder] = useState<SortField>("id");
+  const [category, setCategory] = useState<"all" | Category>("all");
+  const [order, setOrder] = useState<SortField>("end_date");
   const [ascending, setAscending] = useState<"ASC" | "DESC">("DESC");
   const [isInitialLoading, setIsInitialLoading] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -65,8 +67,9 @@ export function MarketManager() {
     params.set("ascending", ascending === "ASC" ? "true" : "false");
     if (search) params.set("search", search);
     if (status) params.set("status", status);
+    if (category) params.set("category", category);
     return params.toString();
-  }, [order, ascending, search, status]);
+  }, [order, ascending, search, status, category]);
 
   const summaryQs = useMemo(() => {
     const params = new URLSearchParams();
@@ -226,80 +229,103 @@ export function MarketManager() {
   return (
     <>
       <section className="space-y-3">
-          <h2 className="text-2xl leading-none tracking-tight">Manage Markets</h2>
-          <p className="text-sm text-muted-foreground">View, create, edit, resolve, and close markets.</p>
-          <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
-            <div className="rounded-lg border p-3">
+          <h2 className="text-lg font-semibold leading-none tracking-tight">Manage Markets</h2>
+          <p className="text-xs text-muted-foreground">View, create, edit, resolve, and close markets.</p>
+          <div className="grid grid-cols-2 gap-1 md:gap-2 xl:grid-cols-4">
+            <div className="rounded-lg border p-2">
               <div className="flex items-center justify-between">
-                <p className="text-sm text-muted-foreground">Total Markets</p>
+                <p className="text-xs text-muted-foreground">Total Markets</p>
                 <Layers3 className="h-4 w-4 text-muted-foreground" />
               </div>
               <div className="mt-2 flex items-center justify-between gap-2">
-                <p className="text-xl font-semibold">{summaryLoading ? "..." : roundLocale(summary.total)}</p>
+                <p className="text-md font-semibold">{summaryLoading ? "..." : roundLocale(summary.total)}</p>
                 <Badge variant="outline">100%</Badge>
               </div>
             </div>
-            <div className="rounded-lg border p-3">
+            <div className="rounded-lg border p-2">
               <div className="flex items-center justify-between">
-                <p className="text-sm text-muted-foreground">Open</p>
+                <p className="text-xs text-muted-foreground">Open</p>
                 <CircleDot className="h-4 w-4 text-primary" />
               </div>
               <div className="mt-2 flex items-center justify-between gap-2">
-                <p className="text-xl font-semibold">{summaryLoading ? "..." : roundLocale(summary.open)}</p>
+                <p className="text-md font-semibold">{summaryLoading ? "..." : roundLocale(summary.open)}</p>
                 <Badge variant="default">{openRate}%</Badge>
               </div>
             </div>
-            <div className="rounded-lg border p-3">
+            <div className="rounded-lg border p-2">
               <div className="flex items-center justify-between">
-                <p className="text-sm text-muted-foreground">Pending</p>
+                <p className="text-xs text-muted-foreground">Unresolved</p>
                 <Clock3 className="h-4 w-4 text-orange-500" />
               </div>
               <div className="mt-2 flex items-center justify-between gap-2">
-                <p className="text-xl font-semibold">{summaryLoading ? "..." : roundLocale(summary.pending)}</p>
+                <p className="text-md font-semibold">{summaryLoading ? "..." : roundLocale(summary.pending)}</p>
                 <Badge variant="secondary">{pendingRate}%</Badge>
               </div>
             </div>
-            <div className="rounded-lg border p-3">
+            <div className="rounded-lg border p-2">
               <div className="flex items-center justify-between">
-                <p className="text-sm text-muted-foreground">Resolved</p>
+                <p className="text-xs text-muted-foreground">Resolved</p>
                 <CheckCircle2 className="h-4 w-4 text-green-500" />
               </div>
               <div className="mt-2 flex items-center justify-between gap-2">
-                <p className="text-xl font-semibold">{summaryLoading ? "..." : roundLocale(summary.resolved)}</p>
+                <p className="text-md font-semibold">{summaryLoading ? "..." : roundLocale(summary.resolved)}</p>
                 <Badge variant="success">{resolvedRate}%</Badge>
               </div>
             </div>
           </div>
           <div className="space-y-2 md:flex md:items-center md:gap-2 md:space-y-0">
-            <div className="grid grid-cols-3 gap-2 md:flex md:items-center md:gap-2">
+            <div className="grid grid-cols-3 gap-1 md:flex md:items-center md:gap-2">
               <Input
                 placeholder="Search…"
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); }}
-                className="col-span-2 w-full md:w-64"
+                className="col-span-2 w-full md:w-64 text-xs"
               />
               <Button
-                className="col-span-1 md:hidden"
+                className="col-span-1 md:hidden text-xs"
                 onClick={() => setCreateDialogOpen(true)}
               >
                 Create
               </Button>
             </div>
-            <div className="grid grid-cols-3 gap-2 md:flex md:items-center md:gap-2">
+            <div className="grid grid-cols-4 md:flex md:items-center gap-1 md:gap-2">
+              <Select
+                value={category}
+                onValueChange={(value) => {
+                  setCategory(value as "all" | Category);
+                }}
+              >
+                <SelectTrigger className="w-full md:w-40 text-xs">
+                  <SelectValue placeholder="Category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all" className="text-xs">All</SelectItem>
+                  <SelectItem value="politics" className="text-xs">Politics</SelectItem>
+                  <SelectItem value="sports" className="text-xs">Sports</SelectItem>
+                  <SelectItem value="crypto" className="text-xs">Crypto</SelectItem>
+                  <SelectItem value="esports" className="text-xs">Esports</SelectItem>
+                  <SelectItem value="finance" className="text-xs">Finance</SelectItem>
+                  <SelectItem value="geopolitics" className="text-xs">Geopolitics</SelectItem>
+                  <SelectItem value="tech" className="text-xs">Tech</SelectItem>
+                  <SelectItem value="culture" className="text-xs">Culture</SelectItem>
+                  <SelectItem value="economy" className="text-xs">Economy</SelectItem>
+                  <SelectItem value="weather" className="text-xs">Weather</SelectItem>
+                </SelectContent>
+              </Select>
               <Select
                 value={status}
                 onValueChange={(value) => {
                   setStatus(value as "all" | Status);
                 }}
               >
-                <SelectTrigger className="w-full md:w-40">
+                <SelectTrigger className="w-full md:w-40 text-xs">
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="open">Open</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="resolved">Resolved</SelectItem>
+                  <SelectItem value="all" className="text-xs">All</SelectItem>
+                  <SelectItem value="open" className="text-xs">Open</SelectItem>
+                  <SelectItem value="pending" className="text-xs">Unresolved</SelectItem>
+                  <SelectItem value="resolved" className="text-xs">Resolved</SelectItem>
                 </SelectContent>
               </Select>
               <Select
@@ -308,18 +334,18 @@ export function MarketManager() {
                   setOrder(value as SortField);
                 }}
               >
-                <SelectTrigger className="w-full md:w-44">
+                <SelectTrigger className="w-full md:w-44 text-xs">
                   <SelectValue placeholder="Sort by" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="id">Id</SelectItem>
-                  <SelectItem value="start_date">Start Date</SelectItem>
-                  <SelectItem value="end_date">End Date</SelectItem>
-                  <SelectItem value="question">Question</SelectItem>
-                  <SelectItem value="status">Status</SelectItem>
-                  <SelectItem value="category">Category</SelectItem>
-                  <SelectItem value="traders">Traders</SelectItem>
-                  <SelectItem value="volume">Volume (π)</SelectItem>
+                  <SelectItem value="id" className="text-xs hidden">#</SelectItem>
+                  <SelectItem value="start_date" className="text-xs hidden">Start Date</SelectItem>
+                  <SelectItem value="end_date" className="text-xs">End Date</SelectItem>
+                  <SelectItem value="question" className="text-xs">Question</SelectItem>
+                  <SelectItem value="status" className="text-xs hidden">Status</SelectItem>
+                  <SelectItem value="category" className="text-xs">Category</SelectItem>
+                  <SelectItem value="traders" className="text-xs">Traders</SelectItem>
+                  <SelectItem value="volume" className="text-xs">Volume (π)</SelectItem>
                 </SelectContent>
               </Select>
               <Select
@@ -328,12 +354,12 @@ export function MarketManager() {
                   setAscending(value as "ASC" | "DESC");
                 }}
               >
-                <SelectTrigger className="w-full md:w-36">
+                <SelectTrigger className="w-full md:w-36 text-xs">
                   <SelectValue placeholder="Order" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="DESC">DESC</SelectItem>
-                  <SelectItem value="ASC">ASC</SelectItem>
+                  <SelectItem value="DESC" className="text-xs">DESC</SelectItem>
+                  <SelectItem value="ASC" className="text-xs">ASC</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -350,24 +376,24 @@ export function MarketManager() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Id</TableHead>
-                <TableHead>Question</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Start Date</TableHead>
-                <TableHead>End Date</TableHead>
-                <TableHead>Traders</TableHead>
-                <TableHead>Volume(PI)</TableHead>
-                <TableHead>Actions</TableHead>
+                <TableHead className="text-xs hidden">Id</TableHead>
+                <TableHead className="text-xs">Question</TableHead>
+                <TableHead className="text-xs hidden">Status</TableHead>
+                <TableHead className="text-xs hidden">Category</TableHead>
+                <TableHead className="text-xs hidden">Start Date</TableHead>
+                <TableHead className="text-xs">End Date</TableHead>
+                <TableHead className="text-xs hidden">Traders</TableHead>
+                <TableHead className="text-xs">Volume</TableHead>
+                <TableHead className="text-xs">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {rows.map((m) => (
                 <TableRow key={m.id}>
-                  <TableCell className="text-center">{m.id}</TableCell>
-                  <TableCell className="min-w-60">
-                    <div className="flex items-start gap-2">
-                      <div className="h-10 w-10 shrink-0 overflow-hidden rounded-md border bg-muted/20">
+                  <TableCell className="text-center text-xs hidden">{m.id}</TableCell>
+                  <TableCell className="min-w-40">
+                    <div className="flex items-start items-center gap-1 md:gap-2">
+                      <div className="h-8 w-8 shrink-0 overflow-hidden rounded-md border bg-muted/20">
                         <img
                           src={typeof m.icon === "string" && m.icon.trim().length > 0 ? m.icon : DEFAULT_MARKET_ICON}
                           alt={m.question ?? "Market image"}
@@ -380,19 +406,19 @@ export function MarketManager() {
                           }}
                         />
                       </div>
-                      <p className="line-clamp-2">{m.question}</p>
+                      <p className="line-clamp-2 text-xs">{m.question}</p>
                     </div>
                   </TableCell>
-                  <TableCell className="text-center">
+                  <TableCell className="text-xs hidden">
                     {m.status}
                   </TableCell>
-                  <TableCell className="text-center">
+                  <TableCell className="text-xs hidden">
                     {m.category}
                   </TableCell>
-                  <TableCell className="text-center">{format(new Date(m.start_date ?? ""), "MM/dd/yyyy")}</TableCell>
-                  <TableCell className="text-center">{format(new Date(m.end_date ?? ""), "MM/dd/yyyy")}</TableCell>
-                  <TableCell className="text-center">{roundLocale(m.traders ?? 0)}</TableCell>
-                  <TableCell className="text-center">{roundLocalePi(m.volume ?? 0)}</TableCell>
+                  <TableCell className="text-xs hidden">{format(new Date(m.start_date ?? ""), "MM/dd/yyyy")}</TableCell>
+                  <TableCell className="text-xs">{format(new Date(m.end_date ?? ""), "MM/dd/yyyy")}</TableCell>
+                  <TableCell className="text-xs hidden">{roundLocale(m.traders ?? 0)}</TableCell>
+                  <TableCell className="text-xs">{roundLocalePi(m.volume ?? 0)}</TableCell>
                   <TableCell>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -401,7 +427,7 @@ export function MarketManager() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem><Link href={`/markets/${m.id}`}>View Market</Link></DropdownMenuItem>
+                        <DropdownMenuItem><Link href={`/admin/markets/detail/${m.id}`}>View Market Metrics</Link></DropdownMenuItem>
                         <DropdownMenuItem><Link href={`/admin/markets/${m.id}`}>Edit Market</Link></DropdownMenuItem>
                         <DropdownMenuItem
                           className="text-green-500"

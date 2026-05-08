@@ -39,7 +39,7 @@ export function MarketImagePickerField({
   return (
     <>
       <div className="flex items-start gap-3 md:block md:space-y-0">
-        <Label className="m-0 w-24 shrink-0 md:w-auto">{label}</Label>
+        <Label className="m-0 w-24 shrink-0 md:w-auto text-xs text-muted-foreground">{label}</Label>
         <div className="flex flex-1 items-center gap-3">
           <div className="h-24 w-24 overflow-hidden rounded-md border bg-muted/20">
             {selectedIcon ? (

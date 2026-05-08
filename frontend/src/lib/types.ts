@@ -3,7 +3,7 @@
 // These are intentionally tolerant (optional fields) to handle both mocks and live data.
 
 export type OutcomeSide = "yes" | "no";
-export type MarketStatus = "open" | "pending_resolution" | "resolved" | "canceled";
+export type MarketStatus = "open" | "unresolved" | "resolved" | "canceled";
 
 /**
  * Market — compatible with both mock data and live backend.

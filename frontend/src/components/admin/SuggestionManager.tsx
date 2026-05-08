@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { Pencil, Ban } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -126,7 +127,7 @@ export function SuggestionManager() {
     <section>
       <div className="mb-4 space-y-1">
         <h2 className="text-xl font-semibold leading-none tracking-tight">Market Suggestions</h2>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           Review user suggestions and move to the detail editor for approval.
         </p>
       </div>
@@ -140,41 +141,46 @@ export function SuggestionManager() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Question</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>User</TableHead>
-                <TableHead>Start</TableHead>
-                <TableHead>End</TableHead>
-                <TableHead>Actions</TableHead>
+                <TableHead className="text-xs">Question</TableHead>
+                <TableHead className="text-xs">Category</TableHead>
+                <TableHead className="text-xs">User</TableHead>
+                <TableHead className="text-xs">Start</TableHead>
+                <TableHead className="text-xs">End</TableHead>
+                <TableHead className="text-xs">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {suggestions.map((suggestion) => (
                 <TableRow key={suggestion.id}>
                   <TableCell className="min-w-60">
-                    <p className="font-medium">{suggestion.question}</p>
+                    <p className="font-medium text-xs">{suggestion.question}</p>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline">{suggestion.category || "-"}</Badge>
+                    <Badge variant="outline" className="text-xs">{suggestion.category || "-"}</Badge>
                   </TableCell>
                   <TableCell className="text-xs">{suggestion.pi_username || "-"}</TableCell>
                   <TableCell className="text-xs">
-                    {suggestion.start_date ? format(new Date(suggestion.start_date), "Pp") : "N/A"}
+                    {suggestion.start_date ? format(new Date(suggestion.start_date), "MM/dd/yyyy") : "N/A"}
                   </TableCell>
                   <TableCell className="text-xs">
-                    {suggestion.end_date ? format(new Date(suggestion.end_date), "Pp") : "N/A"}
+                    {suggestion.end_date ? format(new Date(suggestion.end_date), "MM/dd/yyyy") : "N/A"}
                   </TableCell>
-                  <TableCell className="space-x-2 min-w-40">
-                    <Button size="sm" asChild>
-                      <Link href={`/admin/suggestions/${suggestion.id}`}>Edit</Link>
+                  <TableCell className="flex min-w-32 items-center gap-2">
+                    <Button size="icon" variant="outline" className="h-8 w-8 shrink-0" asChild>
+                      <Link href={`/admin/suggestions/${suggestion.id}`} aria-label="Edit suggestion">
+                        <Pencil className="h-4 w-4" />
+                      </Link>
                     </Button>
                     <Button
-                      size="sm"
+                      type="button"
+                      size="icon"
                       variant="destructive"
+                      className="h-8 w-8 shrink-0"
                       onClick={() => rejectSuggestion(suggestion)}
                       disabled={isProcessing}
+                      aria-label="Reject suggestion"
                     >
-                      Reject
+                      <Ban className="h-4 w-4" />
                     </Button>
                   </TableCell>
                 </TableRow>

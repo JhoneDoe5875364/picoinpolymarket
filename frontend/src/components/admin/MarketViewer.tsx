@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiFetchWithToken } from "@/lib/api";
 import { format } from "date-fns";
 
-type Status = "open" | "pending_resolution" | "resolved";
+type Status = "open" | "unresolved" | "resolved";
 
 type Row = {
   id: string;
@@ -106,7 +106,7 @@ export function MarketViewer() {
           />
           <Button variant="outline" onClick={() => setStatus("all")}>All</Button>
           <Button variant="outline" onClick={() => setStatus("open")}>Open</Button>
-          <Button variant="outline" onClick={() => setStatus("pending_resolution")}>Pending</Button>
+          <Button variant="outline" onClick={() => setStatus("unresolved")}>Unresolved</Button>
           <Button variant="outline" onClick={() => setStatus("resolved")}>Resolved</Button>
           <div className="ml-auto text-sm opacity-70">
             {loading ? "Loading…" : `${rows.length} / ${total}`}
