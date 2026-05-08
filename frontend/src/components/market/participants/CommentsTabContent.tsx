@@ -358,7 +358,7 @@ export function CommentsTabContent({ market, isActive, onCommentCountChange }: C
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           placeholder="Add a comment..."
-          className="flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0 px-0 h-9"
+          className="flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0 focus-visible:border-0 px-0 h-9"
           disabled={posting}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
@@ -367,14 +367,6 @@ export function CommentsTabContent({ market, isActive, onCommentCountChange }: C
             }
           }}
         />
-        <div className="flex items-center gap-1 text-muted-foreground">
-          <button type="button" className="rounded p-1 hover:bg-muted" aria-label="Emoji" disabled>
-            <Smile className="h-5 w-5" />
-          </button>
-          <button type="button" className="rounded p-1 hover:bg-muted" aria-label="Attach" disabled>
-            <ImageIcon className="h-5 w-5" />
-          </button>
-        </div>
         <Button
           type="button"
           size="sm"

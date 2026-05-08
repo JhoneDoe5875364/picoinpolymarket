@@ -109,8 +109,8 @@ export function MarketRules({ market }: MarketRulesProps) {
             <p className="mt-1 text-xs text-muted-foreground">
               This section is informational only and does not recommend a Yes/No position.
             </p>
-            <div>
-              <dt className="font-medium text-foreground">Context</dt>
+            <div className="mt-4">
+              <dt className="font-medium text-foreground text-sm">Context</dt>
               <dd className="mt-1 ml-4 whitespace-pre-line text-muted-foreground text-xs">{marketContext || "No additional context provided."}</dd>
             </div>
           </div>

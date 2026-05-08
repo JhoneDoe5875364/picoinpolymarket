@@ -14,7 +14,7 @@ function formatCount(n: number): string {
 }
 
 export function MarketParticipants({ market }: { market: Market }) {
-  const [activeTab, setActiveTab] = useState("top-holders");
+  const [activeTab, setActiveTab] = useState("comments");
   const [commentTotal, setCommentTotal] = useState(0);
 
   const refreshCommentTotal = useCallback(async () => {
