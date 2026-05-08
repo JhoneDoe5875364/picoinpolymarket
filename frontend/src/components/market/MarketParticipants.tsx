@@ -34,7 +34,7 @@ export function MarketParticipants({ market }: { market: Market }) {
 
   return (
     <section>
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="pb-8">
         <TabsList className="h-auto p-0 bg-transparent rounded-none justify-start gap-6">
           <TabsTrigger
             value="comments"
