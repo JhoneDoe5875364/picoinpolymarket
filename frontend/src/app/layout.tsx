@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import Script from "next/script";
-import { AppShell } from "@/components/AppShell";
+import { AppShell } from "@/components/app/AppShell";
 import { AuthProvider } from "@/context/AuthContext";
 import { GeoControlProvider } from "@/context/GeoControlContext";
 // removed AppFooter import

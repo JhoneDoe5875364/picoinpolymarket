@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import LoginWithPi from "./LoginWithPi";
-import { Button } from "./ui/button";
+import LoginWithPi from "@/components/LoginWithPi";
+import { Button } from "@/components/ui/button";
 import { CheckCircle, Menu, Moon, Sun } from "lucide-react";
 import { User } from "@/lib/types";
 import { AppNavigation } from "./AppNavigation";
@@ -15,7 +15,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "./ui/dropdown-menu";
+} from "@/components/ui/dropdown-menu";
 
 interface AppHeaderProps {
   currentUser: User | null;

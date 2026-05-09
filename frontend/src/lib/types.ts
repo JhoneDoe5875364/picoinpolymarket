@@ -84,8 +84,6 @@ export type Paged<T> = {
 };
 export type User = any;
 
-export type FraudReport = any;
-
 export interface Transaction {
   id: string;
   date: string;

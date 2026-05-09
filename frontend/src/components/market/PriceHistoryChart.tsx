@@ -3,8 +3,8 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { CartesianGrid, Line, LineChart, Tooltip, XAxis, YAxis } from "recharts"
-import { ChartContainer, ChartTooltipContent, type ChartConfig } from "./ui/chart"
-import { Skeleton } from "./ui/skeleton"
+import { ChartContainer, ChartTooltipContent, type ChartConfig } from "../ui/chart"
+import { Skeleton } from "../ui/skeleton"
 import { apiFetch } from "@/lib/api"
 import { Market } from "@/lib/types"
 import { Clock } from "lucide-react"

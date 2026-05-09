@@ -3,14 +3,14 @@
 import { useState, useEffect } from "react";
 import { initPiSDK } from "@/lib/pi";
 import type { User } from "@/lib/types";
-import { Skeleton } from "./ui/skeleton";
+import { Skeleton } from "@/components/ui/skeleton";
 import { AppFooter } from "./AppFooter";
 import Link from "next/link";
-import { PredictPixLogo } from "./PredictPixLogo";
+import { PredictPixLogo } from "@/components/PredictPixLogo";
 
 import AppHeader from "./AppHeader";
 import { usePathname } from "next/navigation";
-import { MobileBottomNav } from "./MobileBottomNav";
+import { MobileBottomNav } from "@/components/MobileBottomNav";
 
 function AppSkeleton() {
   return (

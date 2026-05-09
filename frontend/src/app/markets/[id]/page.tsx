@@ -4,7 +4,7 @@ export const runtime = "nodejs"; // <— IMPORTANT: allow server to reach 127.0.
 import { notFound } from "next/navigation";
 import { PredictionPanel } from "@/components/market/PredictionPanel";
 import { Market } from "@/lib/types";
-import { PriceHistoryChart } from "@/components/PriceHistorychart";
+import { PriceHistoryChart } from "@/components/market/PriceHistoryChart";
 import { apiFetch } from "@/lib/api";
 import { MarketSummary } from "@/components/market/MarketSummary";
 import { MarketRules } from "@/components/market/MarketRules";

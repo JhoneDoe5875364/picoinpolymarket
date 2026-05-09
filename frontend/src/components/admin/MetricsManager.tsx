@@ -55,13 +55,6 @@ function formatNumber(value: number): string {
   return Number(value || 0).toLocaleString();
 }
 
-function formatPi(value: number): string {
-  return `${Number(value || 0).toLocaleString(undefined, {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  })} PI`;
-}
-
 function formatDate(value?: string | null): string {
   if (!value) return "-";
   const date = new Date(value);
@@ -92,7 +85,7 @@ function MetricPeriodTable({
   );
 }
 
-export function AdminMetricsDashboard() {
+export function MetricsManager() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<AdminMetricsData | null>(null);

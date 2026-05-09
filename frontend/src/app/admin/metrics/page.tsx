@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Loader2, ShieldAlert } from "lucide-react";
-import { AdminMetricsDashboard } from "@/components/admin/AdminMetricsDashboard";
+import { MetricsManager } from "@/components/admin/MetricsManager";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/context/AuthContext";
 
@@ -43,7 +43,7 @@ export default function AdminMetricsPage() {
 
   return (
     <div className="container mx-auto space-y-8 px-4 py-8 sm:px-6 lg:px-8">
-      <AdminMetricsDashboard />
+      <MetricsManager />
     </div>
   );
 }
