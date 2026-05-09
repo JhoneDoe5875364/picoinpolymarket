@@ -3,23 +3,68 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type { User } from '@/lib/types';
+import { PeriodButtonGroup, type PeriodButtonKey } from '@/components/PeriodButtonGroup';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Layers3, ShieldCheck, ShieldOff, UserCheck, UserMinus, UserX } from 'lucide-react';
+import {
+  AlertTriangle,
+  Clock,
+  Layers3,
+  ShieldCheck,
+  ShieldOff,
+  TrendingUp,
+  UserCheck,
+  UserMinus,
+  UserX,
+  Wallet,
+} from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { apiFetchWithToken } from '@/lib/api';
 import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { cn, roundLocale } from '@/lib/utils';
+import { roundLocale } from '@/lib/utils';
+
+type TopUserActivity = {
+  user_id: number;
+  pi_username: string;
+  trade_count: number;
+};
 
 type UserSummary = {
   total: number;
   active: number;
   suspended: number;
   banned: number;
+  active_traders_by_period: Record<PeriodButtonKey, number>;
+  users_with_open_positions: number;
+  users_with_resolved_positions: number;
+  users_with_pending_payments: number;
+  users_with_failed_payments: number;
+  top_users_by_activity: TopUserActivity[];
 };
+
+const emptyActiveTradersByPeriod = (): Record<PeriodButtonKey, number> => ({
+  today: 0,
+  week: 0,
+  month: 0,
+  year: 0,
+  all: 0,
+});
+
+const emptySummary = (): UserSummary => ({
+  total: 0,
+  active: 0,
+  suspended: 0,
+  banned: 0,
+  active_traders_by_period: emptyActiveTradersByPeriod(),
+  users_with_open_positions: 0,
+  users_with_resolved_positions: 0,
+  users_with_pending_payments: 0,
+  users_with_failed_payments: 0,
+  top_users_by_activity: [],
+});
 
 export function UserManager() {
   const [users, setUsers] = useState<User[]>([]);
@@ -33,8 +78,9 @@ export function UserManager() {
   const [order, setOrder] = useState<"ASC" | "DESC">("DESC");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "ACTIVE" | "SUSPENDED" | "BANNED">("ALL");
   const [loading, setLoading] = useState(false);
-  const [summary, setSummary] = useState<UserSummary>({ total: 0, active: 0, suspended: 0, banned: 0 });
+  const [summary, setSummary] = useState<UserSummary>(emptySummary);
   const [summaryLoading, setSummaryLoading] = useState(false);
+  const [activeTradersPeriod, setActiveTradersPeriod] = useState<PeriodButtonKey>('today');
 
   const qs = useMemo(() => {
     const params = new URLSearchParams();
@@ -73,11 +119,30 @@ export function UserManager() {
     try {
       const res = await apiFetchWithToken(`/users/summary?${summaryQs}`, { method: "GET" });
       if (res.ok && res.data) {
+        const d = res.data;
+        const top = Array.isArray(d.top_users_by_activity) ? d.top_users_by_activity : [];
+        const ap = d.active_traders_by_period;
+        const byPeriod = emptyActiveTradersByPeriod();
+        if (ap && typeof ap === 'object') {
+          (Object.keys(byPeriod) as PeriodButtonKey[]).forEach((k) => {
+            byPeriod[k] = Number((ap as Record<string, unknown>)[k] ?? 0);
+          });
+        }
         setSummary({
-          total: Number(res.data.total ?? 0),
-          active: Number(res.data.active ?? 0),
-          suspended: Number(res.data.suspended ?? 0),
-          banned: Number(res.data.banned ?? 0),
+          total: Number(d.total ?? 0),
+          active: Number(d.active ?? 0),
+          suspended: Number(d.suspended ?? 0),
+          banned: Number(d.banned ?? 0),
+          active_traders_by_period: byPeriod,
+          users_with_open_positions: Number(d.users_with_open_positions ?? 0),
+          users_with_resolved_positions: Number(d.users_with_resolved_positions ?? 0),
+          users_with_pending_payments: Number(d.users_with_pending_payments ?? 0),
+          users_with_failed_payments: Number(d.users_with_failed_payments ?? 0),
+          top_users_by_activity: top.map((u: TopUserActivity) => ({
+            user_id: Number(u.user_id),
+            pi_username: String(u.pi_username ?? ''),
+            trade_count: Number(u.trade_count ?? 0),
+          })),
         });
       }
     } catch (e: any) {
@@ -200,6 +265,99 @@ export function UserManager() {
             </div>
           </div>
         </div>
+
+        <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
+          <div className="rounded-lg border p-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">Users with open positions</p>
+              <Wallet className="h-4 w-4 text-amber-500" />
+            </div>
+            <p className="mt-2 text-md font-semibold">
+              {summaryLoading ? '...' : roundLocale(summary.users_with_open_positions)}
+            </p>
+          </div>
+          <div className="rounded-lg border p-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">Users with resolved positions</p>
+              <Layers3 className="h-4 w-4 text-teal-500" />
+            </div>
+            <p className="mt-2 text-md font-semibold">
+              {summaryLoading ? '...' : roundLocale(summary.users_with_resolved_positions)}
+            </p>
+          </div>
+          <div className="rounded-lg border p-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">Users with pending payments</p>
+              <Clock className="h-4 w-4 text-orange-500" />
+            </div>
+            <p className="mt-2 text-md font-semibold">
+              {summaryLoading ? '...' : roundLocale(summary.users_with_pending_payments)}
+            </p>
+          </div>
+          <div className="rounded-lg border p-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">Users with failed payments</p>
+              <AlertTriangle className="h-4 w-4 text-red-500" />
+            </div>
+            <p className="mt-2 text-md font-semibold">
+              {summaryLoading ? '...' : roundLocale(summary.users_with_failed_payments)}
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-1 pt-2 hidden">
+          <p className="text-xs font-medium text-muted-foreground">Trading &amp; engagement</p>
+          <p className="text-[11px] text-muted-foreground">
+            Active traders: distinct members with at least one trade in the period (UTC), matching admin metrics ranges.
+            Top activity uses the last 30 days.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+          <div className="rounded-lg border p-3">
+            <div className="flex gap-2 items-center justify-between">
+              <p className="text-xs text-muted-foreground">Active traders</p>
+              <PeriodButtonGroup
+                selected={activeTradersPeriod}
+                onSelect={setActiveTradersPeriod}
+                className="shrink-0 self-end sm:self-auto"
+              />
+            </div>
+            <p className="mt-2 text-md font-semibold">
+              {summaryLoading
+                ? '...'
+                : roundLocale(summary.active_traders_by_period[activeTradersPeriod] ?? 0)}
+            </p>
+          </div>
+          <div className="rounded-lg border p-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">Largest users by activity</p>
+                <p className="text-[11px] text-muted-foreground">Top 5 by trade count (last 30 days)</p>
+              </div>
+              <TrendingUp className="h-4 w-4 shrink-0 text-muted-foreground" />
+            </div>
+            {summaryLoading ? (
+              <p className="text-xs text-muted-foreground">...</p>
+            ) : summary.top_users_by_activity.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No trades in this window (or no matching users).</p>
+            ) : (
+              <ul className="space-y-1.5">
+                {summary.top_users_by_activity.map((u, i) => (
+                  <li
+                    key={`${u.user_id}-${i}`}
+                    className="flex items-center justify-between gap-2 text-xs"
+                  >
+                    <span className="min-w-0 truncate font-medium">{u.pi_username || `User ${u.user_id}`}</span>
+                    <span className="shrink-0 tabular-nums text-muted-foreground">
+                      {roundLocale(u.trade_count)} trades
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+
         <div>
           <div className="md:flex md:justify-between md:items-center gap-1 md:gap-2">
             <Input

@@ -12,6 +12,7 @@ from app.models.tables.market import Market
 from app.models.tables.market_token import MarketToken
 from app.models.tables.market_position import MarketPosition
 from app.models.tables.market_trades import MarketTrade
+from app.models.tables.payment import Payment
 from app.models.tables.user import User
 
 
@@ -127,14 +128,19 @@ async def get_users(
     return rows, int(total or 0)
 
 
+def _member_user_filters(search: str) -> list[Any]:
+    filters: list[Any] = [User.role_id == 3]
+    if search and search.strip():
+        filters.append(User.pi_username.ilike(f"%{search}%"))
+    return filters
+
+
 async def get_users_summary(
     session: AsyncSession,
     *,
     search: str = "",
-) -> dict[str, int]:
-    filters: list[Any] = [User.role_id == 3]
-    if search and search.strip():
-        filters.append(User.pi_username.ilike(f"%{search}%"))
+) -> dict[str, Any]:
+    filters = _member_user_filters(search)
 
     stmt = select(
         func.count(User.id).label("total"),
@@ -155,12 +161,112 @@ async def get_users_summary(
     result = await session.execute(stmt)
     row = result.mappings().first()
     if not row:
-        return {"total": 0, "active": 0, "suspended": 0, "banned": 0}
+        base = {"total": 0, "active": 0, "suspended": 0, "banned": 0}
+    else:
+        base = {
+            "total": int(row["total"] or 0),
+            "active": int(row["active"] or 0),
+            "suspended": int(row["suspended"] or 0),
+            "banned": int(row["banned"] or 0),
+        }
+
+    now = datetime.now(timezone.utc)
+    day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_start = day_start - timedelta(days=day_start.weekday())
+    month_start = day_start.replace(day=1)
+    year_start = day_start.replace(month=1, day=1)
+    activity_since = now - timedelta(days=30)
+
+    periods: list[tuple[str, Optional[datetime]]] = [
+        ("today", day_start),
+        ("week", week_start),
+        ("month", month_start),
+        ("year", year_start),
+        ("all", None),
+    ]
+    active_traders_by_period: dict[str, int] = {}
+    for label, start_at in periods:
+        trade_filters: list[Any] = list(filters)
+        if start_at is not None:
+            trade_filters.append(MarketTrade.created_at >= start_at)
+        active_stmt = (
+            select(func.count(func.distinct(MarketTrade.taker_user_id)))
+            .select_from(MarketTrade)
+            .join(User, User.id == MarketTrade.taker_user_id)
+            .where(*trade_filters)
+        )
+        active_traders_by_period[label] = int(await session.scalar(active_stmt) or 0)
+
+    open_pos_stmt = (
+        select(func.count(func.distinct(MarketPosition.user_id)))
+        .select_from(MarketPosition)
+        .join(User, User.id == MarketPosition.user_id)
+        .join(Market, Market.id == MarketPosition.market_id)
+        .where(
+            *filters,
+            MarketPosition.is_closed == False,
+            Market.is_active == True,
+        )
+    )
+
+    resolved_pos_stmt = (
+        select(func.count(func.distinct(MarketPosition.user_id)))
+        .select_from(MarketPosition)
+        .join(User, User.id == MarketPosition.user_id)
+        .where(*filters, MarketPosition.is_closed == True)
+    )
+
+    _trade_count = func.count().label("trade_count")
+    top_activity_stmt = (
+        select(
+            User.id.label("user_id"),
+            User.pi_username.label("pi_username"),
+            _trade_count,
+        )
+        .select_from(MarketTrade)
+        .join(User, User.id == MarketTrade.taker_user_id)
+        .where(*filters, MarketTrade.created_at >= activity_since)
+        .group_by(User.id, User.pi_username)
+        .order_by(_trade_count.desc())
+        .limit(5)
+    )
+
+    pending_pay_stmt = (
+        select(func.count(func.distinct(Payment.user_id)))
+        .select_from(Payment)
+        .join(User, User.id == Payment.user_id)
+        .where(*filters, Payment.status == "PENDING")
+    )
+    failed_pay_stmt = (
+        select(func.count(func.distinct(Payment.user_id)))
+        .select_from(Payment)
+        .join(User, User.id == Payment.user_id)
+        .where(*filters, Payment.status == "FAILED")
+    )
+
+    users_open_positions = int(await session.scalar(open_pos_stmt) or 0)
+    users_resolved_positions = int(await session.scalar(resolved_pos_stmt) or 0)
+    users_pending_payments = int(await session.scalar(pending_pay_stmt) or 0)
+    users_failed_payments = int(await session.scalar(failed_pay_stmt) or 0)
+
+    top_result = await session.execute(top_activity_stmt)
+    top_users_by_activity = [
+        {
+            "user_id": int(r["user_id"]),
+            "pi_username": r["pi_username"] or "",
+            "trade_count": int(r["trade_count"] or 0),
+        }
+        for r in top_result.mappings().all()
+    ]
+
     return {
-        "total": int(row["total"] or 0),
-        "active": int(row["active"] or 0),
-        "suspended": int(row["suspended"] or 0),
-        "banned": int(row["banned"] or 0),
+        **base,
+        "active_traders_by_period": active_traders_by_period,
+        "users_with_open_positions": users_open_positions,
+        "users_with_resolved_positions": users_resolved_positions,
+        "users_with_pending_payments": users_pending_payments,
+        "users_with_failed_payments": users_failed_payments,
+        "top_users_by_activity": top_users_by_activity,
     }
 
 

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { PeriodButtonGroup, type PeriodButtonKey } from "@/components/PeriodButtonGroup";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -11,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiFetchWithToken } from "@/lib/api";
 import { roundLocalePi } from "@/lib/utils";
 
-type PeriodKey = "today" | "week" | "month" | "year" | "all";
+type PeriodKey = PeriodButtonKey;
 
 type PeriodValue = Record<PeriodKey, number>;
 
@@ -48,14 +49,6 @@ const PERIODS: Array<{ key: PeriodKey; label: string }> = [
   { key: "month", label: "This Month" },
   { key: "year", label: "This Year" },
   { key: "all", label: "All Time" },
-];
-
-const PERIOD_TABS: Array<{ key: PeriodKey; label: string }> = [
-  { key: "today", label: "1D" },
-  { key: "week", label: "1W" },
-  { key: "month", label: "1M" },
-  { key: "year", label: "1Y" },
-  { key: "all", label: "ALL" },
 ];
 
 function formatNumber(value: number): string {
@@ -227,30 +220,7 @@ export function AdminMetricsDashboard() {
   return (
     <div className="space-y-2">
       <div className="pt-2 text-right">
-        <div className="inline-flex items-center rounded-2xl border border-border overflow-hidden">
-        {PERIOD_TABS.map((period) => (
-          <div
-            key={period.key}
-            role="button"
-            tabIndex={0}
-            aria-pressed={selectedPeriod === period.key}
-            onClick={() => setSelectedPeriod(period.key)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                setSelectedPeriod(period.key);
-              }
-            }}
-            className={`px-3 py-1 text-sm font-medium cursor-pointer select-none border-r border-border last:border-r-0 first:rounded-l-md last:rounded-r-md ${
-              selectedPeriod === period.key
-                ? "bg-primary text-primary-foreground"
-                : "bg-background text-foreground hover:bg-muted/60"
-            }`}
-          >
-            {period.label}
-          </div>
-        ))}
-        </div>
+        <PeriodButtonGroup selected={selectedPeriod} onSelect={setSelectedPeriod} />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
