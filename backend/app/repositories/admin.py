@@ -5,14 +5,17 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, List, Optional, Tuple
 
-from sqlalchemy import and_, case, func, or_, select, update
+from sqlalchemy import and_, case, exists, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.tables.category import Category
+from app.models.tables.leaderboard import Leaderboard
 from app.models.tables.market import Market
 from app.models.tables.market_position import MarketPosition
 from app.models.tables.market_trades import MarketTrade
 from app.models.tables.market_token import MarketToken
+from app.models.tables.order import Order
+from app.models.tables.payment import Payment
 from app.models.tables.suggestion import Suggestion
 from app.models.tables.user import User
 
@@ -461,3 +464,151 @@ async def metrics(session: AsyncSession) -> dict[str, Any]:
         "suggestion_count_created": {k: int(suggestions_created_row[k] or 0) for k, _ in periods},
         "closed_unresolved_markets": [dict(row) for row in unresolved_closed_rows],
     }
+
+
+def _wallet_present_expr():
+    return and_(
+        Leaderboard.wallet_address.isnot(None),
+        func.trim(Leaderboard.wallet_address) != "",
+    )
+
+
+async def payment_operations_overview(session: AsyncSession) -> dict[str, Any]:
+    """Aggregates for admin payment / payout monitoring (best-effort from current schema)."""
+    received_stmt = select(
+        func.count(Payment.id),
+        func.coalesce(func.sum(Payment.amount), 0),
+    ).where(Payment.status == "COMPLETED")
+    received_row = (await session.execute(received_stmt)).one()
+
+    pending_stmt = select(
+        func.count(Payment.id),
+        func.coalesce(func.sum(Payment.amount), 0),
+    ).where(Payment.status == "PENDING")
+    pending_row = (await session.execute(pending_stmt)).one()
+
+    failed_stmt = select(
+        func.count(Payment.id),
+        func.coalesce(func.sum(Payment.amount), 0),
+    ).where(Payment.status == "FAILED")
+    failed_row = (await session.execute(failed_stmt)).one()
+
+    manual_stmt = select(
+        func.count(Payment.id),
+        func.coalesce(func.sum(Payment.amount), 0),
+    ).where(Payment.status == "APPROVED")
+    manual_row = (await session.execute(manual_stmt)).one()
+
+    mismatch_stmt = (
+        select(func.count())
+        .select_from(Payment)
+        .join(Order, Order.id == Payment.order_id)
+        .where(Payment.amount != Order.pi_amount)
+    )
+    mismatch_count = int(await session.scalar(mismatch_stmt) or 0)
+
+    wallet_connected_stmt = select(func.count(func.distinct(Leaderboard.user_id))).where(
+        _wallet_present_expr()
+    )
+    wallet_connected = int(await session.scalar(wallet_connected_stmt) or 0)
+
+    wallet_missing_stmt = select(func.count()).select_from(User).where(
+        User.role_id == 3,
+        ~exists(
+            select(Leaderboard.user_id).where(
+                Leaderboard.user_id == User.id,
+                _wallet_present_expr(),
+            )
+        ),
+    )
+    wallet_missing = int(await session.scalar(wallet_missing_stmt) or 0)
+
+    return {
+        "user_to_app_payments_received": {
+            "count": int(received_row[0] or 0),
+            "total_pi": float(received_row[1] or 0),
+        },
+        "app_to_user_payouts_sent": {
+            "count": 0,
+            "total_pi": 0.0,
+            "tracking_note": "On-chain app-to-user payouts are not stored in this database yet.",
+        },
+        "pending_payouts": {
+            "count": int(pending_row[0] or 0),
+            "total_pi": float(pending_row[1] or 0),
+            "scope_note": "Pi payments awaiting user wallet action (user→app).",
+        },
+        "failed_payouts": {
+            "count": int(failed_row[0] or 0),
+            "total_pi": float(failed_row[1] or 0),
+            "scope_note": "Failed Pi payment records linked to orders.",
+        },
+        "manual_payout_queue": {
+            "count": int(manual_row[0] or 0),
+            "total_pi": float(manual_row[1] or 0),
+            "scope_note": "Approved server-side; may still need Pi complete / manual follow-up.",
+        },
+        "wallet_address_connected_users": wallet_connected,
+        "wallet_address_missing_users": wallet_missing,
+        "wallet_scope_note": "Based on distinct users with a non-empty wallet on any leaderboard row.",
+        "payment_mismatch_warnings": {
+            "count": mismatch_count,
+            "scope_note": "Payment.amount differs from orders.pi_amount for the linked order.",
+        },
+    }
+
+
+async def list_admin_payments(
+    session: AsyncSession,
+    *,
+    status: str = "ALL",
+    limit: int = 20,
+    offset: int = 0,
+) -> Tuple[List[dict[str, Any]], int]:
+    allowed = {"ALL", "PENDING", "APPROVED", "COMPLETED", "FAILED", "CANCELLED"}
+    if status not in allowed:
+        raise ValueError("Invalid status filter")
+
+    mismatch_expr = Payment.amount != Order.pi_amount
+
+    base = (
+        select(
+            Payment.id,
+            Payment.user_id,
+            User.pi_username,
+            Payment.order_id,
+            Payment.amount,
+            Order.pi_amount.label("order_pi_amount"),
+            Payment.status,
+            Payment.pi_payment_id,
+            Payment.txid,
+            Payment.created_at,
+            mismatch_expr.label("amount_mismatch"),
+        )
+        .join(User, User.id == Payment.user_id)
+        .join(Order, Order.id == Payment.order_id)
+    )
+    if status != "ALL":
+        base = base.where(Payment.status == status)
+
+    count_base = (
+        select(func.count())
+        .select_from(Payment)
+        .join(User, User.id == Payment.user_id)
+        .join(Order, Order.id == Payment.order_id)
+    )
+    if status != "ALL":
+        count_base = count_base.where(Payment.status == status)
+
+    total = int(await session.scalar(count_base) or 0)
+
+    list_stmt = base.order_by(Payment.created_at.desc()).limit(limit).offset(offset)
+    result = await session.execute(list_stmt)
+    rows: List[dict[str, Any]] = []
+    for r in result.mappings().all():
+        row = dict(r)
+        row["amount"] = float(row["amount"] or 0)
+        row["order_pi_amount"] = float(row["order_pi_amount"] or 0)
+        row["amount_mismatch"] = bool(row.get("amount_mismatch"))
+        rows.append(row)
+    return rows, total

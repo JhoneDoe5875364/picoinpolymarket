@@ -1,9 +1,9 @@
+from math import ceil
 import base64
 import binascii
 import re
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
-from math import ceil
 from pathlib import Path as FsPath
 from typing import Literal, Optional
 
@@ -427,3 +427,41 @@ async def get_metrics(db: DbSession, user=Depends(verify_token)):
 
     stats = await admin_repo.metrics(db)
     return {"ok": True, "data": jsonable_encoder(stats)}
+
+
+@router.get("/payments/overview")
+async def get_admin_payments_overview(db: DbSession, user=Depends(verify_token)):
+    role = user.get("role", "")
+    if role != "superadmin":
+        raise HTTPException(status_code=403, detail="HasNotSuperadminRole")
+
+    data = await admin_repo.payment_operations_overview(db)
+    return {"ok": True, "data": jsonable_encoder(data)}
+
+
+@router.get("/payments")
+async def list_admin_payments(
+    db: DbSession,
+    user=Depends(verify_token),
+    status: str = Query(default="ALL"),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+):
+    role = user.get("role", "")
+    if role != "superadmin":
+        raise HTTPException(status_code=403, detail="HasNotSuperadminRole")
+
+    try:
+        rows, total = await admin_repo.list_admin_payments(
+            db, status=status, limit=limit, offset=offset
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return {
+        "ok": True,
+        "data": jsonable_encoder(rows),
+        "total": total,
+        "page": ceil(offset / limit) + 1 if limit else 1,
+        "pages": ceil(total / limit) if total and limit else 0,
+    }

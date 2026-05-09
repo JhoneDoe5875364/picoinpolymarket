@@ -31,6 +31,7 @@ export function AppNavigation({ currentUser: _currentUser }: AppNavigationProps)
     { label: "Metrics", href: "/admin/metrics", section: "metrics" },
     { label: "Markets", href: "/admin/markets", section: "markets" },
     { label: "Users", href: "/admin/users", section: "users" },
+    { label: "Payments", href: "/admin/payments", section: "payment" },
     { label: "Suggestions", href: "/admin/suggestions", section: "suggestions" },
   ] as const;
 
