@@ -429,6 +429,15 @@ async def get_metrics(db: DbSession, user=Depends(verify_token)):
     return {"ok": True, "data": jsonable_encoder(stats)}
 
 
+@router.get("/trust-safety")
+async def get_trust_safety(db: DbSession, user=Depends(verify_token)):
+    role = user.get("role", "")
+    if role not in ("superadmin", "admin"):
+        raise HTTPException(status_code=403, detail="HasNotAdminRole")
+    data = await admin_repo.trust_safety_dashboard(db)
+    return {"ok": True, "data": jsonable_encoder(data)}
+
+
 @router.get("/payments/overview")
 async def get_admin_payments_overview(db: DbSession, user=Depends(verify_token)):
     role = user.get("role", "")

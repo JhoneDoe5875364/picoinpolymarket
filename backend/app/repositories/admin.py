@@ -9,6 +9,7 @@ from sqlalchemy import and_, case, exists, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.tables.category import Category
+from app.models.tables.comment import Comment
 from app.models.tables.leaderboard import Leaderboard
 from app.models.tables.market import Market
 from app.models.tables.market_position import MarketPosition
@@ -612,3 +613,233 @@ async def list_admin_payments(
         row["amount_mismatch"] = bool(row.get("amount_mismatch"))
         rows.append(row)
     return rows, total
+
+
+HIGH_COMMENT_WEEK_THRESHOLD = 12
+LARGE_TRADE_PI_THRESHOLD = Decimal("500")
+
+
+async def trust_safety_dashboard(session: AsyncSession) -> dict[str, Any]:
+    """Operational trust & safety signals derived from current schema (best-effort)."""
+    now = datetime.now(timezone.utc)
+    seven_ago = now - timedelta(days=7)
+
+    mismatch_stmt = (
+        select(func.count())
+        .select_from(Payment)
+        .join(Order, Order.id == Payment.order_id)
+        .where(Payment.amount != Order.pi_amount)
+    )
+    payment_mismatch_count = int(await session.scalar(mismatch_stmt) or 0)
+
+    failed_7d_stmt = select(func.count()).where(
+        Payment.status == "FAILED",
+        Payment.created_at >= seven_ago,
+    )
+    failed_payments_7d = int(await session.scalar(failed_7d_stmt) or 0)
+
+    blocked_markets_count_stmt = select(func.count(func.distinct(Comment.market_id))).where(
+        Comment.status == "blocked",
+    )
+    markets_with_blocked_comments = int(await session.scalar(blocked_markets_count_stmt) or 0)
+
+    blocked_agg = (
+        select(
+            Comment.market_id.label("market_id"),
+            func.count().label("blocked_comments"),
+        )
+        .where(Comment.status == "blocked")
+        .group_by(Comment.market_id)
+        .subquery()
+    )
+    disputed_stmt = (
+        select(
+            Market.id,
+            Market.question,
+            blocked_agg.c.blocked_comments,
+        )
+        .join(blocked_agg, Market.id == blocked_agg.c.market_id)
+        .order_by(blocked_agg.c.blocked_comments.desc())
+        .limit(50)
+    )
+    disputed_rows = (await session.execute(disputed_stmt)).mappings().all()
+    disputed_markets = [
+        {
+            "market_id": int(r["id"]),
+            "question": r["question"],
+            "blocked_comments": int(r["blocked_comments"] or 0),
+        }
+        for r in disputed_rows
+    ]
+
+    c7 = (
+        select(
+            Comment.market_id.label("market_id"),
+            func.count().label("comment_count_7d"),
+        )
+        .where(
+            Comment.status == "active",
+            Comment.created_at >= seven_ago,
+        )
+        .group_by(Comment.market_id)
+        .having(func.count() >= HIGH_COMMENT_WEEK_THRESHOLD)
+        .subquery()
+    )
+    hi_stmt = (
+        select(Market.id, Market.question, c7.c.comment_count_7d)
+        .join(c7, Market.id == c7.c.market_id)
+        .order_by(c7.c.comment_count_7d.desc())
+        .limit(40)
+    )
+    hi_rows = (await session.execute(hi_stmt)).mappings().all()
+    high_comment_markets = [
+        {
+            "market_id": int(r["id"]),
+            "question": r["question"],
+            "active_comments_7d": int(r["comment_count_7d"] or 0),
+        }
+        for r in hi_rows
+    ]
+
+    dup_stmt = (
+        select(
+            User.pi_username,
+            func.count().label("user_count"),
+            func.array_agg(User.id).label("user_ids"),
+        )
+        .where(User.pi_username.isnot(None), func.trim(User.pi_username) != "")
+        .group_by(User.pi_username)
+        .having(func.count() > 1)
+        .order_by(func.count().desc())
+        .limit(40)
+    )
+    dup_rows = (await session.execute(dup_stmt)).mappings().all()
+    duplicate_pi_usernames: List[dict[str, Any]] = []
+    for r in dup_rows:
+        raw_ids = r.get("user_ids") or []
+        if not isinstance(raw_ids, list):
+            raw_ids = list(raw_ids) if raw_ids is not None else []
+        duplicate_pi_usernames.append(
+            {
+                "pi_username": r["pi_username"],
+                "user_count": int(r["user_count"] or 0),
+                "user_ids": [int(x) for x in raw_ids],
+            }
+        )
+
+    lt_stmt = (
+        select(
+            MarketTrade.id,
+            MarketTrade.created_at,
+            MarketTrade.market_id,
+            MarketTrade.taker_user_id,
+            MarketTrade.pi_total_amount,
+            MarketTrade.side,
+            MarketTrade.outcome,
+            Market.question.label("market_question"),
+        )
+        .join(Market, Market.id == MarketTrade.market_id)
+        .where(
+            MarketTrade.created_at >= seven_ago,
+            MarketTrade.pi_total_amount >= LARGE_TRADE_PI_THRESHOLD,
+        )
+        .order_by(MarketTrade.pi_total_amount.desc())
+        .limit(40)
+    )
+    lt_rows = (await session.execute(lt_stmt)).mappings().all()
+    large_trades_7d = [
+        {
+            "trade_id": int(r["id"]),
+            "created_at": r["created_at"],
+            "market_id": int(r["market_id"]),
+            "market_question": r["market_question"],
+            "taker_user_id": int(r["taker_user_id"]),
+            "pi_total_amount": float(r["pi_total_amount"] or 0),
+            "side": r["side"],
+            "outcome": r["outcome"],
+        }
+        for r in lt_rows
+    ]
+
+    unresolved_edge_stmt = (
+        select(
+            Market.id,
+            Market.question,
+            Market.status,
+            Market.edge_cases,
+            Market.updated_at,
+        )
+        .where(
+            Market.edge_cases.isnot(None),
+            func.trim(Market.edge_cases) != "",
+            func.coalesce(Market.is_resolved, False) == False,
+        )
+        .order_by(Market.updated_at.desc().nullslast())
+        .limit(50)
+    )
+    edge_rows = (await session.execute(unresolved_edge_stmt)).mappings().all()
+    unresolved_edge_case_markets = [dict(r) for r in edge_rows]
+
+    manual_stmt = (
+        select(
+            Market.id,
+            Market.question,
+            Market.resolved_outcome,
+            Market.resolved_at,
+            Market.resolved_by_username,
+            Market.resolved_by_user_id,
+        )
+        .where(
+            func.coalesce(Market.is_resolved, False) == True,
+            Market.resolved_by_username.isnot(None),
+        )
+        .order_by(Market.resolved_at.desc().nullslast())
+        .limit(40)
+    )
+    manual_rows = (await session.execute(manual_stmt)).mappings().all()
+    manual_admin_resolutions = [dict(r) for r in manual_rows]
+
+    return {
+        "generated_at": now,
+        "thresholds": {
+            "high_comment_count_7d": HIGH_COMMENT_WEEK_THRESHOLD,
+            "large_trade_pi_7d": float(LARGE_TRADE_PI_THRESHOLD),
+        },
+        "suspicious_signals": {
+            "payment_amount_mismatches": payment_mismatch_count,
+            "failed_payments_last_7d": failed_payments_7d,
+            "markets_with_blocked_comments": markets_with_blocked_comments,
+            "duplicate_pi_username_groups": len(duplicate_pi_usernames),
+            "scope_note": "Roll-up of automated checks; confirm before action.",
+        },
+        "disputed_markets": {
+            "scope_note": "Markets with at least one blocked (moderated) comment — review for disputes.",
+            "count": markets_with_blocked_comments,
+            "items": disputed_markets,
+        },
+        "markets_high_comment_activity": {
+            "scope_note": f"Active comments in the last 7 days (≥ {HIGH_COMMENT_WEEK_THRESHOLD} per market).",
+            "count": len(high_comment_markets),
+            "items": high_comment_markets,
+        },
+        "duplicate_pi_usernames": {
+            "scope_note": "Pi usernames shared by more than one user row — data integrity risk.",
+            "count": len(duplicate_pi_usernames),
+            "items": duplicate_pi_usernames,
+        },
+        "large_sudden_trades": {
+            "scope_note": f"Largest fills in the last 7 days with π total ≥ {float(LARGE_TRADE_PI_THRESHOLD)}.",
+            "count": len(large_trades_7d),
+            "items": large_trades_7d,
+        },
+        "unresolved_edge_cases": {
+            "scope_note": "Unresolved markets with non-empty edge-case notes in market copy.",
+            "count": len(unresolved_edge_case_markets),
+            "items": unresolved_edge_case_markets,
+        },
+        "manual_admin_overrides": {
+            "scope_note": "Recent admin resolutions (resolver recorded on the market).",
+            "count": len(manual_admin_resolutions),
+            "items": manual_admin_resolutions,
+        },
+    }
