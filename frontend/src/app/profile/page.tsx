@@ -27,7 +27,7 @@ export default function ProfilePage() {
               value="activity"
               className="px-0 text-lg sm:text-xl font-bold data-[state=active]:shadow-none"
             >
-              Activity
+              Trades
             </TabsTrigger>
             <TabsTrigger
               value="payment-history"

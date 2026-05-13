@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.tables.user import User
@@ -29,6 +29,12 @@ async def get_user_by_id(session: AsyncSession, user_id: str) -> Optional[dict[s
     result = await session.execute(stmt)
     row = result.scalar_one_or_none()
     return _user_dict(row) if row else None
+
+
+async def touch_login_timestamp(session: AsyncSession, internal_user_id: int) -> None:
+    await session.execute(
+        update(User).where(User.id == internal_user_id).values(updated_at=func.now())
+    )
 
 
 async def insert_user(

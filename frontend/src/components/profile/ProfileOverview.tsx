@@ -1,15 +1,16 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowDownToLine, ArrowUpFromLine, MessageSquarePlus, Pencil } from 'lucide-react';
+import { ArrowDownToLine, ArrowUpFromLine, MessageSquarePlus, Pencil, Wallet } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
 import { apiFetchWithToken } from '@/lib/api';
-import { cn, toNumber, toSignedMoney, toUnsignedMoney } from '@/lib/utils';
+import { cn, roundLocalePi, toNumber, toSignedMoney } from '@/lib/utils';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { SuggestMarketForm } from '@/components/market/SuggestMarketForm';
 
 type PnlPeriod = '1D' | '1W' | '1M' | 'ALL';
@@ -32,6 +33,27 @@ type OverviewPayload = {
   stats: OverviewStats;
   pnlHistory: PnlHistoryPoint[];
 };
+
+type AccountWalletInfo = {
+  pi_uid?: string | null;
+  pi_username?: string | null;
+  payout_destination?: string | null;
+  last_pi_verified_at?: string | null;
+};
+
+function formatWalletPreview(addr: string | null | undefined): string {
+  const s = (addr ?? '').trim();
+  if (!s) return '—';
+  if (s.length <= 14) return s;
+  return `${s.slice(0, 8)}…${s.slice(-6)}`;
+}
+
+function formatVerifiedTimestamp(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+}
 
 const overviewCache = new Map<string, OverviewPayload>();
 const overviewInFlight = new Map<string, Promise<OverviewPayload>>();
@@ -148,6 +170,9 @@ export function ProfileOverview() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [suggestDialogOpen, setSuggestDialogOpen] = useState(false);
+  const [walletInfo, setWalletInfo] = useState<AccountWalletInfo | null>(null);
+  const [walletLoading, setWalletLoading] = useState(false);
+  const [walletError, setWalletError] = useState<string | null>(null);
 
   const profileName = useMemo(() => {
     return (ppxUser?.username ?? 'Unknown User');
@@ -187,6 +212,44 @@ export function ProfileOverview() {
     };
   }, [ppxUser?.id, selectedPeriod]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadWalletInfo() {
+      if (!ppxUser?.id) {
+        setWalletInfo(null);
+        setWalletError(null);
+        return;
+      }
+      setWalletLoading(true);
+      setWalletError(null);
+      try {
+        const res = await apiFetchWithToken<{ ok?: boolean; info?: AccountWalletInfo }>('/account/info', {
+          method: 'GET',
+        });
+        if (cancelled) return;
+        setWalletInfo(res?.info ?? null);
+      } catch (e: unknown) {
+        if (cancelled) return;
+        setWalletInfo(null);
+        setWalletError(e instanceof Error ? e.message : 'Failed to load wallet info.');
+      } finally {
+        if (!cancelled) {
+          setWalletLoading(false);
+        }
+      }
+    }
+
+    loadWalletInfo();
+    return () => {
+      cancelled = true;
+    };
+  }, [ppxUser?.id]);
+
+  const piUsernameDisplay = walletInfo?.pi_username?.trim() || profileName;
+  const piUidDisplay = walletInfo?.pi_uid?.trim() || '—';
+  const payoutDisplay = formatWalletPreview(walletInfo?.payout_destination);
+
   const pnlClassName =
     stats.profitLoss > 0
       ? 'text-emerald-500 dark:text-emerald-400'
@@ -213,28 +276,42 @@ export function ProfileOverview() {
               </div>
             </div>
             <div className="flex items-center gap-1">
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 gap-1 px-2 text-xs"
-                onClick={() => setSuggestDialogOpen(true)}
-              >
-                <MessageSquarePlus className="h-4 w-4" />
-                Suggest
-              </Button>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <Pencil className="h-4 w-4" />
-              </Button>
+              <TooltipProvider delayDuration={300}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      type="button"
+                      onClick={() => setSuggestDialogOpen(true)}
+                    >
+                      <MessageSquarePlus className="h-4 w-4" aria-hidden />
+                      <span className="sr-only">Suggest</span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">Suggest a market</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" type="button">
+                      <Pencil className="h-4 w-4" aria-hidden />
+                      <span className="sr-only">Edit Profile</span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">Edit Profile</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
           </div>
 
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <p className="text-xl sm:text-2xl font-bold leading-none">{toUnsignedMoney(stats.positionsValue)}</p>
+              <p className="text-xl sm:text-2xl font-bold leading-none">{roundLocalePi(stats.positionsValue)}</p>
               <p className="text-xs text-muted-foreground sm:text-sm">Positions Value</p>
             </div>
             <div>
-              <p className="text-xl sm:text-2xl font-bold leading-none">{toUnsignedMoney(stats.biggestWin)}</p>
+              <p className="text-xl sm:text-2xl font-bold leading-none">{roundLocalePi(stats.biggestWin)}</p>
               <p className="text-xs text-muted-foreground sm:text-sm">Biggest Win</p>
             </div>
             <div>
@@ -242,6 +319,63 @@ export function ProfileOverview() {
               <p className="text-xs text-muted-foreground sm:text-sm">Predictions</p>
             </div>
           </div>
+
+          {ppxUser?.id ? (
+            <div className="rounded-lg border border-border/60 bg-muted/15 px-3 py-3">
+              <div className="flex items-center gap-2">
+                <Wallet className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Wallet</p>
+              </div>
+              {walletLoading ? (
+                <div className="mt-3 h-16 animate-pulse rounded-md bg-muted/40" />
+              ) : walletError ? (
+                <p className="mt-2 text-xs text-destructive">{walletError}</p>
+              ) : (
+                <dl className="mt-3 grid gap-2 text-sm">
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                    <dt className="text-muted-foreground">Pi username</dt>
+                    <dd className="max-w-[min(100%,14rem)] truncate text-right font-medium">
+                      {piUsernameDisplay}
+                    </dd>
+                  </div>
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                    <dt className="text-muted-foreground shrink-0">Pi user ID</dt>
+                    <dd
+                      className="max-w-[min(100%,14rem)] truncate text-right font-mono text-xs text-muted-foreground"
+                      title={piUidDisplay !== '—' ? piUidDisplay : undefined}
+                    >
+                      {piUidDisplay}
+                    </dd>
+                  </div>
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                    <dt className="text-muted-foreground shrink-0">Payout destination</dt>
+                    <dd
+                      className="max-w-[min(100%,14rem)] truncate text-right font-mono text-xs font-medium"
+                      title={
+                        walletInfo?.payout_destination?.trim()
+                          ? walletInfo.payout_destination.trim()
+                          : undefined
+                      }
+                    >
+                      {payoutDisplay}
+                    </dd>
+                  </div>
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                    <dt className="text-muted-foreground shrink-0">Last verified</dt>
+                    <dd className="text-right text-xs text-muted-foreground">
+                      {formatVerifiedTimestamp(walletInfo?.last_pi_verified_at)}
+                    </dd>
+                  </div>
+                </dl>
+              )}
+              {!walletLoading && !walletError ? (
+                <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
+                  Payout destination shows your linked mainnet address when it is stored on leaderboard rows.
+                  Last verified updates each time you complete Pi Browser authentication.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
 
           <div className="grid grid-cols-2 gap-2">
             <Button className="w-full">
@@ -260,9 +394,9 @@ export function ProfileOverview() {
         </CardContent>
       </Card>
 
-      <Card className="overflow-hidden">
-        <CardContent className="space-y-6 p-3 sm:space-y-7 sm:p-4">
-          <div className="flex items-start justify-between gap-4">
+      <Card className="overflow-hidden lg:flex lg:h-full lg:min-h-0 lg:flex-col">
+        <CardContent className="flex flex-1 flex-col gap-6 p-3 sm:gap-7 sm:p-4 lg:min-h-0">
+          <div className="flex shrink-0 items-start justify-between gap-4">
             <div>
               <p className="text-sm text-muted-foreground">Profit/Loss</p>
               <p className={cn('text-2xl sm:text-3xl font-bold leading-none', pnlClassName)}>
@@ -290,56 +424,61 @@ export function ProfileOverview() {
             </div>
           </div>
 
-          {error ? <p className="text-sm text-destructive">{error}</p> : null}
+          {error ? <p className="shrink-0 text-sm text-destructive">{error}</p> : null}
 
-          {isLoading ? (
-            <div className="h-28 animate-pulse rounded-md bg-muted/40" />
-          ) : pnlHistory.length === 0 ? (
-            <div className="h-28 rounded-md border border-dashed border-border/60 flex items-center justify-center text-xs text-muted-foreground">
-              No PnL history
-            </div>
-          ) : (
-            <ChartContainer config={chartConfig} className="h-28 w-full aspect-auto">
-              <LineChart data={pnlHistory}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.5)" />
-                <XAxis
-                  dataKey="timestamp"
-                  tickFormatter={(value) => formatXAxisLabel(Number(value), selectedPeriod)}
-                  tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
-                  tickLine={{ stroke: 'hsl(var(--muted-foreground))' }}
-                />
-                <YAxis
-                  orientation="right"
-                  tickFormatter={(value) => `${Number(value).toFixed(0)}π`}
-                  tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
-                  tickLine={{ stroke: 'hsl(var(--muted-foreground))' }}
-                />
-                <ChartTooltip
-                  cursor={{ stroke: 'hsl(var(--primary))', strokeWidth: 1, strokeDasharray: '3 3' }}
-                  content={(props) => {
-                    const { content: _content, ...tooltipProps } = props;
-                    return (
-                      <ChartTooltipContent
-                        {...tooltipProps}
-                        labelFormatter={(value, payload) => {
-                          const payloadTimestamp = payload?.[0]?.payload?.timestamp;
-                          return formatTooltipTimestamp(Number(payloadTimestamp ?? value));
-                        }}
-                        formatter={(value: any) => toSignedMoney(toNumber(value))}
-                      />
-                    );
-                  }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="profitLoss"
-                  stroke="hsl(var(--primary))"
-                  strokeWidth={2}
-                  dot={false}
-                />
-              </LineChart>
-            </ChartContainer>
-          )}
+          <div className="relative h-28 shrink-0 lg:h-auto lg:min-h-0 lg:flex-1">
+            {isLoading ? (
+              <div className="absolute inset-0 animate-pulse rounded-md bg-muted/40" />
+            ) : pnlHistory.length === 0 ? (
+              <div className="absolute inset-0 flex items-center justify-center rounded-md border border-dashed border-border/60 text-xs text-muted-foreground">
+                No PnL history
+              </div>
+            ) : (
+              <ChartContainer
+                config={chartConfig}
+                className="absolute inset-0 h-full w-full aspect-auto [&_.recharts-responsive-container]:!h-full [&_.recharts-responsive-container]:!w-full"
+              >
+                <LineChart data={pnlHistory}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.5)" />
+                  <XAxis
+                    dataKey="timestamp"
+                    tickFormatter={(value) => formatXAxisLabel(Number(value), selectedPeriod)}
+                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                    tickLine={{ stroke: 'hsl(var(--muted-foreground))' }}
+                  />
+                  <YAxis
+                    orientation="right"
+                    tickFormatter={(value) => `${Number(value).toFixed(0)}π`}
+                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                    tickLine={{ stroke: 'hsl(var(--muted-foreground))' }}
+                  />
+                  <ChartTooltip
+                    cursor={{ stroke: 'hsl(var(--primary))', strokeWidth: 1, strokeDasharray: '3 3' }}
+                    content={(props) => {
+                      const { content: _content, ...tooltipProps } = props;
+                      return (
+                        <ChartTooltipContent
+                          {...tooltipProps}
+                          labelFormatter={(value, payload) => {
+                            const payloadTimestamp = payload?.[0]?.payload?.timestamp;
+                            return formatTooltipTimestamp(Number(payloadTimestamp ?? value));
+                          }}
+                          formatter={(value: any) => toSignedMoney(toNumber(value))}
+                        />
+                      );
+                    }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="profitLoss"
+                    stroke="hsl(var(--primary))"
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                </LineChart>
+              </ChartContainer>
+            )}
+          </div>
         </CardContent>
       </Card>
 

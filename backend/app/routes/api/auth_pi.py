@@ -43,6 +43,10 @@ async def auth_pi_verify(req: VerifyRequest, db: DbSession):
             user_row = await auth_repo.insert_user(
                 db, user_id=str(user_id), username=username
             )
+            await auth_repo.touch_login_timestamp(db, int(user_row["id"]))
+    else:
+        async with db.begin():
+            await auth_repo.touch_login_timestamp(db, int(user_row["id"]))
 
     if user_row.get("role_id") == 1:
         role = "superadmin"
