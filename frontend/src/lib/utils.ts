@@ -52,3 +52,15 @@ export function formatRelativeTime(value: string): string {
   const day = Math.floor(hr / 24);
   return `${day}d ago`;
 }
+
+export function toRelativeTimeLabel(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '';
+
+  const diffSeconds = Math.max(0, Math.floor((Date.now() - parsed.getTime()) / 1000));
+  if (diffSeconds < 60) return 'just now';
+  if (diffSeconds < 3600) return `${Math.floor(diffSeconds / 60)}m ago`;
+  if (diffSeconds < 86400) return `${Math.floor(diffSeconds / 3600)}h ago`;
+  if (diffSeconds < 604800) return `${Math.floor(diffSeconds / 86400)}d ago`;
+  return parsed.toLocaleDateString();
+}

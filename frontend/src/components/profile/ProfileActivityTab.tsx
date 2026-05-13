@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { cn, toPriceLabel } from '@/lib/utils';
+import { cn, roundLocalePi, toPriceLabel, toRelativeTimeLabel } from '@/lib/utils';
 import { apiFetchWithToken } from '@/lib/api';
 import { TRADE_TERMS } from '@/lib/trade/tradeTerms';
 
@@ -74,17 +74,7 @@ function normalizeTradePage(rows: any[], startIndex: number): TradeRow[] {
   return rows.map((row, index) => normalizeTradeRow(row, startIndex + index));
 }
 
-function toRelativeTimeLabel(value: string): string {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return '';
 
-  const diffSeconds = Math.max(0, Math.floor((Date.now() - parsed.getTime()) / 1000));
-  if (diffSeconds < 60) return 'just now';
-  if (diffSeconds < 3600) return `${Math.floor(diffSeconds / 60)}m ago`;
-  if (diffSeconds < 86400) return `${Math.floor(diffSeconds / 3600)}h ago`;
-  if (diffSeconds < 604800) return `${Math.floor(diffSeconds / 86400)}d ago`;
-  return parsed.toLocaleDateString();
-}
 
 export function ProfileActivityTab({
   isActive,
@@ -241,8 +231,7 @@ export function ProfileActivityTab({
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        <p className="text-sm font-bold leading-none">{trade.piAmount.toFixed(2)} π</p>
-                        <p className="mt-1 text-[11px] text-muted-foreground">{TRADE_TERMS.amount}</p>
+                        <p className="text-sm font-bold leading-none">{roundLocalePi(trade.piAmount)}</p>
                         <p className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground">
                           {toRelativeTimeLabel(trade.createdAt)}
                         </p>

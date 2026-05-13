@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { cn, toPercentLabel, toPriceLabel, toSignedMoney } from '@/lib/utils';
+import { cn, roundLocalePi, toPercentLabel, toPriceLabel, toSignedMoney } from '@/lib/utils';
 import { PositionsToolbar } from '@/components/profile/PositionsToolbar';
 import { apiFetchWithToken } from '@/lib/api';
 import { TRADE_TERMS } from '@/lib/trade/tradeTerms';
@@ -338,8 +338,8 @@ export function ProfilePositionsTab({
                         {toPriceLabel(position.currentPrice)}
                       </TableCell>
                       <TableCell className="text-right">
-                        <p className="text-sm md:text-md font-bold leading-none">{position.currentPiAmount.toFixed(2)}π</p>
-                        <p className="mt-1 text-[11px] text-muted-foreground">{TRADE_TERMS.amount}</p>
+                        <p className="text-sm md:text-md font-bold leading-none">{roundLocalePi(position.currentPiAmount)}</p>
+                        {/* <p className="mt-1 text-[11px] text-muted-foreground">{TRADE_TERMS.amount}</p> */}
                         <p className={cn('mt-1 text-xs font-semibold', pnlClass)}>
                           {toSignedMoney(position.pnl)} ({toPercentLabel(position.pnlPercent)})
                         </p>
