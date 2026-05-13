@@ -3,7 +3,6 @@
 // These are intentionally tolerant (optional fields) to handle both mocks and live data.
 
 export type OutcomeSide = "yes" | "no";
-export type MarketStatus = "open" | "unresolved" | "resolved" | "canceled";
 
 /**
  * Market — compatible with both mock data and live backend.
@@ -68,13 +67,6 @@ export interface Market {
   traders?: number;
 }
 
-/** Minimal current user shape returned by your hook */
-export interface CurrentUser {
-  id?: string;
-  handle?: string;
-  // add fields as needed
-}
-
 /** Response helpers */
 export type Paged<T> = {
   items: T[];
@@ -83,39 +75,6 @@ export type Paged<T> = {
   total?: number;
 };
 export type User = any;
-
-export interface Transaction {
-  id: string;
-  date: string;
-  type: 'deposit' | 'withdrawal' | 'prediction-yes' | 'prediction-no' | 'claim-payouts' | 'referral-bonus';
-  status: 'completed' | 'pending' | 'failed';
-  amount: number;
-  pi_amount: number;
-  details: string;
-}
-
-export interface OpenPosition {
-  id: string;
-  position_id: string;
-  market_id: string;
-  market_title: string;
-  side: 'yes' | 'no';
-  amount: number;
-  pi_amount: number;
-  created_at: string;
-};
-
-export interface Activity {
-  id: string;
-  position_id: string;
-  market_id: string;
-  market_title: string;
-  side: 'yes' | 'no';
-  amount: number;
-  price: number | null;
-  date: string;
-  outcome: 'yes' | 'no' | null;
-};
 
 export interface Suggestion {
   id: number;
@@ -133,21 +92,3 @@ export interface Suggestion {
   created_at?: string | null;
   updated_at?: string | null;
 };
-
-export interface PriceHistory {
-  id: string;
-  market_id: string;
-  date: string;
-  ts: string;
-  yes: number;
-  no: number;
-  volume_pi: number;
-}
-
-export interface Trade {
-  id: string;
-  side: string;
-  pi_amount: number;
-  pi_username: string;
-  created_at: string;
-}

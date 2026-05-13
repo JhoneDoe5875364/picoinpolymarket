@@ -380,7 +380,7 @@ export function ProfileOverview() {
           <div className="grid grid-cols-2 gap-2">
             <Button className="w-full">
               <ArrowDownToLine className="mr-2 h-4 w-4" />
-              Deposit
+              Send Pi
             </Button>
             <Button
               variant="outline"
@@ -388,7 +388,7 @@ export function ProfileOverview() {
               disabled
             >
               <ArrowUpFromLine className="mr-2 h-4 w-4" />
-              Withdraw
+              Receive Pi
             </Button>
           </div>
         </CardContent>
