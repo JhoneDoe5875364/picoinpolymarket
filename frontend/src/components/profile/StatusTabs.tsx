@@ -20,7 +20,7 @@ export default function StatusTabs({ activeTab, setActiveTab }: { activeTab: 'ac
             : 'text-muted-foreground hover:text-foreground'}
         `}
       >
-        Active
+        Open
       </div>
 
       {/* Closed */}
@@ -39,7 +39,7 @@ export default function StatusTabs({ activeTab, setActiveTab }: { activeTab: 'ac
             : 'text-muted-foreground hover:text-foreground'}
         `}
       >
-        Closed
+        Resolved
       </div>
     </div>
   )

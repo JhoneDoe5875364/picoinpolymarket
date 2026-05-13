@@ -25,7 +25,7 @@ export default function ProfilePage() {
             </TabsTrigger>
             <TabsTrigger
               value="activity"
-              className="px-0 text-lg sm:text-xl font-bold data-[state=active]:shadow-none"
+              className="px-0 text-lg sm:text-xl font-bold data-[state=active]:shadow-none hidden"
             >
               Trades
             </TabsTrigger>
@@ -33,7 +33,7 @@ export default function ProfilePage() {
               value="payment-history"
               className="px-0 text-lg sm:text-xl font-bold data-[state=active]:shadow-none"
             >
-              Payments
+              Payment History
             </TabsTrigger>
           </TabsList>
 
@@ -41,7 +41,7 @@ export default function ProfilePage() {
             <ProfilePositionsTab isActive={activeTab === 'positions'} />
           </TabsContent>
 
-          <TabsContent value="activity">
+          <TabsContent value="activity" className="hidden">
             <ProfileActivityTab isActive={activeTab === 'activity'} />
           </TabsContent>
 
