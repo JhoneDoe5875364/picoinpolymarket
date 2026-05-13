@@ -84,6 +84,46 @@ async def get_open_positions(
     return {"ok": True, "data": jsonable_encoder(rows)}
 
 
+@router.get("/payments", summary="List Pi payment history for a user")
+async def get_user_payments(
+    db: DbSession,
+    user_id: int = Query(..., ge=1),
+    status: str = Query(default="ALL"),
+    search: str = Query(default=""),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    order: str = Query(default="created_at"),
+    ascending: bool = Query(default=False),
+    user=Depends(verify_token),
+):
+    sub = str(user.get("sub", ""))
+    role = user.get("role", "")
+    if role not in ("admin", "superadmin") and sub != str(user_id):
+        raise HTTPException(status_code=403, detail="Cannot access other users' payments")
+
+    try:
+        rows, total = await users_repo.list_user_payments(
+            db,
+            user_id=user_id,
+            status=status,
+            search=search,
+            limit=limit,
+            offset=offset,
+            order=order,
+            ascending=ascending,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return {
+        "ok": True,
+        "data": jsonable_encoder(rows),
+        "total": total,
+        "page": ceil(offset / limit) + 1 if limit else 1,
+        "pages": ceil(total / limit) if total else 0,
+    }
+
+
 @router.get("/trades", summary="Get trades by user")
 async def get_user_trades(
     db: DbSession,

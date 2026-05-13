@@ -1,7 +1,7 @@
 "use client";
 
 import { apiFetch } from "@/lib/api";
-import { cn } from "@/lib/utils";
+import { cn, toNumber } from "@/lib/utils";
 import { useEffect, useMemo, useState } from "react";
 import { Search, Trophy, ChevronDown, ArrowUpDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -68,15 +68,6 @@ const SORT_OPTIONS: Array<{ key: SortFilter; label: string }> = [
   { key: "pnl", label: "Profit/Loss" },
   { key: "volume", label: "Volume" },
 ];
-
-function toNumber(value: number | string | null | undefined) {
-  if (typeof value === "number") return value;
-  if (typeof value === "string") {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : 0;
-  }
-  return 0;
-}
 
 function getAvatarGradient(seed: string) {
   const palette = [

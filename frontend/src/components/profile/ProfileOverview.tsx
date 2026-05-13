@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
 import { apiFetchWithToken } from '@/lib/api';
-import { cn, toSignedMoney, toUnsignedMoney } from '@/lib/utils';
+import { cn, toNumber, toSignedMoney, toUnsignedMoney } from '@/lib/utils';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { SuggestMarketForm } from '@/components/market/SuggestMarketForm';
 
@@ -49,15 +49,6 @@ const chartConfig = {
     color: 'hsl(var(--primary))',
   },
 } satisfies ChartConfig;
-
-function toNumber(value: unknown, fallback = 0): number {
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  if (typeof value === 'string') {
-    const parsed = Number(value);
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  return fallback;
-}
 
 function normalizeTimestamp(value: unknown): number {
   if (typeof value === 'number') return value < 1_000_000_000_000 ? value * 1000 : value;

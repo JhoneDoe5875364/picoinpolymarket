@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from sqlalchemy import Float, String, and_, case, cast, func, select, union_all, update
+from sqlalchemy import Float, String, and_, case, cast, func, or_, select, union_all, update
 from typing import Any, List, Optional, Tuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +12,7 @@ from app.models.tables.market import Market
 from app.models.tables.market_token import MarketToken
 from app.models.tables.market_position import MarketPosition
 from app.models.tables.market_trades import MarketTrade
+from app.models.tables.order import Order
 from app.models.tables.payment import Payment
 from app.models.tables.user import User
 
@@ -766,4 +767,83 @@ async def get_pnl_history(
         )
 
     return {"period": period, "history": history}
+
+
+async def list_user_payments(
+    session: AsyncSession,
+    *,
+    user_id: int,
+    status: str = "ALL",
+    search: str = "",
+    limit: int = 20,
+    offset: int = 0,
+    order: str = "created_at",
+    ascending: bool = False,
+) -> Tuple[List[dict[str, Any]], int]:
+    allowed_status = {"ALL", "PENDING", "APPROVED", "COMPLETED", "FAILED", "CANCELLED"}
+    if status not in allowed_status:
+        raise ValueError("Invalid status filter")
+    order_cols: dict[str, Any] = {
+        "created_at": Payment.created_at,
+        "amount": Payment.amount,
+        "status": Payment.status,
+    }
+    if order not in order_cols:
+        raise ValueError("Invalid order")
+    order_col = order_cols[order]
+    order_expr = order_col.asc() if ascending else order_col.desc()
+
+    filters: list[Any] = [Payment.user_id == user_id]
+    if status != "ALL":
+        filters.append(Payment.status == status)
+    if search and search.strip():
+        term = f"%{search.strip()}%"
+        filters.append(
+            or_(
+                Market.question.ilike(term),
+                func.coalesce(Payment.pi_payment_id, "").ilike(term),
+                func.coalesce(Payment.txid, "").ilike(term),
+            )
+        )
+
+    count_stmt = (
+        select(func.count())
+        .select_from(Payment)
+        .join(Order, Order.id == Payment.order_id)
+        .join(Market, Market.id == Order.market_id)
+        .where(*filters)
+    )
+    total = int(await session.scalar(count_stmt) or 0)
+
+    list_stmt = (
+        select(
+            Payment.id,
+            Payment.amount,
+            Payment.status,
+            Payment.currency,
+            Payment.pi_payment_id,
+            Payment.txid,
+            Payment.created_at,
+            Order.id.label("order_id"),
+            Order.side,
+            Order.pi_amount.label("order_pi_amount"),
+            Market.question,
+            Market.icon,
+        )
+        .select_from(Payment)
+        .join(Order, Order.id == Payment.order_id)
+        .join(Market, Market.id == Order.market_id)
+        .where(*filters)
+        .order_by(order_expr)
+        .limit(limit)
+        .offset(offset)
+    )
+    result = await session.execute(list_stmt)
+    rows: List[dict[str, Any]] = []
+    for r in result.mappings().all():
+        row = dict(r)
+        row["amount"] = float(row["amount"] or 0)
+        row["order_pi_amount"] = float(row["order_pi_amount"] or 0)
+        rows.append(row)
+    return rows, total
 

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { cn, roundLocalePi, toPriceLabel, toRelativeTimeLabel } from '@/lib/utils';
+import { cn, roundLocalePi, toNumber, toPriceLabel, toRelativeTimeLabel } from '@/lib/utils';
 import { apiFetchWithToken } from '@/lib/api';
 import { TRADE_TERMS } from '@/lib/trade/tradeTerms';
 
@@ -25,15 +25,6 @@ type ProfileActivityTabProps = {
 };
 
 const PAGE_SIZE = 10;
-
-function toNumber(value: unknown, fallback = 0): number {
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  if (typeof value === 'string') {
-    const parsed = Number(value);
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  return fallback;
-}
 
 function normalizeTradeRow(row: any, index: number): TradeRow {
   const side: 'BUY' | 'SELL' = String(row?.side ?? 'BUY') === 'SELL' ? 'SELL' : 'BUY';
