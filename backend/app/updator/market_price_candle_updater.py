@@ -1,19 +1,20 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.logger import get_logger
 from app.models.tables.market import Market
 from app.models.tables.market_price_candles import MarketPriceCandle
 from app.models.tables.market_token import MarketToken
+from app.models.tables.market_trades import MarketTrade
 
 logger = get_logger()
-MARKET_CANDLE_REFRESH_INTERVAL_SECONDS = 10 * 60
+MARKET_CANDLE_REFRESH_INTERVAL_SECONDS = 60 * 60
 _PRICE_QUANT = Decimal("0.0001")
 _VOLUME_QUANT = Decimal("0.0001")
 
@@ -95,6 +96,25 @@ async def refresh_market_price_candles_once(
         inserted_count,
         updated_count,
     )
+
+
+async def refresh_market_price_candles_from_earliest_trade(
+    session: AsyncSession
+) -> None:
+    earliest_row = await session.execute(select(func.min(MarketTrade.created_at)))
+    earliest = earliest_row.scalar()
+    if earliest is None:
+        logger.info(
+            "refresh_market_price_candles_from_earliest_trade skipped: "
+            "no rows in market_trades"
+        )
+        return
+
+    end = datetime.now(timezone.utc)
+    ts = earliest
+    while ts <= end:
+        await refresh_market_price_candles_once(session, ts)
+        ts += timedelta(seconds=MARKET_CANDLE_REFRESH_INTERVAL_SECONDS)
 
 
 async def run_periodic_market_price_candle_refresh(

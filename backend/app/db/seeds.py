@@ -506,9 +506,9 @@ async def run_seed_market_trades(session: AsyncSession) -> None:
             )
             await update_market_price(session, trade)
             await update_market_position(session, trade)
-            await market_price_candle_updater.refresh_market_price_candles_once(session, created_at)
             inserted_trade_count += 1
 
+    await market_price_candle_updater.refresh_market_price_candles_from_earliest_trade(session)
     elapsed_seconds = time.perf_counter() - started_at
     print(
         f"run_seed_market_trades completed: inserted={inserted_trade_count}, "
