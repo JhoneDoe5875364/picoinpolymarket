@@ -22,6 +22,19 @@ function iconOf(m: Market | any) {
   return typeof m?.icon === "string" && m.icon.trim().length > 0 ? m.icon : null;
 }
 
+function labelColorClass(label: string) {
+  switch (label.trim().toLowerCase()) {
+    case "new":
+      return "border-emerald-300/80 bg-emerald-100 text-emerald-800 dark:border-emerald-700/70 dark:bg-emerald-900/40 dark:text-emerald-200";
+    case "trending":
+      return "border-sky-300/80 bg-sky-100 text-sky-800 dark:border-sky-700/70 dark:bg-sky-900/40 dark:text-sky-200";
+    case "hot":
+      return "border-rose-300/80 bg-rose-100 text-rose-800 dark:border-rose-700/70 dark:bg-rose-900/40 dark:text-rose-200";
+    default:
+      return "border-border/60 bg-secondary/70 text-foreground/90";
+  }
+}
+
 function MiniSparkline({ values }: { values: number[] }) {
   if (!values || values.length < 2) {
     return null;
@@ -126,7 +139,10 @@ export function MarketCard({ market }: { market: Market | any }) {
                 {labels.map((label: string) => (
                   <span
                     key={label}
-                    className="rounded-full border border-border/60 bg-secondary/70 px-2 py-0.5 text-[10px] font-semibold text-foreground/90"
+                    className={cn(
+                      "rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+                      labelColorClass(label)
+                    )}
                   >
                     {label}
                   </span>
