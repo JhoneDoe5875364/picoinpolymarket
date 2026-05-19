@@ -37,6 +37,37 @@ function labelColorClass(label: string) {
   }
 }
 
+function MoveArrow({ up }: { up: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 8 6"
+      className={cn("h-2.5 w-2.5 shrink-0", up && "rotate-180")}
+      aria-hidden
+    >
+      <path d="M4 6 0 0h8L4 6z" fill="currentColor" />
+    </svg>
+  );
+}
+
+function PriceMoveBadge({ move }: { move: number }) {
+  if (!Number.isFinite(move) || move === 0) {
+    return null;
+  }
+  const isUp = move > 0;
+  const pct = Math.abs(Math.round(move * 100));
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-0.5 font-semibold",
+        isUp ? "text-emerald-500" : "text-red-500"
+      )}
+    >
+      <MoveArrow up={isUp} />
+      {pct}%
+    </span>
+  );
+}
+
 function MiniSparkline({ values }: { values: number[] }) {
   if (!values || values.length < 2) {
     return null;
@@ -80,11 +111,10 @@ export function MarketCard({ market }: { market: Market | any }) {
   const trades24h = Number(market?.trades_24h ?? 0);
   const comments24h = Number(market?.comments_24h ?? 0);
   const priceMove24h = Number(market?.price_move_24h ?? 0);
-  const signalParts = [
-    trades24h > 0 ? `${fmtNum(trades24h)} trades today` : null,
-    comments24h > 0 ? `${fmtNum(comments24h)} comments` : null,
-    priceMove24h > 0 ? `price move ${(priceMove24h * 100).toFixed(1)}%` : null,
-  ].filter(Boolean) as string[];
+  const showTrades = trades24h > 0;
+  const showComments = comments24h > 0;
+  const showPriceMove = priceMove24h !== 0;
+  const showSignals = showTrades || showComments || showPriceMove;
 
   const [outcome, setOutcome] = React.useState<null | "YES" | "NO">(null);
   const [modalOpen, setModalOpen] = React.useState(false);
@@ -182,8 +212,14 @@ export function MarketCard({ market }: { market: Market | any }) {
                 {isNoHovered ? `${noProbability}%` : "No"}
               </button>
             </div>
-            {signalParts.length > 0 && (
-              <p className="mt-2 line-clamp-1 text-[11px] text-muted-foreground">{signalParts.join(" · ")}</p>
+            {showSignals && (
+              <p className="mt-2 line-clamp-1 text-[11px] text-muted-foreground">
+                {showTrades && <span>{fmtNum(trades24h)} trades today</span>}
+                {showTrades && (showComments || showPriceMove) && <span> · </span>}
+                {showComments && <span>{fmtNum(comments24h)} comments</span>}
+                {showComments && showPriceMove && <span> · </span>}
+                {showPriceMove && <PriceMoveBadge move={priceMove24h} />}
+              </p>
             )}
             <div className="mt-2 flex justify-between text-xs text-muted-foreground md:mt-4">
               <span>· Volume: <span className="font-semibold">{roundLocalePi(volume)}</span></span>

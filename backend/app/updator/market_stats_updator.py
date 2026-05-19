@@ -290,11 +290,41 @@ async def refresh_market_discovery_stats(session: AsyncSession, *, commit: bool 
             ),
             price_move AS (
               SELECT
-                market_id,
-                COALESCE(MAX(price), 0) - COALESCE(MIN(price), 0) AS price_move_24h
-              FROM market_trades
-              WHERE created_at >= now() - interval '24 hours'
-              GROUP BY market_id
+                m.id AS market_id,
+                (
+                  COALESCE(window_trades.end_yes_price, yes_token.price)
+                  - COALESCE(
+                      baseline.before_yes_price,
+                      window_trades.start_yes_price,
+                      yes_token.price
+                    )
+                )::numeric(18, 6) AS price_move_24h
+              FROM markets m
+              JOIN market_tokens yes_token
+                ON yes_token.market_id = m.id AND yes_token.outcome = 'YES'
+              LEFT JOIN (
+                SELECT
+                  market_id,
+                  (ARRAY_AGG(yes_price ORDER BY created_at ASC))[1] AS start_yes_price,
+                  (ARRAY_AGG(yes_price ORDER BY created_at DESC))[1] AS end_yes_price
+                FROM (
+                  SELECT
+                    market_id,
+                    created_at,
+                    CASE WHEN outcome = 'YES' THEN price ELSE 1 - price END AS yes_price
+                  FROM market_trades
+                  WHERE created_at >= now() - interval '24 hours'
+                ) recent_trades
+                GROUP BY market_id
+              ) window_trades ON window_trades.market_id = m.id
+              LEFT JOIN (
+                SELECT DISTINCT ON (market_id)
+                  market_id,
+                  CASE WHEN outcome = 'YES' THEN price ELSE 1 - price END AS before_yes_price
+                FROM market_trades
+                WHERE created_at < now() - interval '24 hours'
+                ORDER BY market_id, created_at DESC
+              ) baseline ON baseline.market_id = m.id
             )
             INSERT INTO market_stats (
               market_id,
@@ -336,7 +366,7 @@ async def refresh_market_discovery_stats(session: AsyncSession, *, commit: bool 
               (
                 (COALESCE(m.volume, 0) * 0.1)
                 + ((COALESCE(tr.trades_24h, 0) + COALESCE(cr.comments_24h, 0)) * 5)
-                + (COALESCE(pm.price_move_24h, 0) * 100)
+                + (ABS(COALESCE(pm.price_move_24h, 0)) * 100)
               )::numeric(18, 6) AS hot_score,
               now() AS updated_at
             FROM markets m
