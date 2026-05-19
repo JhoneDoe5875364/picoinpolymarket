@@ -339,7 +339,7 @@ async def list_featured_markets(
         price_history = await market_prices_history(
             session,
             market.id,
-            interval="1D",
+            interval="MAX",
         )
         item["price_history"] = price_history
         item["sparkline"] = [

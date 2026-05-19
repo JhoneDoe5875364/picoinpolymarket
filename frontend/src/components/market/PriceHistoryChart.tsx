@@ -13,6 +13,12 @@ import { cn } from "@/lib/utils"
 
 interface PriceHistoryChartProps {
   market: Market
+  /** When set, always loads this interval and hides the interval selector. */
+  fixedInterval?: ChartInterval
+  /** Show volume / end-date row and interval buttons (default: true). */
+  showFooter?: boolean
+  className?: string
+  chartClassName?: string
 }
 
 const chartConfig = {
@@ -97,9 +103,16 @@ async function loadPriceHistory(market_id: number, interval: string): Promise<Pr
 }
 
 
-export function PriceHistoryChart({ market }: PriceHistoryChartProps) {
+export function PriceHistoryChart({
+  market,
+  fixedInterval,
+  showFooter = true,
+  className,
+  chartClassName,
+}: PriceHistoryChartProps) {
   const [chartData, setChartData] = useState<PriceHistoryPoint[] | null>(null)
-  const [interval, setInterval] = useState<ChartInterval>("1D")
+  const [interval, setInterval] = useState<ChartInterval>(fixedInterval ?? "1D")
+  const activeInterval = fixedInterval ?? interval
   const xAxisLabelMode = useMemo<"time" | "date">(() => {
     if (!chartData || chartData.length < 2) {
       return "time"
@@ -115,23 +128,23 @@ export function PriceHistoryChart({ market }: PriceHistoryChartProps) {
 
     const dayInMs = 24 * 60 * 60 * 1000
     return maxTimestamp - minTimestamp >= dayInMs ? "date" : "time"
-  }, [chartData, interval])
+  }, [chartData])
 
   useEffect(() => {
     if (!market) return;
     (async () => {
-      const res = await loadPriceHistory(market.id, interval);
+      const res = await loadPriceHistory(market.id, activeInterval);
       setChartData(res);
     })()
-  }, [market, interval])
+  }, [market, activeInterval])
 
   if (!chartData) {
-    return <Skeleton className="w-full" />;
+    return <Skeleton className={cn("w-full", chartClassName, className)} />;
   }
 
   return (
-    <div className="w-full">
-      <ChartContainer config={chartConfig}>
+    <div className={cn("w-full", className)}>
+      <ChartContainer config={chartConfig} className={chartClassName}>
         <LineChart data={chartData}>
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.5)" />
           <XAxis
@@ -176,33 +189,37 @@ export function PriceHistoryChart({ market }: PriceHistoryChartProps) {
           />
         </LineChart>
       </ChartContainer>
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-sm">
-        <div className="flex items-center gap-3">
-          <div className="text-foreground">π {(market.volume ?? 0).toLocaleString()} Vol.</div>
-          <div className="hidden md:flex items-center gap-1">
-            <Clock className="h-3 w-3 text-muted-foreground" />
-            <div className="text-muted-foreground">{formatDate(market.end_date, "PP")}</div>
+      {showFooter && (
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-sm">
+          <div className="flex items-center gap-3">
+            <div className="text-foreground">π {(market.volume ?? 0).toLocaleString()} Vol.</div>
+            <div className="hidden md:flex items-center gap-1">
+              <Clock className="h-3 w-3 text-muted-foreground" />
+              <div className="text-muted-foreground">{formatDate(market.end_date, "PP")}</div>
+            </div>
           </div>
-        </div>
 
-        <div className="flex items-center rounded-md border border-border/60 bg-background/40 p-0.5">
-          {INTERVAL_OPTIONS.map((value) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => setInterval(value)}
-              className={cn(
-                "rounded px-2 py-0.5 text-xs font-medium transition-colors",
-                interval === value
-                  ? "bg-primary/20 text-primary"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {value}
-            </button>
-          ))}
+          {!fixedInterval && (
+            <div className="flex items-center rounded-md border border-border/60 bg-background/40 p-0.5">
+              {INTERVAL_OPTIONS.map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setInterval(value)}
+                  className={cn(
+                    "rounded px-2 py-0.5 text-xs font-medium transition-colors",
+                    interval === value
+                      ? "bg-primary/20 text-primary"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {value}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
-      </div>
+      )}
     </div>
   )
 }
