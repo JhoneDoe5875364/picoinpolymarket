@@ -43,13 +43,13 @@ export function MarketRules({ market }: MarketRulesProps) {
         <TabsList className="h-auto p-0 bg-transparent rounded-none justify-start gap-6">
           <TabsTrigger
             value="resolution"
-            className="px-0 py-0 rounded-none bg-transparent text-sm font-semibold text-muted-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+            className="px-0 py-0 rounded-none bg-transparent text-md font-semibold text-muted-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
           >
             Resolution Rules
           </TabsTrigger>
           <TabsTrigger
             value="context"
-            className="px-0 py-0 rounded-none bg-transparent text-sm font-semibold text-muted-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+            className="px-0 py-0 rounded-none bg-transparent text-md font-semibold text-muted-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
           >
             Market Context
           </TabsTrigger>

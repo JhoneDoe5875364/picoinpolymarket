@@ -13,6 +13,9 @@ function formatCount(n: number): string {
   return new Intl.NumberFormat("en-US").format(n);
 }
 
+const tabTriggerClassName =
+  "shrink-0 px-0 py-0 rounded-none bg-transparent text-md font-semibold text-muted-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none";
+
 export function MarketParticipants({ market }: { market: Market }) {
   const [activeTab, setActiveTab] = useState("comments");
   const [commentTotal, setCommentTotal] = useState(0);
@@ -35,32 +38,22 @@ export function MarketParticipants({ market }: { market: Market }) {
   return (
     <section>
       <Tabs value={activeTab} onValueChange={setActiveTab} className="pb-8">
-        <TabsList className="h-auto p-0 bg-transparent rounded-none justify-start gap-6">
-          <TabsTrigger
-            value="comments"
-            className="px-0 py-0 rounded-none bg-transparent text-sm font-semibold text-muted-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
-          >
-            Comments ({formatCount(commentTotal)})
-          </TabsTrigger>
-          <TabsTrigger
-            value="top-holders"
-            className="px-0 py-0 rounded-none bg-transparent text-sm font-semibold text-muted-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
-          >
-            Top Holders
-          </TabsTrigger>
-          <TabsTrigger
-            value="positions"
-            className="px-0 py-0 rounded-none bg-transparent text-sm font-semibold text-muted-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
-          >
-            Positions
-          </TabsTrigger>
-          <TabsTrigger
-            value="activity"
-            className="px-0 py-0 rounded-none bg-transparent text-sm font-semibold text-muted-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
-          >
-            Activity
-          </TabsTrigger>
-        </TabsList>
+        <div className="max-w-full overflow-x-auto overscroll-x-contain">
+          <TabsList className="h-auto w-max max-w-none flex-nowrap p-0 bg-transparent rounded-none justify-start gap-4">
+            <TabsTrigger value="comments" className={tabTriggerClassName}>
+              Comments ({formatCount(commentTotal)})
+            </TabsTrigger>
+            <TabsTrigger value="top-holders" className={tabTriggerClassName}>
+              Top Holders
+            </TabsTrigger>
+            <TabsTrigger value="positions" className={tabTriggerClassName}>
+              Positions
+            </TabsTrigger>
+            <TabsTrigger value="activity" className={tabTriggerClassName}>
+              Activity
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="comments" className="mt-5">
           <CommentsTabContent
