@@ -54,6 +54,14 @@ def market_to_dict(m: Market) -> dict[str, Any]:
     return d
 
 
+def _as_utc(dt: Any) -> datetime | None:
+    if not isinstance(dt, datetime):
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
 def _build_market_labels(
     row: dict[str, Any],
     *,
@@ -62,27 +70,19 @@ def _build_market_labels(
     ending_soon_window_end: datetime,
 ) -> list[str]:
     labels: list[str] = []
-    created_at = row.get("created_at")
-    end_date = row.get("end_date")
+    created_at = _as_utc(row.get("created_at"))
+    end_date = _as_utc(row.get("end_date"))
     trending_score = float(row.get("trending_score") or 0)
     hot_score = float(row.get("hot_score") or 0)
 
-    if created_at:
-        try:
-            if created_at >= new_window_start:
-                labels.append("New")
-        except TypeError:
-            pass
+    if created_at and created_at >= new_window_start:
+        labels.append("New")
     if trending_score > 0:
         labels.append("Trending")
     if hot_score > 0:
         labels.append("Hot")
-    if end_date:
-        try:
-            if now_utc <= end_date <= ending_soon_window_end:
-                labels.append("Ending Soon")
-        except TypeError:
-            pass
+    if end_date and now_utc <= end_date <= ending_soon_window_end:
+        labels.append("Ending Soon")
 
     return labels
 

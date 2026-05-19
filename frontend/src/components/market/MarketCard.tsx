@@ -30,6 +30,8 @@ function labelColorClass(label: string) {
       return "border-sky-300/80 bg-sky-100 text-sky-800 dark:border-sky-700/70 dark:bg-sky-900/40 dark:text-sky-200";
     case "hot":
       return "border-rose-300/80 bg-rose-100 text-rose-800 dark:border-rose-700/70 dark:bg-rose-900/40 dark:text-rose-200";
+    case "ending soon":
+      return "border-amber-300/80 bg-amber-100 text-amber-800 dark:border-amber-700/70 dark:bg-amber-900/40 dark:text-amber-200";
     default:
       return "border-border/60 bg-secondary/70 text-foreground/90";
   }
@@ -74,14 +76,13 @@ export function MarketCard({ market }: { market: Market | any }) {
   const pathname = usePathname();
   const yesProbability = Math.round(yesPrice * 100);
   const noProbability = Math.round(noPrice * 100);
-  const labels = Array.isArray(market?.labels) ? market.labels.slice(0, 3) : [];
+  const labels = Array.isArray(market?.labels) ? market.labels.slice(0, 4) : [];
   const trades24h = Number(market?.trades_24h ?? 0);
   const comments24h = Number(market?.comments_24h ?? 0);
   const priceMove24h = Number(market?.price_move_24h ?? 0);
   const signalParts = [
     trades24h > 0 ? `${fmtNum(trades24h)} trades today` : null,
     comments24h > 0 ? `${fmtNum(comments24h)} comments` : null,
-    market?.is_ending_soon ? "ending soon" : null,
     priceMove24h > 0 ? `price move ${(priceMove24h * 100).toFixed(1)}%` : null,
   ].filter(Boolean) as string[];
 
