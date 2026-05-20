@@ -145,7 +145,7 @@ export default function FeaturedMarketCard({ market }: FeaturedMarketCardProps) 
             fixedInterval="ALL"
             embedded
             showFooter={false}
-            chartClassName="aspect-auto h-32 md:h-48 w-full [&_.recharts-surface]:overflow-visible"
+            chartClassName="aspect-auto h-32 md:h-48 w-full"
           />
         </div>
         <div className="md:col-span-1">

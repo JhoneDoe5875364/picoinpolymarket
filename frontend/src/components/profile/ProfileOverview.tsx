@@ -1,12 +1,25 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDownToLine, ArrowUpFromLine, MessageSquarePlus, Pencil, Wallet } from 'lucide-react';
-import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
+import {
+  AreaSeries,
+  ColorType,
+  CrosshairMode,
+  LineType,
+  createChart,
+  type AreaData,
+  type IChartApi,
+  type ISeriesApi,
+  type MouseEventParams,
+  type SingleValueData,
+  type Time,
+  type UTCTimestamp,
+} from 'lightweight-charts';
+import { format, isValid } from 'date-fns';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
 import { apiFetchWithToken } from '@/lib/api';
 import { cn, roundLocalePi, toNumber, toSignedMoney } from '@/lib/utils';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -65,12 +78,215 @@ const PERIODS: Array<{ key: PnlPeriod; label: string; caption: string }> = [
   { key: 'ALL', label: 'ALL', caption: 'All Time' },
 ];
 
-const chartConfig = {
-  profitLoss: {
-    label: 'Profit/Loss',
-    color: 'hsl(var(--primary))',
-  },
-} satisfies ChartConfig;
+const PNL_LINE_COLOR = '#2E5CFF';
+const PNL_AREA_TOP = 'rgba(46, 92, 255, 0.35)';
+const PNL_AREA_BOTTOM = 'rgba(46, 92, 255, 0)';
+
+function getChartTheme() {
+  const isDark = document.documentElement.classList.contains('dark');
+  return {
+    text: isDark ? 'hsl(220, 11%, 72%)' : 'hsl(0, 0%, 40%)',
+    grid: isDark ? 'hsla(223, 20%, 24%, 0.55)' : 'hsla(0, 0%, 89%, 0.55)',
+    crosshair: isDark ? 'hsla(223, 20%, 40%, 0.8)' : 'hsla(0, 0%, 70%, 0.8)',
+    crosshairLabel: isDark ? 'hsl(224, 29%, 12%)' : 'hsl(0, 0%, 100%)',
+  };
+}
+
+function timeToMs(time: Time): number {
+  if (typeof time === 'number') return time * 1000;
+  if (typeof time === 'string') return Date.parse(time);
+  return Date.UTC(time.year, time.month - 1, time.day);
+}
+
+function toPnlSeriesData(points: PnlHistoryPoint[]): SingleValueData<Time>[] {
+  const bySecond = new Map<number, PnlHistoryPoint>();
+  for (const point of points) {
+    bySecond.set(Math.floor(point.timestamp / 1000), point);
+  }
+  return Array.from(bySecond.entries())
+    .sort(([a], [b]) => a - b)
+    .map(([seconds, point]) => ({
+      time: seconds as UTCTimestamp,
+      value: point.profitLoss,
+    }));
+}
+
+type PnlChartTooltip = {
+  x: number;
+  y: number;
+  label: string;
+  value: number;
+};
+
+function ProfilePnlChart({
+  points,
+  period,
+  className,
+}: {
+  points: PnlHistoryPoint[];
+  period: PnlPeriod;
+  className?: string;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<IChartApi | null>(null);
+  const seriesRef = useRef<ISeriesApi<'Area'> | null>(null);
+  const [tooltip, setTooltip] = useState<PnlChartTooltip | null>(null);
+
+  const seriesData = useMemo(() => toPnlSeriesData(points), [points]);
+
+  const applyTheme = useCallback((chart: IChartApi) => {
+    const theme = getChartTheme();
+    chart.applyOptions({
+      layout: {
+        background: { type: ColorType.Solid, color: 'transparent' },
+        textColor: theme.text,
+        attributionLogo: false,
+      },
+      grid: {
+        vertLines: { visible: false },
+        horzLines: { color: theme.grid },
+      },
+      crosshair: {
+        vertLine: {
+          color: theme.crosshair,
+          labelBackgroundColor: theme.crosshairLabel,
+        },
+        horzLine: {
+          color: theme.crosshair,
+          labelBackgroundColor: theme.crosshairLabel,
+        },
+      },
+    });
+  }, []);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const chart = createChart(container, {
+      autoSize: true,
+      layout: {
+        background: { type: ColorType.Solid, color: 'transparent' },
+        attributionLogo: false,
+      },
+      rightPriceScale: {
+        borderVisible: false,
+        scaleMargins: { top: 0.08, bottom: 0 },
+      },
+      leftPriceScale: { visible: false },
+      timeScale: {
+        borderVisible: false,
+        timeVisible: true,
+        secondsVisible: period === '1D',
+        fixLeftEdge: true,
+        fixRightEdge: true,
+        minBarSpacing: 0.5,
+        tickMarkFormatter: (time: Time) => formatXAxisLabel(timeToMs(time), period),
+      },
+      crosshair: {
+        mode: CrosshairMode.Normal,
+        vertLine: { labelVisible: false },
+      },
+      localization: {
+        priceFormatter: (price: number) => `${Math.round(price)}π`,
+      },
+      handleScroll: true,
+      handleScale: true,
+    });
+
+    const series = chart.addSeries(AreaSeries, {
+      lineColor: PNL_LINE_COLOR,
+      topColor: PNL_AREA_TOP,
+      bottomColor: PNL_AREA_BOTTOM,
+      lineWidth: 2,
+      lineType: LineType.WithSteps,
+      crosshairMarkerVisible: true,
+      crosshairMarkerRadius: 4,
+      priceLineVisible: false,
+      lastValueVisible: false,
+    });
+
+    applyTheme(chart);
+
+    const onCrosshairMove = (param: MouseEventParams<Time>) => {
+      if (
+        !param.point ||
+        param.point.x < 0 ||
+        param.point.y < 0 ||
+        param.time === undefined
+      ) {
+        setTooltip(null);
+        return;
+      }
+
+      const entry = param.seriesData.get(series) as AreaData<Time> | undefined;
+      if (entry?.value === undefined) {
+        setTooltip(null);
+        return;
+      }
+
+      const date = new Date(timeToMs(param.time));
+      const label = isValid(date) ? format(date, 'MMM d, yyyy h:mm a') : '-';
+
+      setTooltip({
+        x: param.point.x,
+        y: param.point.y,
+        label,
+        value: entry.value,
+      });
+    };
+
+    chart.subscribeCrosshairMove(onCrosshairMove);
+
+    chartRef.current = chart;
+    seriesRef.current = series;
+
+    const themeObserver = new MutationObserver(() => {
+      if (chartRef.current) applyTheme(chartRef.current);
+    });
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class'],
+    });
+
+    return () => {
+      themeObserver.disconnect();
+      chart.unsubscribeCrosshairMove(onCrosshairMove);
+      chart.remove();
+      chartRef.current = null;
+      seriesRef.current = null;
+    };
+  }, [applyTheme, period]);
+
+  useEffect(() => {
+    seriesRef.current?.setData(seriesData);
+    const chart = chartRef.current;
+    if (!chart || seriesData.length === 0) return;
+    chart.timeScale().fitContent();
+  }, [seriesData]);
+
+  const valueClassName =
+    tooltip && tooltip.value > 0
+      ? 'text-emerald-600 dark:text-emerald-400'
+      : tooltip && tooltip.value < 0
+        ? 'text-rose-600 dark:text-rose-400'
+        : 'text-foreground';
+
+  return (
+    <div className={cn('relative w-full', className)}>
+      <div ref={containerRef} className="h-full min-h-[120px] w-full" />
+      {tooltip ? (
+        <div
+          className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full rounded-lg border border-border/80 bg-background px-3 py-2 text-xs shadow-md"
+          style={{ left: tooltip.x, top: tooltip.y - 8 }}
+        >
+          <p className="mb-1.5 text-muted-foreground">{tooltip.label}</p>
+          <p className={cn('font-semibold', valueClassName)}>{toSignedMoney(tooltip.value)}</p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 function normalizeTimestamp(value: unknown): number {
   if (typeof value === 'number') return value < 1_000_000_000_000 ? value * 1000 : value;
@@ -93,18 +309,6 @@ function formatXAxisLabel(value: number, period: PnlPeriod): string {
     return date.toLocaleDateString(undefined, { year: '2-digit', month: 'short' });
   }
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
-
-function formatTooltipTimestamp(value: number): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '-';
-  return date.toLocaleString(undefined, {
-    year: '2-digit',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
 }
 
 function normalizePnlHistory(rows: any[]): PnlHistoryPoint[] {
@@ -434,49 +638,11 @@ export function ProfileOverview() {
                 No PnL history
               </div>
             ) : (
-              <ChartContainer
-                config={chartConfig}
-                className="absolute inset-0 h-full w-full aspect-auto [&_.recharts-responsive-container]:!h-full [&_.recharts-responsive-container]:!w-full"
-              >
-                <LineChart data={pnlHistory}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.5)" />
-                  <XAxis
-                    dataKey="timestamp"
-                    tickFormatter={(value) => formatXAxisLabel(Number(value), selectedPeriod)}
-                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
-                    tickLine={{ stroke: 'hsl(var(--muted-foreground))' }}
-                  />
-                  <YAxis
-                    orientation="right"
-                    tickFormatter={(value) => `${Number(value).toFixed(0)}π`}
-                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
-                    tickLine={{ stroke: 'hsl(var(--muted-foreground))' }}
-                  />
-                  <ChartTooltip
-                    cursor={{ stroke: 'hsl(var(--primary))', strokeWidth: 1, strokeDasharray: '3 3' }}
-                    content={(props) => {
-                      const { content: _content, ...tooltipProps } = props;
-                      return (
-                        <ChartTooltipContent
-                          {...tooltipProps}
-                          labelFormatter={(value, payload) => {
-                            const payloadTimestamp = payload?.[0]?.payload?.timestamp;
-                            return formatTooltipTimestamp(Number(payloadTimestamp ?? value));
-                          }}
-                          formatter={(value: any) => toSignedMoney(toNumber(value))}
-                        />
-                      );
-                    }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="profitLoss"
-                    stroke="hsl(var(--primary))"
-                    strokeWidth={2}
-                    dot={false}
-                  />
-                </LineChart>
-              </ChartContainer>
+              <ProfilePnlChart
+                points={pnlHistory}
+                period={selectedPeriod}
+                className="absolute inset-0"
+              />
             )}
           </div>
         </CardContent>

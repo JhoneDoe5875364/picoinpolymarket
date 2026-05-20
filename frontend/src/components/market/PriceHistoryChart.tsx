@@ -1,15 +1,20 @@
 "use client"
 
-import { useEffect, useId, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts"
-import { ChartContainer, type ChartConfig } from "../ui/chart"
+  AreaSeries,
+  ColorType,
+  CrosshairMode,
+  LineType,
+  createChart,
+  type AreaData,
+  type IChartApi,
+  type ISeriesApi,
+  type MouseEventParams,
+  type SingleValueData,
+  type Time,
+  type UTCTimestamp,
+} from "lightweight-charts"
 import { Skeleton } from "../ui/skeleton"
 import { apiFetch } from "@/lib/api"
 import { Market } from "@/lib/types"
@@ -30,11 +35,6 @@ interface PriceHistoryChartProps {
   chartClassName?: string
 }
 
-const chartConfig = {
-  yes: { label: "Yes", color: "#22c55e" },
-  no: { label: "No", color: "#ef4444" },
-} satisfies ChartConfig
-
 type PriceHistoryPoint = {
   timestamp: number
   probability: number
@@ -46,8 +46,19 @@ type ChartPoint = {
   no: number
 }
 
+const YES_COLOR = "#22c55e"
+const NO_COLOR = "#ef4444"
+
 const INTERVAL_OPTIONS = ["1H", "1D", "1W", "1M", "1Y", "ALL"] as const
 type ChartInterval = (typeof INTERVAL_OPTIONS)[number]
+
+type CrosshairTooltip = {
+  x: number
+  y: number
+  label: string
+  yes: number
+  no: number
+}
 
 function toApiInterval(interval: ChartInterval | "ALL"): string {
   if (interval === "ALL") return "ALL"
@@ -88,6 +99,16 @@ function clampProbability(value: number): number {
   return Math.min(1, Math.max(0, value))
 }
 
+function getChartTheme() {
+  const isDark = document.documentElement.classList.contains("dark")
+  return {
+    text: isDark ? "hsl(220, 11%, 72%)" : "hsl(0, 0%, 40%)",
+    grid: isDark ? "hsla(223, 20%, 24%, 0.55)" : "hsla(0, 0%, 89%, 0.55)",
+    crosshair: isDark ? "hsla(223, 20%, 40%, 0.8)" : "hsla(0, 0%, 70%, 0.8)",
+    crosshairLabel: isDark ? "hsl(224, 29%, 12%)" : "hsl(0, 0%, 100%)",
+  }
+}
+
 async function loadPriceHistory(
   marketId: number,
   interval: ChartInterval | "ALL"
@@ -117,28 +138,225 @@ function toChartPoints(points: PriceHistoryPoint[]): ChartPoint[] {
   })
 }
 
-type ChartTooltipProps = {
-  active?: boolean
-  payload?: { payload?: ChartPoint }[]
+function toSeriesData(
+  points: ChartPoint[],
+  key: "yes" | "no"
+): SingleValueData<Time>[] {
+  const bySecond = new Map<number, ChartPoint>()
+  for (const point of points) {
+    bySecond.set(Math.floor(point.timestamp / 1000), point)
+  }
+
+  return Array.from(bySecond.entries())
+    .sort(([a], [b]) => a - b)
+    .map(([seconds, point]) => ({
+      time: seconds as UTCTimestamp,
+      value: point[key],
+    }))
 }
 
-function PriceHistoryTooltip({ active, payload }: ChartTooltipProps) {
-  if (!active || !payload?.length) return null
-  const point = payload[0]?.payload
-  if (!point) return null
+function timeToMs(time: Time): number {
+  if (typeof time === "number") return time * 1000
+  if (typeof time === "string") return Date.parse(time)
+  return Date.UTC(time.year, time.month - 1, time.day)
+}
 
-  const date = new Date(point.timestamp)
-  const label = isValid(date) ? format(date, "MMM d, yyyy h:mm a") : "-"
+type LightweightChartProps = {
+  points: ChartPoint[]
+  interval: ChartInterval | "ALL"
+  className?: string
+}
+
+function LightweightPriceChart({
+  points,
+  interval,
+  className,
+}: LightweightChartProps) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const chartRef = useRef<IChartApi | null>(null)
+  const yesSeriesRef = useRef<ISeriesApi<"Area"> | null>(null)
+  const noSeriesRef = useRef<ISeriesApi<"Area"> | null>(null)
+  const [tooltip, setTooltip] = useState<CrosshairTooltip | null>(null)
+
+  const yesData = useMemo(() => toSeriesData(points, "yes"), [points])
+  const noData = useMemo(() => toSeriesData(points, "no"), [points])
+
+  const applyTheme = useCallback((chart: IChartApi) => {
+    const theme = getChartTheme()
+    chart.applyOptions({
+      layout: {
+        background: { type: ColorType.Solid, color: "transparent" },
+        textColor: theme.text,
+        attributionLogo: false,
+      },
+      grid: {
+        vertLines: { visible: false },
+        horzLines: { color: theme.grid },
+      },
+      crosshair: {
+        vertLine: {
+          color: theme.crosshair,
+          labelBackgroundColor: theme.crosshairLabel,
+        },
+        horzLine: {
+          color: theme.crosshair,
+          labelBackgroundColor: theme.crosshairLabel,
+        },
+      },
+    })
+  }, [])
+
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    const chart = createChart(container, {
+      autoSize: true,
+      layout: {
+        background: { type: ColorType.Solid, color: "transparent" },
+        attributionLogo: false,
+      },
+      rightPriceScale: {
+        borderVisible: false,
+        scaleMargins: { top: 0.08, bottom: 0 },
+        autoScale: false,
+      },
+      leftPriceScale: { visible: false },
+      timeScale: {
+        borderVisible: false,
+        timeVisible: true,
+        secondsVisible: interval === "1H",
+        fixLeftEdge: true,
+        fixRightEdge: true,
+        minBarSpacing: 0.5,
+        tickMarkFormatter: (time: Time) =>
+          formatXAxisLabel(timeToMs(time), interval),
+      },
+      crosshair: {
+        mode: CrosshairMode.Normal,
+        vertLine: { labelVisible: false },
+      },
+      localization: {
+        priceFormatter: (price: number) => `${Math.round(price)}%`,
+      },
+      handleScroll: true,
+      handleScale: true,
+    })
+
+    const yesSeries = chart.addSeries(AreaSeries, {
+      lineColor: YES_COLOR,
+      topColor: "rgba(34, 197, 94, 0.35)",
+      bottomColor: "rgba(34, 197, 94, 0)",
+      lineWidth: 2,
+      lineType: LineType.WithSteps,
+      crosshairMarkerVisible: true,
+      crosshairMarkerRadius: 4,
+      priceLineVisible: false,
+      lastValueVisible: false,
+    })
+
+    const noSeries = chart.addSeries(AreaSeries, {
+      lineColor: NO_COLOR,
+      topColor: "rgba(239, 68, 68, 0.35)",
+      bottomColor: "rgba(239, 68, 68, 0)",
+      lineWidth: 2,
+      lineType: LineType.WithSteps,
+      crosshairMarkerVisible: true,
+      crosshairMarkerRadius: 4,
+      priceLineVisible: false,
+      lastValueVisible: false,
+    })
+
+    chart.priceScale("right").setVisibleRange({ from: 0, to: 100 })
+    applyTheme(chart)
+
+    const onCrosshairMove = (param: MouseEventParams<Time>) => {
+      if (
+        !param.point ||
+        param.point.x < 0 ||
+        param.point.y < 0 ||
+        param.time === undefined
+      ) {
+        setTooltip(null)
+        return
+      }
+
+      const yesEntry = param.seriesData.get(yesSeries) as AreaData<Time> | undefined
+      const noEntry = param.seriesData.get(noSeries) as AreaData<Time> | undefined
+      const yes = yesEntry?.value
+      const no = noEntry?.value
+
+      if (yes === undefined && no === undefined) {
+        setTooltip(null)
+        return
+      }
+
+      const date = new Date(timeToMs(param.time))
+      const label = isValid(date) ? format(date, "MMM d, yyyy h:mm a") : "-"
+
+      setTooltip({
+        x: param.point.x,
+        y: param.point.y,
+        label,
+        yes: yes ?? (no !== undefined ? 100 - no : 0),
+        no: no ?? (yes !== undefined ? 100 - yes : 0),
+      })
+    }
+
+    chart.subscribeCrosshairMove(onCrosshairMove)
+
+    chartRef.current = chart
+    yesSeriesRef.current = yesSeries
+    noSeriesRef.current = noSeries
+
+    const themeObserver = new MutationObserver(() => {
+      if (chartRef.current) applyTheme(chartRef.current)
+    })
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    })
+
+    return () => {
+      themeObserver.disconnect()
+      chart.unsubscribeCrosshairMove(onCrosshairMove)
+      chart.remove()
+      chartRef.current = null
+      yesSeriesRef.current = null
+      noSeriesRef.current = null
+    }
+  }, [applyTheme, interval])
+
+  useEffect(() => {
+    yesSeriesRef.current?.setData(yesData)
+    noSeriesRef.current?.setData(noData)
+
+    const chart = chartRef.current
+    if (!chart || yesData.length === 0) return
+
+    chart.timeScale().fitContent()
+    chart.priceScale("right").setVisibleRange({ from: 0, to: 100 })
+  }, [yesData, noData])
 
   return (
-    <div className="rounded-lg border border-border/80 bg-background px-3 py-2 text-xs shadow-md">
-      <p className="mb-1.5 text-muted-foreground">{label}</p>
-      <div className="flex flex-col gap-1">
-        <p className="font-semibold text-emerald-600 dark:text-emerald-400">
-          Yes {point.yes.toFixed(1)}%
-        </p>
-        <p className="font-semibold text-rose-600 dark:text-rose-400">No {point.no.toFixed(1)}%</p>
-      </div>
+    <div className={cn("relative w-full", className)}>
+      <div ref={containerRef} className="h-full min-h-[120px] w-full" />
+      {tooltip && (
+        <div
+          className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full rounded-lg border border-border/80 bg-background px-3 py-2 text-xs shadow-md"
+          style={{ left: tooltip.x, top: tooltip.y - 8 }}
+        >
+          <p className="mb-1.5 text-muted-foreground">{tooltip.label}</p>
+          <div className="flex flex-col gap-1">
+            <p className="font-semibold text-emerald-600 dark:text-emerald-400">
+              Yes {tooltip.yes.toFixed(1)}%
+            </p>
+            <p className="font-semibold text-rose-600 dark:text-rose-400">
+              No {tooltip.no.toFixed(1)}%
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -166,9 +384,6 @@ export function PriceHistoryChart({
   const resolvedInterval: ChartInterval | "ALL" =
     fixedInterval === "ALL" ? "ALL" : (fixedInterval ?? interval)
   const headerVisible = showHeader ?? showFooter
-  const chartUid = useId().replace(/:/g, "")
-  const yesFillId = `priceHistoryYesFill-${chartUid}`
-  const noFillId = `priceHistoryNoFill-${chartUid}`
 
   const chartPoints = useMemo(
     () => (chartData ? toChartPoints(chartData) : []),
@@ -238,74 +453,17 @@ export function PriceHistoryChart({
         </div>
       )}
 
-      <ChartContainer
-        config={chartConfig}
+      <LightweightPriceChart
+        points={chartPoints}
+        interval={resolvedInterval}
         className={cn(
           "aspect-auto h-[280px] w-full sm:h-[300px]",
-          "[&_.recharts-cartesian-grid_horizontal]:stroke-border/40",
           chartClassName
         )}
-      >
-        <AreaChart
-          accessibilityLayer={false}
-          data={chartPoints}
-          margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
-        >
-          <defs>
-            <linearGradient id={yesFillId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#22c55e" stopOpacity={0.35} />
-              <stop offset="100%" stopColor="#22c55e" stopOpacity={0} />
-            </linearGradient>
-            <linearGradient id={noFillId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#ef4444" stopOpacity={0.35} />
-              <stop offset="100%" stopColor="#ef4444" stopOpacity={0} />
-            </linearGradient>
-          </defs>
-          <CartesianGrid vertical={false} strokeDasharray="0" stroke="hsl(var(--border) / 0.35)" />
-          <XAxis
-            dataKey="timestamp"
-            tickFormatter={(value) =>
-              formatXAxisLabel(Number(value), resolvedInterval)
-            }
-            tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
-            tickLine={false}
-            axisLine={false}
-            minTickGap={32}
-            dy={8}
-          />
-          <YAxis
-            domain={[0, 100]}
-            ticks={[0, 25, 50, 75, 100]}
-            tickFormatter={(value) => `${value}%`}
-            tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
-            tickLine={false}
-            axisLine={false}
-            width={40}
-          />
-          <Tooltip content={<PriceHistoryTooltip />} />
-          <Area
-            type="stepAfter"
-            dataKey="yes"
-            stroke="#22c55e"
-            strokeWidth={2}
-            fill={`url(#${yesFillId})`}
-            dot={false}
-            isAnimationActive={false}
-          />
-          <Area
-            type="stepAfter"
-            dataKey="no"
-            stroke="#ef4444"
-            strokeWidth={2}
-            fill={`url(#${noFillId})`}
-            dot={false}
-            isAnimationActive={false}
-          />
-        </AreaChart>
-      </ChartContainer>
+      />
 
       {showFooter && (
-        <div className="mt-5 grid grid-cols-4 gap-4 sm:grid-cols-4 sm:gap-6 text-center">
+        <div className="mt-5 grid grid-cols-4 gap-4 text-center sm:grid-cols-4 sm:gap-6">
           <StatBlock label="Volume (7D)" value={roundLocalePi(volume7d)} />
           <StatBlock label="24h Volume" value={roundLocalePi(volume24h)} />
           <StatBlock label="Traders" value={roundLocale(traders)} />
