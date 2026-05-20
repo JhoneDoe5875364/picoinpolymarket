@@ -155,9 +155,9 @@ export function ActivityTabContent({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center justify-end gap-3">
         <Select value={minAmount} onValueChange={(value) => setMinAmount(value as MinAmountFilter)}>
-          <SelectTrigger className="h-9 w-[140px] rounded-full">
+          <SelectTrigger className="h-9 w-[160px] rounded-full">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

@@ -6,13 +6,8 @@ import { useAuth } from "@/context/AuthContext";
 import { apiFetch, apiFetchWithToken } from "@/lib/api";
 import type { Market } from "@/lib/types";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { InitialAvatar, ListSkeleton } from "./shared";
 import { cn } from "@/lib/utils";
 
@@ -331,26 +326,21 @@ export function CommentsTabContent({ market, isActive, onCommentCountChange }: C
     [ppxToken, reloadCommentsFromStart, refreshSummary, replyDrafts]
   );
 
-  const sortLabel = sortKey === "most_liked" ? "Most liked" : "Newest";
-
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-4">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 text-sm font-medium text-foreground outline-none hover:text-foreground/90"
-            >
-              {sortLabel}
-              <ChevronDown className="h-4 w-4 text-muted-foreground" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="min-w-[10rem]">
-            <DropdownMenuItem onClick={() => setSortKey("newest")}>Newest</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setSortKey("most_liked")}>Most liked</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <Select
+          value={sortKey}
+          onValueChange={(value) => setSortKey(value as "newest" | "most_liked")}
+        >
+          <SelectTrigger className="h-9 w-[120px] rounded-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="newest">Newest</SelectItem>
+            <SelectItem value="most_liked">Most liked</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2">

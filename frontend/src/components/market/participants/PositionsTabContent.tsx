@@ -221,7 +221,7 @@ export function PositionsTabContent({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-end gap-2">
         <Select value={positionStatus} onValueChange={(value) => setPositionStatus(value as PositionStatus)}>
-          <SelectTrigger className="h-9 w-[100px]">
+          <SelectTrigger className="h-9 w-[120px] rounded-full">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -232,7 +232,7 @@ export function PositionsTabContent({
         </Select>
 
         <Select value={sortDirection} onValueChange={(value) => setSortDirection(value as SortDirection)}>
-          <SelectTrigger className="h-9 w-[80px]">
+          <SelectTrigger className="h-9 w-[120px] rounded-full">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
