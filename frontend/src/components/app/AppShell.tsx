@@ -11,6 +11,7 @@ import { PredictPixLogo } from "@/components/PredictPixLogo";
 import AppHeader from "./AppHeader";
 import { usePathname } from "next/navigation";
 import { MobileBottomNav } from "@/components/MobileBottomNav";
+import { cn } from "@/lib/utils";
 
 function AppSkeleton() {
   return (
@@ -42,9 +43,12 @@ function AppSkeleton() {
   )
 }
 
+const MARKET_DETAIL_PATH = /^\/markets\/[^/]+$/;
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const hideHeaderFooter = pathname === '/region-unavailable';
+  const isMarketDetailPage = MARKET_DETAIL_PATH.test(pathname);
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isMounted, setIsMounted] = useState(false);
@@ -65,10 +69,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <>
       {!hideHeaderFooter && <AppHeader currentUser={currentUser} />}
-      <main id="content" className="min-h-[60vh] pb-20 md:pb-0">{children}</main>
+      <main
+        id="content"
+        className={cn("min-h-[60vh] md:pb-0", isMarketDetailPage ? "pb-0" : "pb-20")}
+      >
+        {children}
+      </main>
       {!hideHeaderFooter && <AppFooter />}
-      {!hideHeaderFooter && <div className="h-[calc(env(safe-area-inset-bottom)+4.25rem)] md:hidden" aria-hidden />}
-      {!hideHeaderFooter && <MobileBottomNav />}
+      {!hideHeaderFooter && !isMarketDetailPage && (
+        <div className="h-[calc(env(safe-area-inset-bottom)+4.25rem)] md:hidden" aria-hidden />
+      )}
+      {!hideHeaderFooter && !isMarketDetailPage && <MobileBottomNav />}
     </>
   );
 }

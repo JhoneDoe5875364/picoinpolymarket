@@ -9,6 +9,7 @@ import { apiFetch } from "@/lib/api";
 import { MarketSummary } from "@/components/market/MarketSummary";
 import { MarketRules } from "@/components/market/MarketRules";
 import { MarketParticipants } from "@/components/market/MarketParticipants";
+import { MarketDetailMobileTrade } from "@/components/market/MarketDetailMobileTrade";
 
 
 async function loadMarketDetail(id: string): Promise<Market> {
@@ -27,9 +28,9 @@ export default async function MarketDetailsPage({ params }: { params: Promise<{ 
     return notFound();
 
   return (
-    <div className="container mx-auto py-8 px-4 sm:px-6 lg:px-8">
-      <div className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-        <div className="lg:col-span-2 xl:col-span-3 space-y-8">
+    <div className="container mx-auto px-4 py-6 pb-28 sm:px-6 sm:py-8 lg:px-8 lg:pb-8">
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="space-y-8 lg:col-span-2 xl:col-span-3">
           <MarketSummary market={market} />
 
           <PriceHistoryChart market={market} />
@@ -39,10 +40,12 @@ export default async function MarketDetailsPage({ params }: { params: Promise<{ 
           <MarketParticipants market={market} />
         </div>
 
-        <div className="lg:col-span-1 xl:col-span-1 space-y-6 lg:sticky lg:top-20 lg:self-start">
+        <div className="hidden space-y-6 lg:col-span-1 lg:block lg:sticky lg:top-20 lg:self-start xl:col-span-1">
           <PredictionPanel market={market} />
         </div>
       </div>
+
+      <MarketDetailMobileTrade market={market} />
     </div>
   );
 }
