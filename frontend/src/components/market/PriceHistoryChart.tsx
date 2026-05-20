@@ -246,7 +246,11 @@ export function PriceHistoryChart({
           chartClassName
         )}
       >
-        <AreaChart data={chartPoints} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+        <AreaChart
+          accessibilityLayer={false}
+          data={chartPoints}
+          margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+        >
           <defs>
             <linearGradient id={yesFillId} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#22c55e" stopOpacity={0.35} />
