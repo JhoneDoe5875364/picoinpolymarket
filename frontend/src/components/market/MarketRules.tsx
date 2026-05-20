@@ -1,9 +1,31 @@
 "use client";
 
-import { format, isValid } from "date-fns";
-import { useState } from "react";
+import {
+  Calendar,
+  Check,
+  ChevronDown,
+  Clock,
+  FileText,
+  HelpCircle,
+  Info,
+  Shield,
+  X,
+} from "lucide-react";
+import { useState, type ReactNode } from "react";
 import type { Market } from "@/lib/types";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
+import { cn } from "@/lib/utils";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "../ui/collapsible";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "../ui/dialog";
 
 interface MarketRulesProps {
   market: Market;
@@ -14,108 +36,332 @@ function normalizeText(value?: string | null): string {
   return value.trim();
 }
 
-function formatDateTime(value?: string | null): string {
+function formatDateTimeUtc(value?: string | null): string {
   if (!value) return "-";
   const date = new Date(value);
-  if (!isValid(date)) return "-";
-  return format(date, "PPp");
+  if (Number.isNaN(date.getTime())) return "-";
+  const formatted = new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "UTC",
+  }).format(date);
+  return `${formatted} UTC`;
+}
+
+const URL_SPLIT_PATTERN = /(https?:\/\/[^\s]+)/;
+
+function linkifyText(text: string): ReactNode {
+  if (!text) return "-";
+  const parts = text.split(URL_SPLIT_PATTERN);
+  if (parts.length === 1) return text;
+
+  return parts.map((part, index) => {
+    if (part.startsWith("http://") || part.startsWith("https://")) {
+      return (
+        <a
+          key={`${part}-${index}`}
+          href={part}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-600 hover:underline dark:text-blue-400"
+        >
+          {part}
+        </a>
+      );
+    }
+    return part;
+  });
+}
+
+const RULE_ICON_VARIANT = {
+  /** Question, section header */
+  violet:
+    "bg-violet-100 text-violet-600 dark:bg-violet-900/40 dark:text-violet-300",
+  /** What counts as Yes */
+  emerald:
+    "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-300",
+  /** What counts as No */
+  red: "bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-300",
+  /** Resolution source / references */
+  sky: "bg-sky-100 text-sky-600 dark:bg-sky-900/40 dark:text-sky-300",
+  /** Close / deadline */
+  amber:
+    "bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-300",
+  /** Resolution timing */
+  blue: "bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-300",
+  /** Edge cases / exceptions */
+  orange:
+    "bg-orange-100 text-orange-600 dark:bg-orange-900/40 dark:text-orange-300",
+} as const;
+
+type RuleIconVariant = keyof typeof RULE_ICON_VARIANT;
+
+const WHY_IT_MATTERS_MESSAGE =
+  "Clear resolution rules help ensure a fair and transparent market for all participants. Please review the rules carefully before making your prediction.";
+
+function RulesWhyItMatters({
+  className,
+  title = "Why this matters",
+  children = WHY_IT_MATTERS_MESSAGE,
+}: {
+  className?: string;
+  title?: string;
+  children?: ReactNode;
+}) {
+  return (
+    <aside
+      role="note"
+      aria-label={title}
+      className={cn(
+        "rounded-lg border p-4",
+        "border-sky-200/90 bg-sky-50",
+        "dark:border-sky-800/60 dark:bg-sky-950/35",
+        className
+      )}
+    >
+      <div className="flex gap-3">
+        <Info
+          className="mt-0.5 h-5 w-5 shrink-0 text-sky-600 dark:text-sky-400"
+          aria-hidden
+        />
+        <div className="min-w-0 space-y-1">
+          <p className="text-sm font-semibold text-sky-900 dark:text-sky-100">{title}</p>
+          <p className="text-sm leading-relaxed text-sky-800/95 dark:text-sky-200/90">
+            {children}
+          </p>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+interface RuleRowProps {
+  icon: ReactNode;
+  iconVariant: RuleIconVariant;
+  label: string;
+  /** Full content shown when expanded (mobile) or inline (desktop). */
+  detail: ReactNode;
+  /** Optional desktop-only summary; defaults to `detail`. */
+  desktopDetail?: ReactNode;
+  /** Desktop-only click handler (e.g. edge cases dialog). */
+  onDesktopClick?: () => void;
+}
+
+function RuleRow({
+  icon,
+  iconVariant,
+  label,
+  detail,
+  desktopDetail,
+  onDesktopClick,
+}: RuleRowProps) {
+  const [open, setOpen] = useState(false);
+  const desktopContent = desktopDetail ?? detail;
+  const isDesktopInteractive = Boolean(onDesktopClick);
+
+  const iconBadge = (
+    <div
+      className={cn(
+        "flex h-6 w-6 shrink-0 items-center justify-center rounded-full",
+        RULE_ICON_VARIANT[iconVariant]
+      )}
+    >
+      {icon}
+    </div>
+  );
+
+  const labelEl = (
+    <span className="min-w-0 flex-1 text-sm font-semibold text-foreground">{label}</span>
+  );
+
+  return (
+    <>
+      {/* Mobile: label + chevron only; tap to expand detail */}
+      <Collapsible
+        open={open}
+        onOpenChange={setOpen}
+        className="border-t border-border md:hidden"
+      >
+        <CollapsibleTrigger className="flex w-full items-center gap-3 pl-8 px-4 py-3.5 text-left transition-colors hover:bg-muted/40 [&[data-state=open]]:bg-muted/20">
+          {iconBadge}
+          {labelEl}
+          <ChevronDown
+            className={cn(
+              "h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200",
+              open && "rotate-180"
+            )}
+          />
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <div className="border-t border-border/60 px-4 pb-3.5 pt-3 text-sm leading-relaxed text-muted-foreground whitespace-pre-line">
+            {detail}
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
+
+      {/* Desktop: inline detail */}
+      {isDesktopInteractive ? (
+        <button
+          type="button"
+          onClick={onDesktopClick}
+          className="hidden w-full items-center gap-3 border-t border-border px-4 ml-4 py-3.5 text-left transition-colors hover:bg-muted/40 md:flex"
+        >
+          {iconBadge}
+          <span className="w-[12.5rem] shrink-0 text-sm font-semibold text-foreground">{label}</span>
+          <span className="min-w-0 flex-1 text-sm text-muted-foreground">{desktopContent}</span>
+          <ChevronDown className="h-4 w-4 shrink-0 -rotate-90 text-muted-foreground" />
+        </button>
+      ) : (
+        <div className="hidden items-center gap-3 border-t border-border px-4 pl-8 py-3.5 md:flex">
+          {iconBadge}
+          <span className="w-[12.5rem] shrink-0 text-sm font-semibold text-foreground">{label}</span>
+          <span className="min-w-0 flex-1 text-sm text-muted-foreground">{desktopContent}</span>
+        </div>
+      )}
+    </>
+  );
+}
+
+function RulesCard({
+  title,
+  headerIcon,
+  defaultOpen = true,
+  children,
+}: {
+  title: string;
+  headerIcon: ReactNode;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <div className="overflow-hidden rounded-lg border border-border bg-card">
+        <CollapsibleTrigger className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left transition-colors hover:bg-muted/30">
+          <div className="flex items-center gap-2.5">
+            {headerIcon}
+            <span className="text-base font-semibold text-foreground">{title}</span>
+          </div>
+          <ChevronDown
+            className={cn(
+              "h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-200",
+              open && "rotate-180"
+            )}
+          />
+        </CollapsibleTrigger>
+        <CollapsibleContent>{children}</CollapsibleContent>
+      </div>
+    </Collapsible>
+  );
 }
 
 export function MarketRules({ market }: MarketRulesProps) {
-  const [activeTab, setActiveTab] = useState("resolution");
+  const [edgeCasesOpen, setEdgeCasesOpen] = useState(false);
 
   const question = normalizeText(market.question);
   const yesCriteria = normalizeText(market.yes_criteria);
   const noCriteria = normalizeText(market.no_criteria);
   const resolutionSource = normalizeText(market.resolution_source);
   const edgeCases = normalizeText(market.edge_cases);
-  const marketContext = normalizeText(market.market_context);
   const legacyRules = normalizeText(market.rules);
-  const closeTime = formatDateTime(market.end_date);
-  const resolutionTime = formatDateTime(market.resolution_time);
+  const closeTime = formatDateTimeUtc(market.end_date);
+  const resolutionTime = formatDateTimeUtc(market.resolution_time);
   const hasStructuredRules = Boolean(
-    question || yesCriteria || noCriteria || resolutionSource || edgeCases || market.end_date || market.resolution_time
+    question ||
+      yesCriteria ||
+      noCriteria ||
+      resolutionSource ||
+      edgeCases ||
+      market.end_date ||
+      market.resolution_time
   );
 
+  const iconSize = "h-4 w-4";
+
   return (
-    <section>
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="pb-8">
-        <TabsList className="h-auto p-0 bg-transparent rounded-none justify-start gap-6">
-          <TabsTrigger
-            value="resolution"
-            className="px-0 py-0 rounded-none bg-transparent text-md font-semibold text-muted-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
-          >
-            Resolution Rules
-          </TabsTrigger>
-          <TabsTrigger
-            value="context"
-            className="px-0 py-0 rounded-none bg-transparent text-md font-semibold text-muted-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
-          >
-            Market Context
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="resolution" className="mt-5">
-          <div className="">
-            <div className="mb-4">
-              <p className="mt-1 text-xs text-muted-foreground">
-                Review these terms before placing a prediction. Outcomes settle by these rules.
-              </p>
-            </div>
-
-            <dl className="grid gap-3 text-sm">
-              <div>
-                <dt className="font-medium text-foreground">Question</dt>
-                <dd className="mt-1 ml-4 whitespace-pre-line text-muted-foreground text-xs">{question || "-"}</dd>
-              </div>
-              <div>
-                <dt className="font-medium text-foreground">What Counts as Yes</dt>
-                <dd className="mt-1 ml-4 whitespace-pre-line text-muted-foreground text-xs">{yesCriteria || "-"}</dd>
-              </div>
-              <div>
-                <dt className="font-medium text-foreground">What Counts as No</dt>
-                <dd className="mt-1 ml-4 whitespace-pre-line text-muted-foreground text-xs">{noCriteria || "-"}</dd>
-              </div>
-              <div>
-                <dt className="font-medium text-foreground">Resolution Source</dt>
-                <dd className="mt-1 ml-4 whitespace-pre-line text-muted-foreground text-xs">{resolutionSource || "-"}</dd>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
-                  <dt className="font-medium text-foreground">Close Time</dt>
-                  <dd className="mt-1 ml-4 text-muted-foreground text-xs">{closeTime}</dd>
-                </div>
-                <div>
-                  <dt className="font-medium text-foreground">Resolution Time</dt>
-                  <dd className="mt-1 ml-4 text-muted-foreground text-xs">{resolutionTime}</dd>
-                </div>
-              </div>
-              <div>
-                <dt className="font-medium text-foreground">Edge Cases</dt>
-                <dd className="mt-1 ml-4 whitespace-pre-line text-muted-foreground text-xs">{edgeCases || "-"}</dd>
-              </div>
-            </dl>
-
-            {!hasStructuredRules && (
-              <div className="rounded-md border border-border/80 bg-background/60 p-3 text-sm text-muted-foreground">
-                {legacyRules || "No rules provided."}
-              </div>
-            )}
+    <section className="space-y-4 pb-8">
+      <RulesCard
+        title="Resolution Rules"
+        headerIcon={
+          <div className={cn("flex h-8 w-8 items-center justify-center rounded-full", RULE_ICON_VARIANT.violet)}>
+            <Shield className={iconSize} />
           </div>
-        </TabsContent>
-
-        <TabsContent value="context" className="mt-5">
-          <div className="">
-            <p className="mt-1 text-xs text-muted-foreground">
-              This section is informational only and does not recommend a Yes/No position.
-            </p>
-            <div className="mt-4">
-              <dt className="font-medium text-foreground text-sm">Context</dt>
-              <dd className="mt-1 ml-4 whitespace-pre-line text-muted-foreground text-xs">{marketContext || "No additional context provided."}</dd>
+        }
+      >
+        <div className="border-t border-border">
+          {!hasStructuredRules ? (
+            <div className="px-4 py-4 text-sm text-muted-foreground">
+              {legacyRules || "No rules provided."}
             </div>
-          </div>
-        </TabsContent>
-      </Tabs>
+          ) : (
+            <>
+              <RuleRow
+                icon={<HelpCircle className={iconSize} />}
+                iconVariant="violet"
+                label="Question"
+                detail={question || "-"}
+              />
+              <RuleRow
+                icon={<Check className={iconSize} strokeWidth={3} />}
+                iconVariant="emerald"
+                label="What Counts as Yes"
+                detail={yesCriteria || "-"}
+              />
+              <RuleRow
+                icon={<X className={iconSize} strokeWidth={3} />}
+                iconVariant="red"
+                label="What Counts as No"
+                detail={noCriteria || "-"}
+              />
+              <RuleRow
+                icon={<FileText className={iconSize} />}
+                iconVariant="sky"
+                label="Resolution Source"
+                detail={resolutionSource ? linkifyText(resolutionSource) : "-"}
+              />
+              <RuleRow
+                icon={<Calendar className={iconSize} />}
+                iconVariant="amber"
+                label="Close Time"
+                detail={closeTime}
+              />
+              <RuleRow
+                icon={<Clock className={iconSize} />}
+                iconVariant="blue"
+                label="Resolution Time"
+                detail={resolutionTime}
+              />
+              <RuleRow
+                icon={<Info className={iconSize} />}
+                iconVariant="orange"
+                label="Edge Cases"
+                detail={edgeCases || "-"}
+                desktopDetail={edgeCases ? "View edge cases" : "-"}
+                onDesktopClick={edgeCases ? () => setEdgeCasesOpen(true) : undefined}
+              />
+            </>
+          )}
+        </div>
+      </RulesCard>
+
+      <RulesWhyItMatters />
+
+      <Dialog open={edgeCasesOpen} onOpenChange={setEdgeCasesOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edge Cases</DialogTitle>
+            <DialogDescription>
+              Special scenarios and how this market resolves in each case.
+            </DialogDescription>
+          </DialogHeader>
+          <p className="whitespace-pre-line text-sm text-foreground">{edgeCases}</p>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }
