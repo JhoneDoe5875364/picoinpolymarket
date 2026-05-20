@@ -12,6 +12,7 @@ import AppHeader from "./AppHeader";
 import { usePathname } from "next/navigation";
 import { MobileBottomNav } from "@/components/MobileBottomNav";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/context/AuthContext";
 
 function AppSkeleton() {
   return (
@@ -47,8 +48,10 @@ const MARKET_DETAIL_PATH = /^\/markets\/[^/]+$/;
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const { ppxUser } = useAuth();
   const hideHeaderFooter = pathname === '/region-unavailable';
   const isMarketDetailPage = MARKET_DETAIL_PATH.test(pathname);
+  const showMobileBottomNav = Boolean(ppxUser) && !hideHeaderFooter && !isMarketDetailPage;
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isMounted, setIsMounted] = useState(false);
@@ -71,15 +74,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {!hideHeaderFooter && <AppHeader currentUser={currentUser} />}
       <main
         id="content"
-        className={cn("min-h-[60vh] md:pb-0", isMarketDetailPage ? "pb-0" : "pb-20")}
+        className={cn("min-h-[60vh] md:pb-0", showMobileBottomNav ? "pb-20" : "pb-0")}
       >
         {children}
       </main>
       {!hideHeaderFooter && <AppFooter />}
-      {!hideHeaderFooter && !isMarketDetailPage && (
+      {showMobileBottomNav && (
         <div className="h-[calc(env(safe-area-inset-bottom)+4.25rem)] md:hidden" aria-hidden />
       )}
-      {!hideHeaderFooter && !isMarketDetailPage && <MobileBottomNav />}
+      {showMobileBottomNav && <MobileBottomNav />}
     </>
   );
 }

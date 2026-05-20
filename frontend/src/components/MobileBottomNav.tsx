@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { House, Trophy, UserRound } from "lucide-react";
+import { House, Sparkles, Trophy, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 
 const menuItems = [
   { href: "/", label: "Home", icon: House },
+  { href: "/new", label: "New", icon: Sparkles },
   { href: "/leaderboard", label: "Leaderboard", icon: Trophy },
   { href: "/profile", label: "Profile", icon: UserRound },
 ];
@@ -15,18 +16,17 @@ const menuItems = [
 export function MobileBottomNav() {
   const pathname = usePathname();
   const { ppxUser } = useAuth();
-  const isLoggedIn = Boolean(ppxUser);
-  const visibleMenuItems = menuItems.filter((item) => item.href !== "/profile" || isLoggedIn);
+
+  if (!ppxUser) {
+    return null;
+  }
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/90 md:hidden">
       <div
-        className={cn(
-          "grid px-2 pb-[calc(env(safe-area-inset-bottom)+0.35rem)] pt-1",
-          visibleMenuItems.length === 2 ? "grid-cols-2" : "grid-cols-3"
-        )}
+        className="grid grid-cols-4 px-2 pb-[calc(env(safe-area-inset-bottom)+0.35rem)] pt-1"
       >
-        {visibleMenuItems.map((item) => {
+        {menuItems.map((item) => {
           const isActive = pathname === item.href;
           const Icon = item.icon;
 
