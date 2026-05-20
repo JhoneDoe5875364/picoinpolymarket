@@ -339,8 +339,8 @@ function LightweightPriceChart({
   }, [yesData, noData])
 
   return (
-    <div className={cn("relative w-full", className)}>
-      <div ref={containerRef} className="h-full min-h-[120px] w-full" />
+    <div className={cn("relative w-full max-w-full overflow-hidden", className)}>
+      <div ref={containerRef} className="h-full min-h-[120px] w-full max-w-full" />
       {tooltip && (
         <div
           className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full rounded-lg border border-border/80 bg-background px-3 py-2 text-xs shadow-md"
@@ -423,7 +423,8 @@ export function PriceHistoryChart({
   return (
     <section
       className={cn(
-        "w-full",
+        "w-full max-w-full min-w-0",
+        embedded && "overflow-hidden",
         !embedded && "rounded-xl border border-border/60 bg-card p-4 shadow-sm sm:p-5",
         className
       )}

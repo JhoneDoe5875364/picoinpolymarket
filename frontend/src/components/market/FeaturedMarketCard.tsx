@@ -137,15 +137,15 @@ export default function FeaturedMarketCard({ market }: FeaturedMarketCardProps) 
           </div>
         </Link>
       </div>
-      <div className="mt-3 grid gap-3 md:grid-cols-3">
-        <div className="md:col-span-2">
+      <div className="mt-3 grid min-w-0 gap-3 md:grid-cols-3">
+        <div className="min-w-0 overflow-hidden md:col-span-2">
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Price History</p>
           <PriceHistoryChart
             market={market}
             fixedInterval="ALL"
             embedded
             showFooter={false}
-            chartClassName="aspect-auto h-32 md:h-48 w-full"
+            chartClassName="aspect-auto h-32 max-w-full md:h-48 w-full"
           />
         </div>
         <div className="md:col-span-1">
