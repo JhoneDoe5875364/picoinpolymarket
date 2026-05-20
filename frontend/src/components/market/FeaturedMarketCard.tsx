@@ -142,7 +142,8 @@ export default function FeaturedMarketCard({ market }: FeaturedMarketCardProps) 
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Price History</p>
           <PriceHistoryChart
             market={market}
-            fixedInterval="MAX"
+            fixedInterval="ALL"
+            embedded
             showFooter={false}
             chartClassName="aspect-auto h-32 md:h-48 w-full [&_.recharts-surface]:overflow-visible"
           />

@@ -142,11 +142,11 @@ async def get_market_prices_history(
     end_ts: Optional[datetime] = Query(default=None),
     interval: Optional[str] = Query(default='1H'),
 ):
-    allowed_intervals = {"1H", "1D", "1W", "1M", "1Y", "MAX"}
+    allowed_intervals = {"1H", "1D", "1W", "1M", "1Y", "ALL"}
     if interval not in allowed_intervals:
         raise HTTPException(
             status_code=400,
-            detail="Invalid interval. Allowed values are: 1H, 1D, 1W, 1M, 1Y, MAX",
+            detail="Invalid interval. Allowed values are: 1H, 1D, 1W, 1M, 1Y, ALL",
         )
 
     rows = await markets_repo.market_prices_history(

@@ -47,6 +47,10 @@ export interface Market {
   category?: string;
   labels?: string[];
   trades_24h?: number;
+  volume_24h?: number;
+  volume_1w?: number;
+  trades_total?: number;
+  holders?: number;
   comments_24h?: number;
   activity_24h?: number;
   price_move_24h?: number;

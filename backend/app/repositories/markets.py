@@ -339,7 +339,7 @@ async def list_featured_markets(
         price_history = await market_prices_history(
             session,
             market.id,
-            interval="MAX",
+            interval="ALL",
         )
         item["price_history"] = price_history
         item["sparkline"] = [
@@ -362,13 +362,34 @@ async def list_featured_markets(
 
 async def get_market_by_id(session: AsyncSession, market_id: int) -> Optional[dict[str, Any]]:
     stmt = (
-        select(Market)
+        select(Market, MarketStat)
         .options(selectinload(Market.category), selectinload(Market.market_tokens))
+        .outerjoin(MarketStat, MarketStat.market_id == Market.id)
         .where(Market.id == market_id)
     )
     result = await session.execute(stmt)
-    row = result.scalar_one_or_none()
-    return market_to_dict(row) if row else None
+    row = result.one_or_none()
+    if row is None:
+        return None
+
+    market, stats = row
+    payload = market_to_dict(market)
+    if stats is not None:
+        payload["volume_24h"] = float(stats.volume_24h or 0)
+        payload["volume_1w"] = float(stats.volume_1w or 0)
+        payload["trades_total"] = int(stats.trades_total or 0)
+        payload["trades_24h"] = int(stats.trades_24h or 0)
+
+    traders_stmt = select(func.count(func.distinct(MarketTrade.taker_user_id))).where(
+        MarketTrade.market_id == market_id
+    )
+    holders_stmt = select(func.count(func.distinct(MarketPosition.user_id))).where(
+        MarketPosition.market_id == market_id,
+        MarketPosition.shares >= 1,
+    )
+    payload["traders"] = int(await session.scalar(traders_stmt) or 0)
+    payload["holders"] = int(await session.scalar(holders_stmt) or 0)
+    return payload
 
 
 async def get_market_by_slug(session: AsyncSession, slug: str) -> Optional[dict[str, Any]]:
@@ -467,7 +488,7 @@ async def market_prices_history(
         "1W": 7 * 24 * 60 * 60,
         "1M": 30 * 24 * 60 * 60,
         "1Y": 365 * 24 * 60 * 60,
-        "MAX": 0,
+        "ALL": 0,
     }
     target_points = 60
 
@@ -483,7 +504,7 @@ async def market_prices_history(
     has_interval_from_ts = False
     if interval is not None:
         end_ts = int(datetime.now(timezone.utc).timestamp())
-        if interval != "MAX":
+        if interval != "ALL":
             start_ts = end_ts - interval_seconds_map[interval]
             has_interval_from_ts = True
 
