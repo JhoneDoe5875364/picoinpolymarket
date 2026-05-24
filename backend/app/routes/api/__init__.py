@@ -14,6 +14,7 @@ from app.routes.api import (
     leaderboard,
     orders,
     comments,
+    watchlist,
 )
 
 
@@ -31,3 +32,4 @@ def include_api_routers(app):
     app.include_router(leaderboard.router, prefix="/api")
     app.include_router(orders.router, prefix="/api")
     app.include_router(comments.router, prefix="/api")
+    app.include_router(watchlist.router, prefix="/api")

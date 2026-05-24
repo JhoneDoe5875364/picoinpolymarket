@@ -16,7 +16,9 @@ from app.models.tables.market_stats import MarketStat
 from app.models.tables.market_token import MarketToken
 from app.models.tables.market_position import MarketPosition
 from app.models.tables.market_trades import MarketTrade
+from app.models.tables.market_watchlist import MarketWatchlist
 from app.models.tables.user import User
+from app.repositories import watchlist as watchlist_repo
 
 _ORDER_COLUMNS: dict[str, Any] = {
     "id": Market.id,
@@ -94,7 +96,7 @@ async def list_markets(
     offset: int = 0,
     order: str = "created_at",
     ascending: bool = False,
-    discovery: Literal["default", "trending", "new", "hot", "ending_soon", "most_discussed"] = "default",
+    discovery: Literal["default", "trending", "new", "hot", "ending_soon", "most_discussed", "watchlist"] = "default",
     search: Optional[str] = None,
     category: str = "all",
     status: Optional[str] = None,
@@ -106,6 +108,7 @@ async def list_markets(
     start_date_max: Optional[datetime] = None,
     end_date_min: Optional[datetime] = None,
     end_date_max: Optional[datetime] = None,
+    viewer_user_id: Optional[int] = None,
 ) -> List[dict[str, Any]]:
     conditions: list[Any] = []
     now_utc = datetime.now(timezone.utc)
@@ -154,6 +157,16 @@ async def list_markets(
         conditions.append(Market.end_date.is_not(None))
         conditions.append(Market.end_date >= now_utc)
         conditions.append(Market.end_date <= ending_soon_window_end)
+    elif discovery == "watchlist":
+        if viewer_user_id is None:
+            return []
+        conditions.append(
+            Market.id.in_(
+                select(MarketWatchlist.market_id).where(
+                    MarketWatchlist.user_id == viewer_user_id
+                )
+            )
+        )
 
     stmt = (
         select(Market, MarketStat)
@@ -194,6 +207,15 @@ async def list_markets(
         stmt = stmt.order_by(Market.created_at.desc())
     elif discovery == "ending_soon":
         stmt = stmt.order_by(Market.end_date.asc())
+    elif discovery == "watchlist":
+        stmt = (
+            stmt.join(
+                MarketWatchlist,
+                (MarketWatchlist.market_id == Market.id)
+                & (MarketWatchlist.user_id == viewer_user_id),
+            )
+            .order_by(MarketWatchlist.created_at.desc(), Market.id.desc())
+        )
     else:
         sort_col = _ORDER_COLUMNS.get(order, Market.created_at)
         stmt = stmt.order_by(sort_col.asc() if ascending else sort_col.desc())
@@ -235,6 +257,20 @@ async def list_markets(
         else:
             item["featured_rank"] = None
         payload.append(item)
+
+    if viewer_user_id is not None and payload:
+        market_ids = [int(item["id"]) for item in payload if item.get("id") is not None]
+        watchlisted_ids = await watchlist_repo.watchlisted_ids_for_markets(
+            session,
+            user_id=viewer_user_id,
+            market_ids=market_ids,
+        )
+        for item in payload:
+            item["viewer_is_watchlisted"] = int(item["id"]) in watchlisted_ids
+    elif payload:
+        for item in payload:
+            item["viewer_is_watchlisted"] = False
+
     return payload
 
 
@@ -283,6 +319,7 @@ async def list_featured_markets(
     session: AsyncSession,
     *,
     limit: int = 5,
+    viewer_user_id: Optional[int] = None,
 ) -> List[dict[str, Any]]:
     now_utc = datetime.now(timezone.utc)
     new_window_start = now_utc - timedelta(hours=72)
@@ -357,10 +394,29 @@ async def list_featured_markets(
         item["featured_comments"] = comments_rows.get("items", [])
         item["featured_rank"] = idx + 1
         payload.append(item)
+
+    if viewer_user_id is not None and payload:
+        market_ids = [int(item["id"]) for item in payload if item.get("id") is not None]
+        watchlisted_ids = await watchlist_repo.watchlisted_ids_for_markets(
+            session,
+            user_id=viewer_user_id,
+            market_ids=market_ids,
+        )
+        for item in payload:
+            item["viewer_is_watchlisted"] = int(item["id"]) in watchlisted_ids
+    elif payload:
+        for item in payload:
+            item["viewer_is_watchlisted"] = False
+
     return payload
 
 
-async def get_market_by_id(session: AsyncSession, market_id: int) -> Optional[dict[str, Any]]:
+async def get_market_by_id(
+    session: AsyncSession,
+    market_id: int,
+    *,
+    viewer_user_id: Optional[int] = None,
+) -> Optional[dict[str, Any]]:
     stmt = (
         select(Market, MarketStat)
         .options(selectinload(Market.category), selectinload(Market.market_tokens))
@@ -389,6 +445,14 @@ async def get_market_by_id(session: AsyncSession, market_id: int) -> Optional[di
     )
     payload["traders"] = int(await session.scalar(traders_stmt) or 0)
     payload["holders"] = int(await session.scalar(holders_stmt) or 0)
+    if viewer_user_id is not None:
+        payload["viewer_is_watchlisted"] = await watchlist_repo.is_watchlisted(
+            session,
+            user_id=viewer_user_id,
+            market_id=market_id,
+        )
+    else:
+        payload["viewer_is_watchlisted"] = False
     return payload
 
 

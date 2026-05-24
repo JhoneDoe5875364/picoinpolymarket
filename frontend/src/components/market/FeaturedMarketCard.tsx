@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { InitialAvatar } from "@/components/market/participants/shared";
 import { PriceHistoryChart } from "@/components/market/PriceHistoryChart";
+import { MarketCardActions } from "@/components/market/MarketCardActions";
 import { cn, roundLocalePi } from "@/lib/utils";
 import { fmtShortDate } from "@/lib/dates";
 import type { Market } from "@/lib/types";
@@ -108,18 +109,25 @@ export default function FeaturedMarketCard({ market }: FeaturedMarketCardProps) 
   return (
     <div className={cn("mb-4 block rounded-md border border-border bg-card/70 p-4 transition-colors hover:bg-card")}>
       <div className="flex items-start gap-3">
-        <div className="h-16 w-16 shrink-0 overflow-hidden rounded-md border border-border/60 bg-muted/20 sm:h-20 sm:w-20">
-          <img
-            src={market.icon || DEFAULT_MARKET_ICON}
-            alt={market.question}
-            className="h-full w-full object-cover"
-            loading="lazy"
-            onError={(event) => {
-              const target = event.currentTarget;
-              if (!target.src.includes(DEFAULT_MARKET_ICON)) {
-                target.src = DEFAULT_MARKET_ICON;
-              }
-            }}
+        <div className="relative h-16 w-16 shrink-0 sm:h-20 sm:w-20">
+          <div className="h-full w-full overflow-hidden rounded-md border border-border/60 bg-muted/20">
+            <img
+              src={market.icon || DEFAULT_MARKET_ICON}
+              alt={market.question}
+              className="h-full w-full object-cover"
+              loading="lazy"
+              onError={(event) => {
+                const target = event.currentTarget;
+                if (!target.src.includes(DEFAULT_MARKET_ICON)) {
+                  target.src = DEFAULT_MARKET_ICON;
+                }
+              }}
+            />
+          </div>
+          <MarketCardActions
+            marketId={market.id}
+            title={market.question}
+            watched={Boolean(market.viewer_is_watchlisted)}
           />
         </div>
         <Link href={`/markets/${market.id}`}>

@@ -16,6 +16,7 @@ from app.models.tables.market_volume_agg_state import MarketVolumeAggState
 from app.models.tables.market_token import MarketToken
 from app.models.tables.market_position import MarketPosition
 from app.models.tables.market_trades import MarketTrade
+from app.models.tables.market_watchlist import MarketWatchlist
 from app.models.tables.market_price_candles import MarketPriceCandle
 from app.models.tables.order import Order
 from app.models.tables.payment import Payment
@@ -41,4 +42,5 @@ __all__ = [
     "MarketPosition",
     "MarketTrade",
     "MarketPriceCandle",
+    "MarketWatchlist",
 ]

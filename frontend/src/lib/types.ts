@@ -63,6 +63,7 @@ export interface Market {
   is_ending_soon?: boolean;
   featured_rank?: number | null;
   sparkline?: number[];
+  viewer_is_watchlisted?: boolean;
   price_history?: { timestamp?: number | string | null; probability?: number | string | null }[];
   featured_comments?: {
     id: number;

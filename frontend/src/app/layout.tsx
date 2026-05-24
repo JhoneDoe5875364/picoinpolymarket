@@ -4,6 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import Script from "next/script";
 import { AppShell } from "@/components/app/AppShell";
 import { AuthProvider } from "@/context/AuthContext";
+import { WatchlistProvider } from "@/context/WatchlistContext";
 import { GeoControlProvider } from "@/context/GeoControlContext";
 // removed AppFooter import
 
@@ -52,9 +53,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="font-body antialiased flex flex-col min-h-screen">
         <GeoControlProvider>
           <AuthProvider>
-            <AppShell>
-              <main className="flex-grow">{children}</main>
-            </AppShell>
+            <WatchlistProvider>
+              <AppShell>
+                <main className="flex-grow">{children}</main>
+              </AppShell>
+            </WatchlistProvider>
           </AuthProvider>
         </GeoControlProvider>
         <Toaster />

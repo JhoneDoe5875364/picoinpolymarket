@@ -23,6 +23,7 @@ interface AppHeaderProps {
 
 const moreMenuItems = [
   { href: "/leaderboard", label: "Leaderboard" },
+  { href: "/watchlist", label: "Watchlist", requiresAuth: true },
   { href: "/profile", label: "Profile", requiresAuth: true },
   { href: "/admin", label: "Admin", requiresAdmin: true },
   { href: "/help", label: "Help Center" },
@@ -33,7 +34,7 @@ export default function AppHeader({ currentUser }: AppHeaderProps) {
   const [isDarkMode, setIsDarkMode] = useState(true);
   const pathname = usePathname();
   const { ppxUser } = useAuth();
-  const hideCategoryMenu = ["/profile", "/leaderboard"].some(
+  const hideCategoryMenu = ["/profile", "/leaderboard", "/watchlist"].some(
     (basePath) => pathname === basePath || pathname.startsWith(`${basePath}/`)
   );
   const isLoggedIn = Boolean(ppxUser);

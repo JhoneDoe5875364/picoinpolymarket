@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import MarketCard from "@/components/market/MarketCard";
 import FeaturedMarketCard from "@/components/market/FeaturedMarketCard";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, apiFetchWithToken } from "@/lib/api";
+import { getPpxToken, useAuth } from "@/context/AuthContext";
 import type { Market } from "@/lib/types";
 import type { MarketDiscoveryKey } from "@/lib/market-categories";
 
@@ -18,6 +19,14 @@ const FEATURED_ROTATE_MS = 5000;
 type MarketsApiResponse = {
   data?: Market[];
 };
+
+async function fetchMarketsApi<T = MarketsApiResponse>(path: string): Promise<T> {
+  const token = getPpxToken();
+  if (token) {
+    return apiFetchWithToken<T>(path, { method: "GET" });
+  }
+  return apiFetch<T>(path, { method: "GET" });
+}
 
 function buildMarketsQuery(
   limit: number,
@@ -60,11 +69,8 @@ async function fetchMarketsPage(
     return existingRequest;
   }
 
-  const request = apiFetch<MarketsApiResponse>(
-    `/markets?${buildMarketsQuery(limit, offset, selectedCategory, selectedDiscovery)}`,
-    {
-      method: "GET",
-    }
+  const request = fetchMarketsApi<MarketsApiResponse>(
+    `/markets?${buildMarketsQuery(limit, offset, selectedCategory, selectedDiscovery)}`
   )
     .then((res) => res?.data ?? [])
     .finally(() => {
@@ -85,9 +91,7 @@ async function fetchFeaturedMarkets(
 
   const query = new URLSearchParams({ limit: "5" });
 
-  const request = apiFetch<MarketsApiResponse>(`/markets/featured?${query.toString()}`, {
-    method: "GET",
-  })
+  const request = fetchMarketsApi<MarketsApiResponse>(`/markets/featured?${query.toString()}`)
     .then((res) => res?.data ?? [])
     .finally(() => {
       inFlightFeaturedMarketsRequests.delete(requestKey);
@@ -118,7 +122,9 @@ export default function MarketsFeed({
   selectedDiscovery = "default",
   selectedLabel,
 }: MarketsFeedProps) {
+  const { ppxToken } = useAuth();
   const isTrendingPage = selectedDiscovery === "trending";
+  const isWatchlistPage = selectedDiscovery === "watchlist";
   const [markets, setMarkets] = useState<Market[]>([]);
   const [featuredMarkets, setFeaturedMarkets] = useState<Market[]>([]);
   const [featuredIndex, setFeaturedIndex] = useState(0);
@@ -141,6 +147,13 @@ export default function MarketsFeed({
         loadingMoreRef.current = false;
         setHasMore(true);
         nextOffsetRef.current = 0;
+
+        if (selectedDiscovery === "watchlist" && !ppxToken) {
+          setMarkets([]);
+          setHasMore(false);
+          return;
+        }
+
         const data = await fetchMarketsPage(PAGE_SIZE, 0, selectedCategory, selectedDiscovery);
         if (cancelled) return;
 
@@ -162,7 +175,7 @@ export default function MarketsFeed({
     return () => {
       cancelled = true;
     };
-  }, [selectedCategory, selectedDiscovery]);
+  }, [selectedCategory, selectedDiscovery, ppxToken]);
 
   useEffect(() => {
     let cancelled = false;
@@ -239,7 +252,7 @@ export default function MarketsFeed({
     return () => {
       observerRef.current?.disconnect();
     };
-  }, [hasMore, loading, loadingMore, selectedCategory, selectedDiscovery]);
+  }, [hasMore, loading, loadingMore, selectedCategory, selectedDiscovery, ppxToken]);
 
   useEffect(() => {
     setFeaturedIndex(0);
@@ -277,7 +290,11 @@ export default function MarketsFeed({
         </div>
         {!loading && markets.length === 0 && (
           <div className="rounded-md border border-border bg-card/60 px-4 py-5 text-sm text-muted-foreground">
-            No markets found in this category yet.
+            {isWatchlistPage && !ppxToken
+              ? "Log in to save markets and view your watchlist."
+              : isWatchlistPage
+                ? "No markets on your watchlist yet. Tap the star on any market card to save it here."
+                : "No markets found in this category yet."}
           </div>
         )}
         {loadingMore && (

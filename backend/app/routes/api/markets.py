@@ -9,7 +9,7 @@ from fastapi.encoders import jsonable_encoder
 
 from app.core.config import Config
 from app.core.logger import get_logger
-from app.core.security import verify_token
+from app.core.security import optional_verify_token, verify_token
 from app.db.deps import DbSession
 from app.repositories import markets as markets_repo
 
@@ -27,6 +27,16 @@ ALLOWED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 BASE64_DATA_PREFIX = re.compile(r"^data:image/[a-zA-Z0-9.+-]+;base64,")
 
 
+def _optional_viewer_user_id(viewer: Optional[dict]) -> Optional[int]:
+    if not viewer:
+        return None
+    raw_sub = viewer.get("sub")
+    try:
+        return int(raw_sub) if raw_sub is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
 @router.get("/", summary="List markets")
 async def list_markets(
     db: DbSession,
@@ -34,7 +44,7 @@ async def list_markets(
     offset: int = Query(default=0, ge=0),
     order: str = Query(default="created_at"),
     ascending: bool = Query(default=False),
-    discovery: Literal["default", "trending", "new", "hot", "ending_soon", "most_discussed"] = Query(default="default"),
+    discovery: Literal["default", "trending", "new", "hot", "ending_soon", "most_discussed", "watchlist"] = Query(default="default"),
     search: Optional[str] = Query(default=None),
     category: str = Query(default="all", min_length=1),
     status: Optional[str] = Query(default=None),
@@ -46,7 +56,12 @@ async def list_markets(
     start_date_max: Optional[datetime] = Query(default=None),
     end_date_min: Optional[datetime] = Query(default=None),
     end_date_max: Optional[datetime] = Query(default=None),
+    viewer: Optional[dict] = Depends(optional_verify_token),
 ):
+    viewer_user_id = _optional_viewer_user_id(viewer)
+    if discovery == "watchlist" and viewer_user_id is None:
+        raise HTTPException(status_code=401, detail="Login required for watchlist")
+
     rows = await markets_repo.list_markets(
         db,
         limit=limit,
@@ -65,6 +80,7 @@ async def list_markets(
         start_date_max=start_date_max,
         end_date_min=end_date_min,
         end_date_max=end_date_max,
+        viewer_user_id=viewer_user_id,
     )
     return {"ok": True, "data": jsonable_encoder(rows)}
 
@@ -73,10 +89,13 @@ async def list_markets(
 async def list_featured_markets(
     db: DbSession,
     limit: int = Query(default=5, ge=1, le=20),
+    viewer: Optional[dict] = Depends(optional_verify_token),
 ):
+    viewer_user_id = _optional_viewer_user_id(viewer)
     rows = await markets_repo.list_featured_markets(
         db,
         limit=limit,
+        viewer_user_id=viewer_user_id,
     )
     return {"ok": True, "data": jsonable_encoder(rows)}
 
@@ -98,8 +117,13 @@ async def get_market_status_summary(
 
 
 @router.get("/{market_id:int}", summary="Get market by id")
-async def get_market_by_id(market_id: int, db: DbSession):
-    row = await markets_repo.get_market_by_id(db, market_id)
+async def get_market_by_id(
+    market_id: int,
+    db: DbSession,
+    viewer: Optional[dict] = Depends(optional_verify_token),
+):
+    viewer_user_id = _optional_viewer_user_id(viewer)
+    row = await markets_repo.get_market_by_id(db, market_id, viewer_user_id=viewer_user_id)
     if not row:
         raise HTTPException(status_code=404, detail="Market not found")
     return {"ok": True, "data": jsonable_encoder(row)}

@@ -8,6 +8,7 @@ import type { Market } from "@/lib/types";
 import { fmtShortDate } from "@/lib/dates";
 import MarketProbability from "@/components/market/MarketProbability";
 import QuickBuyModal from "@/components/market/QuickBuyModal";
+import { MarketCardActions } from "@/components/market/MarketCardActions";
 import { cn, roundLocalePi } from "@/lib/utils";
 // -----------------------------------------------------
 const DEFAULT_MARKET_ICON = "/images/markets/market-default.png";
@@ -148,7 +149,7 @@ export function MarketCard({ market }: { market: Market | any }) {
         <Card>
           <CardContent>
             <div className="mb-3 flex items-start gap-3">
-              <div className="h-12 w-12 md:h-16 md:w-16 shrink-0 overflow-hidden rounded-md border bg-muted/20 ">
+              <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md border bg-muted/20 md:h-16 md:w-16">
                 <img
                   src={iconSrc}
                   alt={titleOf(market)}
@@ -159,10 +160,15 @@ export function MarketCard({ market }: { market: Market | any }) {
                   }}
                 />
               </div>
-              <div className="flex-1 h-12 md:h-16 overflow-hidden">
-                <CardTitle className="text-[14px] md:text-[16px] leading-6 md:leading-snug line-clamp-2 md:line-clamp-3 break-words">
+              <div className="flex min-h-12 min-w-0 flex-1 items-start justify-between gap-2 md:min-h-16">
+                <CardTitle className="min-w-0 flex-1 text-[14px] leading-6 line-clamp-2 break-words md:text-[16px] md:leading-snug md:line-clamp-3">
                   {titleOf(market)}
                 </CardTitle>
+                <MarketCardActions
+                  marketId={market.id}
+                  title={titleOf(market)}
+                  watched={Boolean(market?.viewer_is_watchlisted)}
+                />
               </div>
             </div>
             {labels.length > 0 && (
