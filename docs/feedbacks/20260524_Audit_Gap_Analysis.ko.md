@@ -12,9 +12,9 @@
 
 | 상태 | 의미 | 대략적 비중 |
 |------|------|-------------|
-| ✅ 구현됨 | 감사 요구를 실사용 가능한 수준으로 충족 | ~45% |
-| 🟡 부분 구현 | UI·API·스키마 중 일부만 존재하거나 placeholder/용어 불일치 | ~35% |
-| ❌ 미구현 | 코드·스키마·화면 모두 없음 | ~20% |
+| ✅ 구현됨 | 감사 요구를 실사용 가능한 수준으로 충족 | ~48% |
+| 🟡 부분 구현 | UI·API·스키마 중 일부만 존재하거나 placeholder/용어 불일치 | ~33% |
+| ❌ 미구현 | 코드·스키마·화면 모두 없음 | ~19% |
 
 **가장 시급한 갭 (감사 §10 원칙 위반 가능성 높음)**
 
@@ -26,6 +26,8 @@
 **최근 반영 (2026-05-24):**
 - 마켓별 **`market_context` 사용자 노출** — `MarketRules` → `RulesMarketContext` (Show/Hide callout). §2.2·§3 Priority 2 참고.
 - **Admin Note / Market Clarification** — `markets.admin_clarification*` 컬럼, `PUT /admin/markets/{id}/clarification`, admin `MarketAdminClarification` UI, 사용자 `RulesAdminClarification` (Rules 영역·댓글과 분리). §2.2·§2.4·§3 Priority 2 참고.
+- **Watchlist** — `market_watchlist` 테이블, `POST/GET /api/watchlist`, `GET /api/markets?discovery=watchlist`, 목록·상세·Featured 카드 ☆ 토글, `/watchlist` 페이지, 햄버거 메뉴(Leaderboard↔Profile 사이). §2.1·§2.8·§3 P4 참고.
+- **Share this market CTA** — `shareMarket` (Web Share API + 클립보드 fallback), 마켓 카드·상세·Featured ↗ 버튼. §2.1·§2.8·§3 P4 참고.
 
 ---
 
@@ -43,13 +45,13 @@
 | 카테고리 구조 (Sports, Crypto, Politics/Public Events, Entertainment, Community) | 🟡 | `Politics`, `Sports`, `Crypto`, `Culture` 등 **다른 taxonomy** | 감사 §1.3 제안 카테고리와 1:1 대응 아님 |
 | 카테고리를 discovery path로 확장 | 🟡 | 카테고리 + discovery 조합 조회 가능 | "정적 필터 → discovery path" UX는 미흡 |
 | Recently resolved markets | ❌ | — | §8.1 항목 없음 |
-| Watchlist | ❌ | — | §8.1 항목 없음 |
-| Share this market CTA | ❌ | — | §8.1 항목 없음 |
+| Watchlist | ✅ | DB `market_watchlist`; `POST /api/watchlist/{id}/toggle`, `GET /api/watchlist`; `discovery=watchlist` + `viewer_is_watchlisted` on list/detail; `MarketWatchlistButton` + `WatchlistContext`; 카드(타이틀 행 ☆)·상세(`MarketActions`)·Featured; `/watchlist` + 햄버거 메뉴(수평 discovery 탭에는 미노출) | Ending Soon 알림·이메일 등 **push/reminder** 없음 |
+| Share this market CTA | ✅ | `lib/share/shareMarket.ts` (Web Share → clipboard); `MarketShareButton` on 카드·상세·Featured | 공유 **이벤트 집계·UTM** 없음 |
 | Admin-picked market of the day | ❌ | — | Featured는 알고리즘 기반, 관리자 지정 없음 |
 | Community poll / prediction prompt | ❌ | — | — |
 | 저작권 없는 이미지 정책 | 🟡 | `MarketImagePickerField`, default icon | 사용 이미지 provenance·정책 enforcement 없음 |
 
-**관련 파일:** `frontend/src/components/market/MarketCard.tsx`, `MarketsFeed.tsx`, `FeaturedMarketCard.tsx`, `backend/app/repositories/markets.py`, `frontend/src/lib/market-categories.ts`
+**관련 파일:** `frontend/src/components/market/MarketCard.tsx`, `MarketCardActions.tsx`, `MarketActions.tsx`, `MarketWatchlistButton.tsx`, `MarketShareButton.tsx`, `MarketsFeed.tsx`, `FeaturedMarketCard.tsx`, `MarketSummary.tsx`, `frontend/src/context/WatchlistContext.tsx`, `frontend/src/lib/share/shareMarket.ts`, `frontend/src/lib/watchlist.ts`, `frontend/src/components/app/AppHeader.tsx`, `backend/app/models/tables/market_watchlist.py`, `backend/app/repositories/watchlist.py`, `backend/app/routes/api/watchlist.py`, `backend/app/repositories/markets.py`, `frontend/src/lib/market-categories.ts`
 
 ---
 
@@ -162,8 +164,8 @@
 | Most discussed | ✅ |
 | Biggest movement today | 🟡 price_move_24h on cards only |
 | New suggestion submitted surfacing | ❌ |
-| Watchlist | ❌ |
-| Share market | ❌ |
+| Watchlist | ✅ |
+| Share market | ✅ |
 | Secondary market (sell shares) | ❌ UI 없음 (about 페이지만 언급; backend SELL enum 존재) |
 
 ---
@@ -204,6 +206,8 @@
 | Trending / New / Hot / Ending soon | ✅ |
 | Featured carousel | 🟡 |
 | Movement indicators / comment counts / activity signals | 🟡 |
+| Watchlist | ✅ |
+| Share market CTA | ✅ |
 | Related markets | ❌ |
 
 ### Priority 5 — Admin control and audit trail
@@ -229,6 +233,8 @@
 - Resolution Rules UI 및 admin structured fields
 - **Market Context 사용자 노출:** `RulesMarketContext` — per-market `market_context`, Show/Hide callout
 - **Admin Clarification:** `admin_clarification*` 필드 + `PUT /admin/markets/{id}/clarification` + `MarketAdminClarification` (admin) + `RulesAdminClarification` (마켓 상세 Rules, 댓글과 분리)
+- **Watchlist:** `market_watchlist` + toggle/list API + `viewer_is_watchlisted` enrich + 카드/상세/Featured ☆ + `/watchlist` discovery feed + 햄버거 메뉴 진입
+- **Share market CTA:** Web Share / clipboard + 카드·상세·Featured ↗ 버튼
 - Trade breakdown + progress/failure/success states
 - Comments CRUD + likes + replies
 - Admin: payments overview, trust & safety dashboard, user metrics, resolutions list
@@ -253,13 +259,16 @@
 5. **P5 — `admin_audit_log` 테이블 + admin UI**  
    market/resolution/payment/moderation 이벤트 hook.
 
-6. **P4 — Related markets, recently resolved, share CTA**  
+6. ~~**P4 — Share CTA + Watchlist**~~ **(완료, 2026-05-24)**  
+   Share: `shareMarket` + `MarketShareButton` (카드·상세·Featured). Watchlist: `market_watchlist` + toggle/list API + `/watchlist` + ☆ UI + 햄버거 메뉴. **잔여:** Related/recently resolved feed, watchlist Ending Soon 알림(선택).
+
+7. **P4 — Related markets, recently resolved**  
    마켓 상세 하단 discovery 확장.
 
-7. **P4/P5 — Comment report + admin moderation UI**  
+8. **P4/P5 — Comment report + admin moderation UI**  
    MoreHorizontal 메뉴 wiring, report queue.
 
-8. **Admin market detail — placeholder metrics 제거**  
+9. **Admin market detail — placeholder metrics 제거**  
    yes/no volume, prediction count, largest bet용 backend endpoint.
 
 ---
@@ -268,6 +277,7 @@
 
 - 이전 실행 계획 초안: [20260502_Audit_Implementation_Plan.ko.md](./20260502_Audit_Implementation_Plan.ko.md) — **2026-05-24 기준 다수 항목이 이미 반영**되어 해당 문서 §1 "현재 상태" 표는 outdated.
 - 본 문서는 **감사 원문 대비 현재 코드 snapshot**이며, 배포 환경·DB seed 데이터 completeness는 별도 QA가 필요하다.
+- Watchlist DB 마이그레이션: `backend/alembic/versions/c4e8b2f1a903_add_market_watchlist.py` (`alembic upgrade head` 또는 `python bin/alembic-upgrade.py`).
 
 ---
 
