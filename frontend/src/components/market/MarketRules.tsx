@@ -118,6 +118,14 @@ const RULES_CALLOUT_VARIANT = {
     title: "text-teal-900 dark:text-teal-100",
     body: "text-teal-800/95 dark:text-teal-200/90",
   },
+  indigo: {
+    border: "border-indigo-200/90 dark:border-indigo-800/60",
+    bg: "bg-indigo-50 dark:bg-indigo-950/35",
+    icon: "text-indigo-600 dark:text-indigo-400",
+    title: "text-indigo-900 dark:text-indigo-100",
+    body: "text-indigo-800/95 dark:text-indigo-200/90",
+    meta: "text-indigo-700/90 dark:text-indigo-300/90",
+  },
 } as const;
 
 type RulesCalloutVariant = keyof typeof RULES_CALLOUT_VARIANT;
@@ -128,6 +136,7 @@ function RulesCollapsibleCallout({
   variant,
   icon,
   bodyId,
+  meta,
   children,
 }: {
   className?: string;
@@ -135,6 +144,7 @@ function RulesCollapsibleCallout({
   variant: RulesCalloutVariant;
   icon: ReactNode;
   bodyId: string;
+  meta?: ReactNode;
   children: ReactNode;
 }) {
   const [visible, setVisible] = useState(true);
@@ -167,12 +177,17 @@ function RulesCollapsibleCallout({
             </button>
           </div>
           {visible ? (
-            <p
-              id={bodyId}
-              className={cn("text-sm leading-relaxed whitespace-pre-line", colors.body)}
-            >
-              {children}
-            </p>
+            <>
+              {meta ? (
+                <p className={cn("text-xs", "meta" in colors ? colors.meta : colors.body)}>{meta}</p>
+              ) : null}
+              <p
+                id={bodyId}
+                className={cn("text-sm leading-relaxed whitespace-pre-line", colors.body)}
+              >
+                {children}
+              </p>
+            </>
           ) : null}
         </div>
       </div>
@@ -218,6 +233,35 @@ function RulesMarketContext({
       bodyId="market-context-body"
     >
       {context}
+    </RulesCollapsibleCallout>
+  );
+}
+
+function RulesAdminClarification({
+  className,
+  text,
+  publishedAt,
+  byUsername,
+}: {
+  className?: string;
+  text: string;
+  publishedAt?: string | null;
+  byUsername?: string | null;
+}) {
+  const metaParts: string[] = ["Official admin note"];
+  if (byUsername) metaParts.push(`by ${byUsername}`);
+  if (publishedAt) metaParts.push(formatDateTimeUtc(publishedAt));
+
+  return (
+    <RulesCollapsibleCallout
+      className={className}
+      title="Admin Clarification"
+      variant="indigo"
+      icon={<Shield className="h-5 w-5" />}
+      bodyId="admin-clarification-body"
+      meta={metaParts.join(" · ")}
+    >
+      {text}
     </RulesCollapsibleCallout>
   );
 }
@@ -353,6 +397,7 @@ export function MarketRules({ market }: MarketRulesProps) {
   const edgeCases = normalizeText(market.edge_cases);
   const legacyRules = normalizeText(market.rules);
   const marketContext = normalizeText(market.market_context);
+  const adminClarification = normalizeText(market.admin_clarification);
   const closeTime = formatDateTimeUtc(market.end_date);
   const resolutionTime = formatDateTimeUtc(market.resolution_time);
   const hasStructuredRules = Boolean(
@@ -432,6 +477,14 @@ export function MarketRules({ market }: MarketRulesProps) {
           )}
         </div>
       </RulesCard>
+
+      {adminClarification ? (
+        <RulesAdminClarification
+          text={adminClarification}
+          publishedAt={market.admin_clarification_at}
+          byUsername={market.admin_clarification_by_username}
+        />
+      ) : null}
 
       <RulesWhyItMatters />
 

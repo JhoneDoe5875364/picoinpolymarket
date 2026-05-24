@@ -49,6 +49,10 @@ class Market(BaseModel):
     no_criteria: Optional[str] = None
     edge_cases: Optional[str] = None
     market_context: Optional[str] = None
+    admin_clarification: Optional[str] = None
+    admin_clarification_at: Optional[datetime] = None
+    admin_clarification_by_user_id: Optional[str] = None
+    admin_clarification_by_username: Optional[str] = None
     resolution_time: Optional[datetime] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None

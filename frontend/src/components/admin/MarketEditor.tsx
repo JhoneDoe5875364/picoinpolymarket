@@ -16,6 +16,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { apiFetchWithToken } from "@/lib/api";
 import { Market } from "@/lib/types";
 import { MarketImagePickerField } from "@/components/admin/MarketImagePickerField";
+import {
+  MarketAdminClarification,
+  type AdminClarificationState,
+} from "@/components/admin/MarketAdminClarification";
 
 const marketSchema = z.object({
   question: z.string().min(10, "Question must be at least 10 characters long."),
@@ -112,6 +116,11 @@ export function MarketEditor({ marketId }: MarketEditorProps) {
   const [images, setImages] = useState<MarketImage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [clarification, setClarification] = useState<AdminClarificationState>({
+    text: null,
+    at: null,
+    byUsername: null,
+  });
   const startDateInputRef = useRef<HTMLInputElement | null>(null);
   const endDateInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -152,6 +161,11 @@ export function MarketEditor({ marketId }: MarketEditorProps) {
         setCategories(categoryRows);
         setImages(imageRows);
         setLoadedCategorySlug(market.category ?? "");
+        setClarification({
+          text: market.admin_clarification?.trim() || null,
+          at: market.admin_clarification_at ?? null,
+          byUsername: market.admin_clarification_by_username?.trim() || null,
+        });
 
         form.reset({
           question: market.question ?? "",
@@ -717,6 +731,13 @@ export function MarketEditor({ marketId }: MarketEditorProps) {
             </div>
           </form>
         </Form>
+
+        <MarketAdminClarification
+          marketId={marketId}
+          initial={clarification}
+          disabled={isLoading}
+          onUpdated={setClarification}
+        />
       </div>
     </section>
   );

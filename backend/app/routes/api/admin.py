@@ -299,6 +299,47 @@ async def update_market(
     return {"ok": True, "market": jsonable_encoder(market_row)}
 
 
+@router.put("/markets/{market_id}/clarification")
+async def set_market_clarification(
+    request: Request,
+    db: DbSession,
+    market_id: int = Path(..., ge=1),
+    user=Depends(verify_token),
+):
+    user_id = str(user.get("sub", ""))
+    username = str(user.get("username", ""))
+    role = user.get("role", "")
+    if role not in ("superadmin", "admin"):
+        raise HTTPException(status_code=403, detail="HasNotAdminRole")
+
+    data = await request.json()
+    clarification = _normalize_optional_text(data.get("admin_clarification"))
+    if clarification is not None and len(clarification) < 10:
+        raise HTTPException(
+            status_code=400,
+            detail="admin_clarification must be at least 10 characters when provided",
+        )
+
+    try:
+        async with db.begin():
+            row = await admin_repo.set_market_admin_clarification(
+                db,
+                market_id=market_id,
+                clarification=clarification,
+                user_id=user_id,
+                username=username,
+            )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error setting admin clarification for market %s: %s", market_id, e)
+        raise HTTPException(status_code=500, detail="Failed to update admin clarification") from e
+
+    return {"ok": True, "data": jsonable_encoder(row)}
+
+
 @router.post("/markets/images")
 async def upload_market_image(request: Request, user=Depends(verify_token)):
     _ = user.get("sub", "")

@@ -151,6 +151,52 @@ async def update_market(
     return dict(updated_row)
 
 
+async def set_market_admin_clarification(
+    session: AsyncSession,
+    *,
+    market_id: int,
+    clarification: Optional[str],
+    user_id: str,
+    username: str,
+) -> dict[str, Any]:
+    now = datetime.now(timezone.utc)
+    if clarification:
+        values = {
+            "admin_clarification": clarification,
+            "admin_clarification_at": now,
+            "admin_clarification_by_user_id": user_id,
+            "admin_clarification_by_username": username or None,
+            "updated_at": now,
+        }
+    else:
+        values = {
+            "admin_clarification": None,
+            "admin_clarification_at": None,
+            "admin_clarification_by_user_id": None,
+            "admin_clarification_by_username": None,
+            "updated_at": now,
+        }
+
+    update_stmt = (
+        update(Market)
+        .where(Market.id == market_id)
+        .values(**values)
+        .returning(
+            Market.id,
+            Market.admin_clarification,
+            Market.admin_clarification_at,
+            Market.admin_clarification_by_user_id,
+            Market.admin_clarification_by_username,
+            Market.updated_at,
+        )
+    )
+    updated = await session.execute(update_stmt)
+    updated_row = updated.mappings().first()
+    if not updated_row:
+        raise LookupError("Market not found")
+    return dict(updated_row)
+
+
 async def close_market(
     session: AsyncSession,
     *,

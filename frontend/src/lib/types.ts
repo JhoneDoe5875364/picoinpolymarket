@@ -36,6 +36,10 @@ export interface Market {
   no_criteria?: string | null;
   edge_cases?: string | null;
   market_context?: string | null;
+  admin_clarification?: string | null;
+  admin_clarification_at?: string | null;
+  admin_clarification_by_user_id?: string | null;
+  admin_clarification_by_username?: string | null;
   resolution_time?: string | null;
   resolved_at?: string | null;
   resolved_outcome?: OutcomeSide | "cancelled" | null;

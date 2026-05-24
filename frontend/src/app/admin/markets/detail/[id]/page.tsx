@@ -8,6 +8,10 @@ import { apiFetchWithToken } from "@/lib/api";
 import { Market } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  MarketAdminClarification,
+  type AdminClarificationState,
+} from "@/components/admin/MarketAdminClarification";
 import { format } from "date-fns";
 import { roundLocale, roundLocalePi } from "@/lib/utils";
 
@@ -34,6 +38,11 @@ export default function AdminMarketDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [iconSrc, setIconSrc] = useState<string>("");
+  const [clarification, setClarification] = useState<AdminClarificationState>({
+    text: null,
+    at: null,
+    byUsername: null,
+  });
 
   const DEFAULT_MARKET_ICON = "/images/markets/market-default.png";
   const isSuperAdmin = ppxUser?.role === "superadmin";
@@ -55,6 +64,11 @@ export default function AdminMarketDetailPage() {
         if (res.ok && res.data) {
           const m = res.data as Market;
           setMarket(m);
+          setClarification({
+            text: m.admin_clarification?.trim() || null,
+            at: m.admin_clarification_at ?? null,
+            byUsername: m.admin_clarification_by_username?.trim() || null,
+          });
 
           const icon = typeof m.icon === "string" && m.icon.trim().length > 0 ? m.icon : null;
           setIconSrc(icon ?? DEFAULT_MARKET_ICON);
@@ -218,6 +232,14 @@ export default function AdminMarketDetailPage() {
           </div>
         </div>
       </div>
+
+      {isAdmin && marketId ? (
+        <MarketAdminClarification
+          marketId={marketId}
+          initial={clarification}
+          onUpdated={setClarification}
+        />
+      ) : null}
     </div>
   );
 }
