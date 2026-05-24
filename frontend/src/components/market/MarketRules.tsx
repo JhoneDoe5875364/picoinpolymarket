@@ -103,6 +103,83 @@ type RuleIconVariant = keyof typeof RULE_ICON_VARIANT;
 const WHY_IT_MATTERS_MESSAGE =
   "Clear resolution rules help ensure a fair and transparent market for all participants. Please review the rules carefully before making your prediction.";
 
+const RULES_CALLOUT_VARIANT = {
+  sky: {
+    border: "border-sky-200/90 dark:border-sky-800/60",
+    bg: "bg-sky-50 dark:bg-sky-950/35",
+    icon: "text-sky-600 dark:text-sky-400",
+    title: "text-sky-900 dark:text-sky-100",
+    body: "text-sky-800/95 dark:text-sky-200/90",
+  },
+  teal: {
+    border: "border-teal-200/90 dark:border-teal-800/60",
+    bg: "bg-teal-50 dark:bg-teal-950/35",
+    icon: "text-teal-600 dark:text-teal-400",
+    title: "text-teal-900 dark:text-teal-100",
+    body: "text-teal-800/95 dark:text-teal-200/90",
+  },
+} as const;
+
+type RulesCalloutVariant = keyof typeof RULES_CALLOUT_VARIANT;
+
+function RulesCollapsibleCallout({
+  className,
+  title,
+  variant,
+  icon,
+  bodyId,
+  children,
+}: {
+  className?: string;
+  title: string;
+  variant: RulesCalloutVariant;
+  icon: ReactNode;
+  bodyId: string;
+  children: ReactNode;
+}) {
+  const [visible, setVisible] = useState(true);
+  const colors = RULES_CALLOUT_VARIANT[variant];
+
+  return (
+    <aside
+      role="note"
+      aria-label={title}
+      className={cn("rounded-lg border p-4", colors.border, colors.bg, className)}
+    >
+      <div className="flex gap-3">
+        <div className={cn("mt-0.5 shrink-0", colors.icon)} aria-hidden>
+          {icon}
+        </div>
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="flex items-center justify-between gap-3">
+            <p className={cn("text-sm font-semibold", colors.title)}>{title}</p>
+            <button
+              type="button"
+              onClick={() => setVisible((current) => !current)}
+              aria-expanded={visible}
+              aria-controls={bodyId}
+              className={cn(
+                "shrink-0 text-xs font-medium underline-offset-2 transition-colors hover:underline",
+                colors.icon
+              )}
+            >
+              {visible ? "Hide" : "Show"}
+            </button>
+          </div>
+          {visible ? (
+            <p
+              id={bodyId}
+              className={cn("text-sm leading-relaxed whitespace-pre-line", colors.body)}
+            >
+              {children}
+            </p>
+          ) : null}
+        </div>
+      </div>
+    </aside>
+  );
+}
+
 function RulesWhyItMatters({
   className,
   title = "Why this matters",
@@ -113,29 +190,35 @@ function RulesWhyItMatters({
   children?: ReactNode;
 }) {
   return (
-    <aside
-      role="note"
-      aria-label={title}
-      className={cn(
-        "rounded-lg border p-4",
-        "border-sky-200/90 bg-sky-50",
-        "dark:border-sky-800/60 dark:bg-sky-950/35",
-        className
-      )}
+    <RulesCollapsibleCallout
+      className={className}
+      title={title}
+      variant="sky"
+      icon={<Info className="h-5 w-5" />}
+      bodyId="rules-why-it-matters-body"
     >
-      <div className="flex gap-3">
-        <Info
-          className="mt-0.5 h-5 w-5 shrink-0 text-sky-600 dark:text-sky-400"
-          aria-hidden
-        />
-        <div className="min-w-0 space-y-1">
-          <p className="text-sm font-semibold text-sky-900 dark:text-sky-100">{title}</p>
-          <p className="text-sm leading-relaxed text-sky-800/95 dark:text-sky-200/90">
-            {children}
-          </p>
-        </div>
-      </div>
-    </aside>
+      {children}
+    </RulesCollapsibleCallout>
+  );
+}
+
+function RulesMarketContext({
+  className,
+  context,
+}: {
+  className?: string;
+  context: string;
+}) {
+  return (
+    <RulesCollapsibleCallout
+      className={className}
+      title="Market Context"
+      variant="teal"
+      icon={<FileText className="h-5 w-5" />}
+      bodyId="market-context-body"
+    >
+      {context}
+    </RulesCollapsibleCallout>
   );
 }
 
@@ -269,6 +352,7 @@ export function MarketRules({ market }: MarketRulesProps) {
   const resolutionSource = normalizeText(market.resolution_source);
   const edgeCases = normalizeText(market.edge_cases);
   const legacyRules = normalizeText(market.rules);
+  const marketContext = normalizeText(market.market_context);
   const closeTime = formatDateTimeUtc(market.end_date);
   const resolutionTime = formatDateTimeUtc(market.resolution_time);
   const hasStructuredRules = Boolean(
@@ -350,6 +434,8 @@ export function MarketRules({ market }: MarketRulesProps) {
       </RulesCard>
 
       <RulesWhyItMatters />
+
+      {marketContext ? <RulesMarketContext context={marketContext} /> : null}
 
       <Dialog open={edgeCasesOpen} onOpenChange={setEdgeCasesOpen}>
         <DialogContent>
