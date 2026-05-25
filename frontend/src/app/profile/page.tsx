@@ -6,6 +6,7 @@ import { ProfileOverview } from '@/components/profile/ProfileOverview';
 import { ProfilePositionsTab } from '@/components/profile/ProfilePositionsTab';
 import { ProfileActivityTab } from '@/components/profile/ProfileActivityTab';
 import { ProfilePaymentHistoryTab } from '@/components/profile/ProfilePaymentHistoryTab';
+import { TRADE_COPY } from '@/lib/copy/trade';
 
 export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState<'positions' | 'activity' | 'payment-history'>('positions');
@@ -27,7 +28,7 @@ export default function ProfilePage() {
               value="activity"
               className="px-0 text-lg sm:text-xl font-bold data-[state=active]:shadow-none hidden"
             >
-              Trades
+              {TRADE_COPY.predictionsCount}
             </TabsTrigger>
             <TabsTrigger
               value="payment-history"

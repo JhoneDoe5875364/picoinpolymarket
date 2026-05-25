@@ -2,14 +2,7 @@
 
 import { FEE } from "@/lib/constants";
 
-export const TRADE_TERMS = {
-  amount: "Amount",
-  fee: "Fee",
-  totalCost: "Total Cost",
-  estimatedReturn: "Estimated Return",
-  netResult: "Net Result",
-  lossIfIncorrect: "Loss if Incorrect",
-} as const;
+export { TRADE_COPY, TRADE_TERMS } from "@/lib/copy/trade";
 
 export type TradeBreakdown = {
   amount: number;

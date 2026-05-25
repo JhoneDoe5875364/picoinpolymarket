@@ -10,6 +10,7 @@ import MarketProbability from "@/components/market/MarketProbability";
 import QuickBuyModal from "@/components/market/QuickBuyModal";
 import { MarketCardActions } from "@/components/market/MarketCardActions";
 import { cn, roundLocalePi } from "@/lib/utils";
+import { TRADE_COPY } from "@/lib/copy/trade";
 // -----------------------------------------------------
 const DEFAULT_MARKET_ICON = "/images/markets/market-default.png";
 
@@ -220,7 +221,7 @@ export function MarketCard({ market }: { market: Market | any }) {
             </div>
             {showSignals && (
               <p className="mt-2 line-clamp-1 text-[11px] text-muted-foreground">
-                {showTrades && <span>{fmtNum(trades24h)} trades today</span>}
+                {showTrades && <span>{TRADE_COPY.predictionsToday(fmtNum(trades24h))}</span>}
                 {showTrades && (showComments || showPriceMove) && <span> · </span>}
                 {showComments && <span>{fmtNum(comments24h)} comments</span>}
                 {showComments && showPriceMove && <span> · </span>}

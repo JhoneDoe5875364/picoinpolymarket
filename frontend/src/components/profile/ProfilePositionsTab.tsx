@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { cn, roundLocalePi, toNumber, toPercentLabel, toPriceLabel, toSignedMoney } from '@/lib/utils';
 import { PositionsToolbar } from '@/components/profile/PositionsToolbar';
 import { apiFetchWithToken } from '@/lib/api';
+import { TRADE_COPY } from '@/lib/copy/trade';
 import { TRADE_TERMS } from '@/lib/trade/tradeTerms';
 
 export type PositionRow = {
@@ -23,7 +24,7 @@ export type PositionRow = {
 };
 
 const SORT_OPTIONS = [
-  'Profit/Loss',
+  TRADE_COPY.netResultLabel,
   'Traded',
   'Alphabetically',
   'Average Price',
@@ -62,7 +63,7 @@ function normalizePositionRow(row: any, index: number): PositionRow {
 
 function mapSortOptionToApi(sortBy: (typeof SORT_OPTIONS)[number]): string {
   switch (sortBy) {
-    case 'Profit/Loss':
+    case TRADE_COPY.netResultLabel:
       return 'pnl';
     case 'Traded':
       return 'shares';
@@ -124,7 +125,7 @@ export function ProfilePositionsTab({
 }: ProfilePositionsTabProps) {
   const { ppxUser } = useAuth();
   const [status, setStatus] = useState<'active' | 'closed'>('active');
-  const [sortBy, setSortBy] = useState<(typeof SORT_OPTIONS)[number]>('Profit/Loss');
+  const [sortBy, setSortBy] = useState<(typeof SORT_OPTIONS)[number]>(TRADE_COPY.netResultLabel);
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [positions, setPositions] = useState<PositionRow[]>([]);
@@ -265,7 +266,7 @@ export function ProfilePositionsTab({
                   Current
                 </TableHead>
                 <TableHead className="text-right uppercase tracking-wide text-xs">
-                  <span className="inline-flex items-center gap-1">Profit/Loss</span>
+                  <span className="inline-flex items-center gap-1">{TRADE_COPY.netResultLabel}</span>
                 </TableHead>
               </TableRow>
             </TableHeader>

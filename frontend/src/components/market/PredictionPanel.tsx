@@ -26,6 +26,7 @@ import {
   sanitizeShares,
   TRADE_TERMS,
 } from "@/lib/trade/tradeTerms";
+import { TRADE_COPY } from "@/lib/copy/trade";
 
 function BreakdownRow({
   label,
@@ -164,8 +165,8 @@ export function PredictionPanel({
       console.error(error);
       setFailureReason("network_error");
       toast({
-        title: "Deposit Failed",
-        description: "The deposit was cancelled or failed. Please try again.",
+        title: TRADE_COPY.sendPiFailedTitle,
+        description: TRADE_COPY.sendPiFailedCancelled,
         variant: "destructive",
       });
     } finally {
@@ -330,7 +331,7 @@ export function PredictionPanel({
             disabled={busy}
           >
             {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Trade
+            {busy ? TRADE_COPY.placingPrediction : TRADE_COPY.placePrediction}
           </Button>
         </div>
       </CardContent>

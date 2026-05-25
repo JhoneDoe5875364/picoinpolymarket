@@ -2,6 +2,7 @@
 
 import { apiFetch, apiFetchWithToken } from "@/lib/api";
 import { getPi } from "@/lib/pi";
+import { TRADE_COPY } from "@/lib/copy/trade";
 import { buildTradePaymentPayload } from "@/lib/trade/tradeTerms";
 
 export type BuyOutcome = "YES" | "NO";
@@ -123,7 +124,7 @@ export async function executeBuyTrade({
     method: "POST",
     body: JSON.stringify({
       amount: paymentAmount,
-      memo: "Deposit to Pi Predict",
+      memo: TRADE_COPY.sendPiMemo,
       metadata: { userId },
     }),
   });
@@ -154,7 +155,7 @@ export async function executeBuyTrade({
   await pi.createPayment(
     {
       amount: paymentAmount,
-      memo: "Deposit to Pi Predict",
+      memo: TRADE_COPY.sendPiMemo,
       metadata: { userId },
     },
     {
@@ -204,8 +205,8 @@ export async function executeBuyTrade({
             status = "confirmed";
 
             toast({
-              title: "Deposit Successful",
-              description: `Successfully deposited ${paymentAmount} π from your wallet.`,
+              title: TRADE_COPY.sendPiSuccessTitle,
+              description: TRADE_COPY.sendPiSuccessDescription(paymentAmount),
             });
           } else {
             failureReason = "payment_detected_position_not_recorded";
@@ -220,8 +221,8 @@ export async function executeBuyTrade({
           failureReason = "position_recorded_confirmation_delayed";
           status = "failed";
           toast({
-            title: "Deposit Failed",
-            description: `Could not complete ${paymentAmount} π deposit confirmation.`,
+            title: TRADE_COPY.sendPiFailedTitle,
+            description: TRADE_COPY.sendPiFailedConfirmation(paymentAmount),
             variant: "destructive",
           });
         }
@@ -241,8 +242,8 @@ export async function executeBuyTrade({
 
         if (cancelRes.status === "cancelled") {
           toast({
-            title: "Deposit Failed",
-            description: "The deposit was cancelled or failed. Please try again.",
+            title: TRADE_COPY.sendPiFailedTitle,
+            description: TRADE_COPY.sendPiFailedCancelled,
             variant: "destructive",
           });
         }
@@ -253,8 +254,8 @@ export async function executeBuyTrade({
         status = "failed";
 
         toast({
-          title: "Deposit Failed",
-          description: "An error occurred during the deposit. Please try again.",
+          title: TRADE_COPY.sendPiFailedTitle,
+          description: TRADE_COPY.sendPiFailedError,
           variant: "destructive",
         });
       },

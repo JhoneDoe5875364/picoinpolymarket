@@ -21,6 +21,7 @@ import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { apiFetchWithToken } from '@/lib/api';
+import { TRADE_COPY } from '@/lib/copy/trade';
 import { cn, roundLocalePi, toNumber, toSignedMoney } from '@/lib/utils';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -602,7 +603,7 @@ export function ProfileOverview() {
         <CardContent className="flex flex-1 flex-col gap-6 p-3 sm:gap-7 sm:p-4 lg:min-h-0">
           <div className="flex shrink-0 items-start justify-between gap-4">
             <div>
-              <p className="text-sm text-muted-foreground">Profit/Loss</p>
+              <p className="text-sm text-muted-foreground">{TRADE_COPY.netResultLabel}</p>
               <p className={cn('text-2xl sm:text-3xl font-bold leading-none', pnlClassName)}>
                 {toSignedMoney(stats.profitLoss)}
               </p>

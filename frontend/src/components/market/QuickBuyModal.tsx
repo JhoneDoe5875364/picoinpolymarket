@@ -16,6 +16,7 @@ import {
   sanitizeShares,
   TRADE_TERMS,
 } from "@/lib/trade/tradeTerms";
+import { TRADE_COPY } from "@/lib/copy/trade";
 
 type Props = {
   open: boolean;
@@ -104,8 +105,8 @@ export default function QuickBuyModal({ open, marketId, outcome, marketQuestion,
       console.error(error);
       setFailureReason("network_error");
       toast({
-        title: "Deposit Failed",
-        description: "The deposit was cancelled or failed. Please try again.",
+        title: TRADE_COPY.sendPiFailedTitle,
+        description: TRADE_COPY.sendPiFailedCancelled,
         variant: 'destructive'
       });
     } finally {

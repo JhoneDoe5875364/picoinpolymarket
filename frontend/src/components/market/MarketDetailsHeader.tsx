@@ -4,6 +4,7 @@
 import * as React from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { TRADE_COPY } from "@/lib/copy/trade";
 
 type MarketLike = {
   id: string;
@@ -95,7 +96,7 @@ export default function MarketDetailsHeader({
 
           <div className="rounded-xl border border-white/10 bg-card/60 px-4 py-3">
             <div className="text-xs uppercase tracking-wide text-muted-foreground">
-              Trades
+              {TRADE_COPY.predictionsCount}
             </div>
             <div className="mt-1 text-lg font-semibold">
               {fmtNum(stats?.trades)}
