@@ -82,7 +82,7 @@ export function MarketShareButton({
         variant="ghost"
         size="icon"
         disabled={busy}
-        className={cn("h-8 w-8 shrink-0", className)}
+        className={cn("h-6 w-6 shrink-0", className)}
         onClick={(event) => void handleShare(event)}
         aria-label="Share market"
       >

@@ -310,6 +310,7 @@ export function PredictionPanel({
                 <p>Side: {outcome}</p>
                 <p>{TRADE_TERMS.amount}: {formatPi(breakdown.amount)}</p>
                 <p>{TRADE_TERMS.fee}: {formatPi(breakdown.fee)}</p>
+                <p>{TRADE_TERMS.totalCost}: {formatPi(breakdown.totalCost)}</p>
                 <p>Reference ID: {tradeResult.txid || tradeResult.paymentId || "Pending"}</p>
                 <p>Wallet status: {tradeResult.status === "confirmed" ? "Confirmed" : "Pending"}</p>
                 <p>Expected resolution: {market.resolution_time || market.end_date || "Pending"}</p>

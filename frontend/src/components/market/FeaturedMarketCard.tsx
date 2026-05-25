@@ -124,26 +124,28 @@ export default function FeaturedMarketCard({ market }: FeaturedMarketCardProps) 
               }}
             />
           </div>
+        </div>
+        <div className="flex justify-between w-full">
+          <Link href={`/markets/${market.id}`}>
+            <div className="min-w-0">
+              <p className="text-xs uppercase tracking-wide text-primary">{market.labels?.length ? market.labels.join(" · ") : "Featured"}</p>
+              <h2 className="mt-1 line-clamp-2 text-base font-semibold text-foreground sm:text-lg">{market.question}</h2>
+              <div className="flex gap-2 mt-1">
+                <span className="btn-yes rounded-md px-2 py-1 text-xs">
+                  Yes {fmtPrice(featuredYesPrice)}
+                </span>
+                <span className="btn-no rounded-md px-2 py-1 text-xs">
+                  No {fmtPrice(featuredNoPrice)}
+                </span>
+              </div>
+            </div>
+          </Link>
           <MarketCardActions
             marketId={market.id}
             title={market.question}
             watched={Boolean(market.viewer_is_watchlisted)}
           />
         </div>
-        <Link href={`/markets/${market.id}`}>
-          <div className="min-w-0">
-            <p className="text-xs uppercase tracking-wide text-primary">{market.labels?.length ? market.labels.join(" · ") : "Featured"}</p>
-            <h2 className="mt-1 line-clamp-2 text-base font-semibold text-foreground sm:text-lg">{market.question}</h2>
-            <div className="flex gap-2 mt-1">
-              <span className="btn-yes rounded-md px-2 py-1 text-xs">
-                Yes {fmtPrice(featuredYesPrice)}
-              </span>
-              <span className="btn-no rounded-md px-2 py-1 text-xs">
-                No {fmtPrice(featuredNoPrice)}
-              </span>
-            </div>
-          </div>
-        </Link>
       </div>
       <div className="mt-3 grid min-w-0 gap-3 md:grid-cols-3">
         <div className="min-w-0 overflow-hidden md:col-span-2">

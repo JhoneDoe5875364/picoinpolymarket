@@ -44,6 +44,32 @@ export function calculateTradeBreakdown(price: number, rawShares: number): Trade
   };
 }
 
+/** Round Pi amounts to 4 decimal places for API / payment consistency. */
+export function roundPiAmount(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.round(value * 10000) / 10000;
+}
+
+export type TradePaymentPayload = {
+  shares: number;
+  price: number;
+  amount: number;
+  fee: number;
+  totalCost: number;
+};
+
+/** Single source for order, Pi payment, and position requests. */
+export function buildTradePaymentPayload(price: number, rawShares: number): TradePaymentPayload {
+  const breakdown = calculateTradeBreakdown(price, rawShares);
+  return {
+    shares: roundPiAmount(breakdown.estimatedReturn),
+    price: roundPiAmount(price),
+    amount: roundPiAmount(breakdown.amount),
+    fee: roundPiAmount(breakdown.fee),
+    totalCost: roundPiAmount(breakdown.totalCost),
+  };
+}
+
 export function formatPi(value: number): string {
   return `${value.toFixed(2)} π`;
 }

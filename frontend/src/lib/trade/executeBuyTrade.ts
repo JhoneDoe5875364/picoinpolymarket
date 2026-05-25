@@ -2,6 +2,7 @@
 
 import { apiFetch, apiFetchWithToken } from "@/lib/api";
 import { getPi } from "@/lib/pi";
+import { buildTradePaymentPayload } from "@/lib/trade/tradeTerms";
 
 export type BuyOutcome = "YES" | "NO";
 
@@ -45,6 +46,7 @@ export type ExecuteBuyTradeResult = {
   paymentCreated: boolean;
   positionRecorded: boolean;
   failureReason?: TradeFailureReason;
+  totalCost?: number;
 };
 
 export async function executeBuyTrade({
@@ -61,22 +63,26 @@ export async function executeBuyTrade({
     throw new Error("Invalid shares amount");
   }
 
+  const payment = buildTradePaymentPayload(price, shares);
+  const paymentAmount = payment.totalCost;
+  const sideLower = outcome.toLowerCase() as "yes" | "no";
+
   onStageChange?.("preparing_payment");
 
   const scopes = ["payments"];
-  const onIncompletePaymentFound = async (payment: unknown) => {
+  const onIncompletePaymentFound = async (paymentRecord: unknown) => {
     const res = await apiFetch<{ status?: string }>(`/pi/payments/incomplete`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ payment }),
+      body: JSON.stringify({ payment: paymentRecord }),
     });
 
     if (res.status === "handled") {
       toast({
         title: "Uncompleted payment found",
-        description: String(payment),
+        description: String(paymentRecord),
         variant: "destructive",
       });
     }
@@ -88,12 +94,15 @@ export async function executeBuyTrade({
   const orderRes = await apiFetchWithToken<{ ok?: boolean }>(`/orders`, {
     method: "POST",
     body: JSON.stringify({
-      user_id: userId,
-      market_id: marketId,
+      user_id: Number(userId),
+      market_id: Number(marketId),
       side: "BUY",
       outcome,
-      price,
-      size: shares,
+      price: payment.price,
+      size: payment.shares,
+      amount: payment.amount,
+      fee: payment.fee,
+      total_cost: payment.totalCost,
     }),
   });
 
@@ -113,7 +122,7 @@ export async function executeBuyTrade({
   const paymentRes = await apiFetchWithToken<{ ok?: boolean }>(`/pi/payments`, {
     method: "POST",
     body: JSON.stringify({
-      amount: shares,
+      amount: paymentAmount,
       memo: "Deposit to Pi Predict",
       metadata: { userId },
     }),
@@ -144,7 +153,7 @@ export async function executeBuyTrade({
 
   await pi.createPayment(
     {
-      amount: shares,
+      amount: paymentAmount,
       memo: "Deposit to Pi Predict",
       metadata: { userId },
     },
@@ -177,8 +186,12 @@ export async function executeBuyTrade({
             method: "POST",
             body: JSON.stringify({
               market_id: marketId,
-              side: outcome,
-              amount: shares,
+              side: sideLower,
+              shares: payment.shares,
+              price: payment.price,
+              amount: payment.amount,
+              fee: payment.fee,
+              total_cost: payment.totalCost,
             }),
           });
 
@@ -192,7 +205,7 @@ export async function executeBuyTrade({
 
             toast({
               title: "Deposit Successful",
-              description: `Successfully deposited ${shares} π from your wallet.`,
+              description: `Successfully deposited ${paymentAmount} π from your wallet.`,
             });
           } else {
             failureReason = "payment_detected_position_not_recorded";
@@ -208,7 +221,7 @@ export async function executeBuyTrade({
           status = "failed";
           toast({
             title: "Deposit Failed",
-            description: `Could not complete ${shares} π deposit confirmation.`,
+            description: `Could not complete ${paymentAmount} π deposit confirmation.`,
             variant: "destructive",
           });
         }
@@ -256,6 +269,7 @@ export async function executeBuyTrade({
     orderCreated,
     paymentCreated,
     positionRecorded,
+    totalCost: paymentAmount,
     failureReason:
       failureReason ??
       (succeeded ? undefined : "payment_pending"),

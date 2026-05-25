@@ -88,7 +88,7 @@ export function MarketWatchlistButton({
         variant="ghost"
         size="icon"
         disabled={pending}
-        className={cn("h-8 w-8 shrink-0", className)}
+        className={cn("h-6 w-6 shrink-0", className)}
         onClick={(event) => void handleToggle(event)}
         aria-label={active ? "Remove from watchlist" : "Add to watchlist"}
         aria-pressed={active}
