@@ -9,8 +9,7 @@ type MarketCardActionsProps = {
   watched?: boolean;
 };
 
-function stopNav(event: React.MouseEvent) {
-  event.preventDefault();
+function stopCardNav(event: React.MouseEvent) {
   event.stopPropagation();
 }
 
@@ -18,19 +17,19 @@ export function MarketCardActions({ marketId, title, watched }: MarketCardAction
   return (
     <div
       className="flex flex-col shrink-0 items-center gap-0.5"
-      onClick={stopNav}
+      onClick={stopCardNav}
     >
       <MarketWatchlistButton
         marketId={marketId}
         watched={watched}
         variant="icon"
-        onClick={stopNav}
+        onClick={stopCardNav}
       />
       <MarketShareButton
         marketId={marketId}
         title={title}
         variant="icon"
-        onClick={stopNav}
+        onClick={stopCardNav}
       />
     </div>
   );
