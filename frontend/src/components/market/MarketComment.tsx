@@ -10,7 +10,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "../ui/collapsible";
-import { CommentsTabContent } from "./participants/CommentsTabContent";
+import { MarketCommentsList } from "./participants/MarketCommentsList";
 
 function formatCount(n: number): string {
   return new Intl.NumberFormat("en-US").format(n);
@@ -62,9 +62,9 @@ export function MarketComment({ market }: MarketCommentProps) {
           <CollapsibleContent>
             <div className="max-h-[28rem] overflow-y-auto border-t border-border">
               <div className="p-4">
-                <CommentsTabContent
+                <MarketCommentsList
                   market={market}
-                  isActive={open}
+                  isOpen={open}
                   onCommentCountChange={setCommentTotal}
                 />
               </div>

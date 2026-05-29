@@ -44,13 +44,13 @@ function formatRelativeTimeEn(iso: string): string {
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(then);
 }
 
-interface CommentsTabContentProps {
+interface MarketCommentsListProps {
   market: Market;
-  isActive: boolean;
+  isOpen: boolean;
   onCommentCountChange?: (total: number) => void;
 }
 
-export function CommentsTabContent({ market, isActive, onCommentCountChange }: CommentsTabContentProps) {
+export function MarketCommentsList({ market, isOpen, onCommentCountChange }: MarketCommentsListProps) {
   const { ppxToken } = useAuth();
   const onCountRef = useRef(onCommentCountChange);
   onCountRef.current = onCommentCountChange;
@@ -134,7 +134,7 @@ export function CommentsTabContent({ market, isActive, onCommentCountChange }: C
   }, [market.id, sortKey, authHeaders, normalizeItems]);
 
   const loadMoreComments = useCallback(async () => {
-    if (!isActive || !hasMore || loadingMore || initialLoading) return;
+    if (!isOpen || !hasMore || loadingMore || initialLoading) return;
     const gen = listGenRef.current;
     const offset = rawItems.length;
     setLoadingMore(true);
@@ -183,7 +183,7 @@ export function CommentsTabContent({ market, isActive, onCommentCountChange }: C
       setLoadingMore(false);
     }
   }, [
-    isActive,
+    isOpen,
     hasMore,
     loadingMore,
     initialLoading,
@@ -198,17 +198,17 @@ export function CommentsTabContent({ market, isActive, onCommentCountChange }: C
   loadMoreRef.current = loadMoreComments;
 
   useEffect(() => {
-    if (!isActive) return;
+    if (!isOpen) return;
     void refreshSummary();
-  }, [isActive, refreshSummary]);
+  }, [isOpen, refreshSummary]);
 
   useEffect(() => {
-    if (!isActive) return;
+    if (!isOpen) return;
     void reloadCommentsFromStart();
-  }, [isActive, reloadCommentsFromStart]);
+  }, [isOpen, reloadCommentsFromStart]);
 
   useEffect(() => {
-    if (!isActive) return;
+    if (!isOpen) return;
     const el = sentinelRef.current;
     if (!el) return;
     const obs = new IntersectionObserver(
@@ -220,7 +220,7 @@ export function CommentsTabContent({ market, isActive, onCommentCountChange }: C
     );
     obs.observe(el);
     return () => obs.disconnect();
-  }, [isActive, rawItems.length, sortKey, hasMore]);
+  }, [isOpen, rawItems.length, sortKey, hasMore]);
 
   const toggleThread = useCallback(async (rootId: number) => {
     const willOpen = !expandedThreads[rootId];
@@ -376,7 +376,7 @@ export function CommentsTabContent({ market, isActive, onCommentCountChange }: C
         <p className="text-sm text-muted-foreground">No comments yet.</p>
       ) : (
         <>
-          <ul className="space-y-6">
+          <ul className="space-y-2">
             {rawItems.map((comment) => {
             const name = comment.pi_username?.trim() || `User ${comment.player_id}`;
             const open = Boolean(expandedThreads[comment.id]);
@@ -397,9 +397,9 @@ export function CommentsTabContent({ market, isActive, onCommentCountChange }: C
                       <MoreHorizontal className="h-4 w-4" />
                     </button>
                   </div>
-                  <p className="mt-1 text-sm text-foreground whitespace-pre-wrap break-words">{comment.body}</p>
+                  <p className="mt-1 text-xs text-muted-foreground whitespace-pre-wrap break-words">{comment.body}</p>
 
-                  <div className="mt-2 flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                  <div className="mt-1 flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                     <button
                       type="button"
                       className="inline-flex items-center gap-1.5 hover:text-foreground"
@@ -434,7 +434,7 @@ export function CommentsTabContent({ market, isActive, onCommentCountChange }: C
                   {comment.reply_count > 0 ? (
                     <button
                       type="button"
-                      className="mt-2 flex items-center gap-1 text-sm font-medium text-foreground/80 hover:text-foreground"
+                      className="mt-1 flex items-center gap-1 text-sm font-medium text-foreground/80 hover:text-foreground"
                       onClick={() => void toggleThread(comment.id)}
                     >
                       {formatCount(comment.reply_count)} {comment.reply_count === 1 ? "Reply" : "Replies"}
@@ -447,7 +447,7 @@ export function CommentsTabContent({ market, isActive, onCommentCountChange }: C
                       {replyFetchLoading[comment.id] ? (
                         <p className="text-xs text-muted-foreground">Loading replies…</p>
                       ) : (
-                        <ul className="space-y-3">
+                        <ul className="space-y-1">
                           {replies.map((r) => {
                             const rname = r.pi_username?.trim() || `User ${r.player_id}`;
                             return (
@@ -460,7 +460,7 @@ export function CommentsTabContent({ market, isActive, onCommentCountChange }: C
                                       {formatRelativeTimeEn(r.created_at)}
                                     </span>
                                   </div>
-                                  <p className="text-sm text-foreground whitespace-pre-wrap break-words">{r.body}</p>
+                                  <p className="text-xs text-muted-foreground whitespace-pre-wrap break-words">{r.body}</p>
                                 </div>
                               </li>
                             );
