@@ -6,6 +6,8 @@ from typing import Optional
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.migrations import ensure_compliance_logs
+
 
 async def insert_compliance_event(
     session: AsyncSession,
@@ -20,6 +22,7 @@ async def insert_compliance_event(
     result: str,
     reason: str,
 ) -> None:
+    await ensure_compliance_logs(session)
     await session.execute(
         text(
             """

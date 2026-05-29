@@ -12,6 +12,7 @@ from app.models.tables.comment_like import CommentLike
 from app.models.tables.comment_stat import CommentStat
 from app.models.tables.market import Market
 from app.models.tables.user import User
+from app.repositories import compliance as compliance_repo
 
 
 def _comment_to_dict(comment: Comment, *, username: Optional[str] = None) -> dict[str, Any]:
@@ -74,7 +75,10 @@ async def list_market_comments(
     sort: str = "newest",
     viewer_user_id: Optional[int] = None,
 ) -> dict[str, Any]:
-    conditions = [Comment.market_id == market_id, Comment.depth == 0]
+    conditions = [
+        Comment.market_id == market_id, 
+        Comment.depth == 0
+    ]
     if not include_deleted:
         conditions.append(Comment.status == "active")
 
@@ -407,6 +411,41 @@ async def get_market_comment_summary(session: AsyncSession, market_id: int) -> d
         "reply_count": stats.reply_count,
         "total_comment_count": stats.root_comment_count + stats.reply_count,
         "last_commented_at": stats.last_commented_at,
+    }
+
+
+async def report_comment(
+    session: AsyncSession,
+    *,
+    comment_id: int,
+    reporter_id: int,
+    reason: Optional[str] = None,
+) -> dict[str, Any]:
+    row_stmt = select(Comment).where(Comment.id == comment_id).limit(1)
+    row_result = await session.execute(row_stmt)
+    comment_row = row_result.scalar_one_or_none()
+    if comment_row is None:
+        raise LookupError("Comment not found")
+    if comment_row.player_id == reporter_id:
+        raise PermissionError("Cannot report your own comment")
+
+    detail = reason or "User reported comment"
+    await compliance_repo.insert_compliance_event(
+        session,
+        user_id=str(reporter_id),
+        ip="0.0.0.0",
+        region_code="UNKNOWN",
+        state_code=None,
+        tier="unknown",
+        category_key=f"comment:{comment_id}",
+        action_type="comment_reported",
+        result="recorded",
+        reason=f"{detail} (market_id={comment_row.market_id}, author_id={comment_row.player_id})",
+    )
+    return {
+        "comment_id": comment_id,
+        "market_id": comment_row.market_id,
+        "reported": True,
     }
 
 

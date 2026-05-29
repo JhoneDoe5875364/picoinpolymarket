@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import List, Optional
 
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.config import DATABASE_URL
 from app.db.session import create_engine_and_sessionmaker, dispose_engine as dispose_db_engine
@@ -48,6 +49,12 @@ CREATE TABLE IF NOT EXISTS attestations (
     "CREATE INDEX IF NOT EXISTS idx_attestations_user_id ON attestations(user_id)",
     "CREATE INDEX IF NOT EXISTS idx_attestations_timestamp ON attestations(timestamp)",
 ]
+
+
+async def ensure_compliance_logs(session: AsyncSession) -> None:
+    """Create compliance_logs table/indexes if missing (idempotent)."""
+    for stmt in _COMPLIANCE_STATEMENTS:
+        await session.execute(text(stmt))
 
 
 async def migrate_database(url: Optional[str] = None) -> bool:

@@ -234,18 +234,24 @@ async def update_user_status(
     user=Depends(verify_token)
 ):
     role = user.get("role", "")
-    if role != "superadmin":
-        raise HTTPException(status_code=403, detail="HasNotSuperadminRole")
+    if role not in ("superadmin", "admin"):
+        raise HTTPException(status_code=403, detail="HasNotAdminRole")
 
     data = await request.json()
-    target_user_id = data.get("user_id")
+    target_user_id_raw = data.get("user_id")
     status = data.get("status")
-    if not target_user_id:
+    if target_user_id_raw is None or str(target_user_id_raw).strip() == "":
         raise HTTPException(status_code=400, detail="user_id is required")
     if not status:
         raise HTTPException(status_code=400, detail="status is required")
     if status not in ["ACTIVE", "SUSPENDED", "BANNED"]:
         raise HTTPException(status_code=400, detail="Invalid status")
+    try:
+        target_user_id = int(target_user_id_raw)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="user_id must be an integer") from None
+    if target_user_id < 1:
+        raise HTTPException(status_code=400, detail="user_id must be a positive integer")
 
     user_row = await users_repo.update_user_status(
         db, user_id=target_user_id, status=status

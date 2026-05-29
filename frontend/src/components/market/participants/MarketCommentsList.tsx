@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, Heart, Image as ImageIcon, MessageCircle, MoreHorizontal, Smile } from "lucide-react";
+import { ChevronDown, Heart, MessageCircle } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { apiFetch, apiFetchWithToken } from "@/lib/api";
 import type { Market } from "@/lib/types";
@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { InitialAvatar, ListSkeleton } from "./shared";
+import { CommentActionMenu } from "./CommentActionMenu";
+import { DiscussionPinnedNotes } from "./DiscussionPinnedNotes";
 import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 20;
@@ -80,10 +82,10 @@ export function MarketCommentsList({ market, isOpen, onCommentCountChange }: Mar
   }, [ppxToken]);
 
   const refreshSummary = useCallback(async () => {
-    const res = await apiFetch<{ ok?: boolean; data?: { total_comment_count?: number } }>(
+    const res = await apiFetch<{ ok?: boolean; data?: { root_comment_count?: number } }>(
       `/comments/markets/${market.id}/summary`
     );
-    const total = Number(res?.data?.total_comment_count ?? 0);
+    const total = Number(res?.data?.root_comment_count ?? 0);
     const n = Number.isFinite(total) ? total : 0;
     onCountRef.current?.(n);
   }, [market.id]);
@@ -326,8 +328,18 @@ export function MarketCommentsList({ market, isOpen, onCommentCountChange }: Mar
     [ppxToken, reloadCommentsFromStart, refreshSummary, replyDrafts]
   );
 
+  const handleCommentHidden = useCallback(
+    (commentId: number) => {
+      setRawItems((rows) => rows.filter((c) => c.id !== commentId));
+      void refreshSummary();
+    },
+    [refreshSummary]
+  );
+
   return (
     <div className="space-y-4">
+      <DiscussionPinnedNotes market={market} />
+
       <div className="flex flex-wrap items-center justify-end gap-2">
         <Select
           value={sortKey}
@@ -393,9 +405,12 @@ export function MarketCommentsList({ market, isOpen, onCommentCountChange }: Mar
                         {formatRelativeTimeEn(comment.created_at)}
                       </span>
                     </div>
-                    <button type="button" className="shrink-0 text-muted-foreground hover:text-foreground p-1" aria-label="More">
-                      <MoreHorizontal className="h-4 w-4" />
-                    </button>
+                    <CommentActionMenu
+                      commentId={comment.id}
+                      playerId={comment.player_id}
+                      piUsername={comment.pi_username}
+                      onHidden={() => handleCommentHidden(comment.id)}
+                    />
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground whitespace-pre-wrap break-words">{comment.body}</p>
 
@@ -453,12 +468,19 @@ export function MarketCommentsList({ market, isOpen, onCommentCountChange }: Mar
                             return (
                               <li key={`${r.id}-${r.created_at}`} className="flex gap-2">
                                 <InitialAvatar name={rname} size="sm" />
-                                <div className="min-w-0">
-                                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                                    <span className="text-xs font-semibold text-foreground">{rname}</span>
-                                    <span className="text-[11px] text-muted-foreground">
-                                      {formatRelativeTimeEn(r.created_at)}
-                                    </span>
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                                      <span className="text-xs font-semibold text-foreground">{rname}</span>
+                                      <span className="text-[11px] text-muted-foreground">
+                                        {formatRelativeTimeEn(r.created_at)}
+                                      </span>
+                                    </div>
+                                    <CommentActionMenu
+                                      commentId={r.id}
+                                      playerId={r.player_id}
+                                      piUsername={r.pi_username}
+                                    />
                                   </div>
                                   <p className="text-xs text-muted-foreground whitespace-pre-wrap break-words">{r.body}</p>
                                 </div>

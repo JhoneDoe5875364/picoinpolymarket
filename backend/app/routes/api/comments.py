@@ -229,6 +229,34 @@ async def delete_comment(
     return {"ok": True, "data": jsonable_encoder(row)}
 
 
+@router.post("/{comment_id:int}/report", summary="Report a comment")
+async def report_comment(
+    request: Request,
+    db: DbSession,
+    comment_id: int = Path(..., ge=1),
+    user=Depends(verify_token),
+):
+    payload = await request.json() if request.headers.get("content-length") else {}
+    reason = str((payload or {}).get("reason") or "").strip() or None
+    reporter_id = _get_user_id(user)
+    try:
+        async with db.begin():
+            row = await comments_repo.report_comment(
+                db,
+                comment_id=comment_id,
+                reporter_id=reporter_id,
+                reason=reason,
+            )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.error("Error reporting comment %s: %s", comment_id, exc)
+        raise HTTPException(status_code=500, detail="Failed to report comment") from exc
+    return {"ok": True, "data": jsonable_encoder(row)}
+
+
 @router.get("/players/{player_id:int}", summary="List player comments")
 async def list_player_comments(
     db: DbSession,
