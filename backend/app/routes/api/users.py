@@ -3,6 +3,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
 
+from app.core.admin_audit import log_admin_action
 from app.core.logger import get_logger
 from app.core.security import verify_token
 from app.db.deps import DbSession
@@ -253,8 +254,28 @@ async def update_user_status(
     if target_user_id < 1:
         raise HTTPException(status_code=400, detail="user_id must be a positive integer")
 
-    user_row = await users_repo.update_user_status(
-        db, user_id=target_user_id, status=status
-    )
+    try:
+        async with db.begin():
+            user_row = await users_repo.update_user_status(
+                db, user_id=target_user_id, status=status
+            )
+            action_type = (
+                "user_banned"
+                if status == "BANNED"
+                else "user_suspended"
+                if status == "SUSPENDED"
+                else "user_status_changed"
+            )
+            await log_admin_action(
+                db,
+                request=request,
+                admin_user=user,
+                action_type=action_type,
+                detail=f"Set user #{target_user_id} status to {status}",
+                category_key=f"user:{target_user_id}",
+            )
+    except Exception as exc:
+        logger.error("Error updating user %s status: %s", target_user_id, exc)
+        raise HTTPException(status_code=500, detail="Failed to update user status") from exc
     return {"ok": True, "user": jsonable_encoder(user_row)}
 

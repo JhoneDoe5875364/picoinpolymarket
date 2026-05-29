@@ -11,10 +11,12 @@ import pytz
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from fastapi.encoders import jsonable_encoder
 
+from app.core.admin_audit import log_admin_action
 from app.core.logger import get_logger
 from app.core.security import verify_token
 from app.db.deps import DbSession
 from app.repositories import admin as admin_repo
+from app.repositories import compliance as compliance_repo
 
 logger = get_logger()
 
@@ -174,6 +176,15 @@ async def create_market(request: Request, db: DbSession, user=Depends(verify_tok
                 liquidity=liquidity,
                 icon=icon,
             )
+            market_id = int(market_row.get("id") or 0)
+            await log_admin_action(
+                db,
+                request=request,
+                admin_user=user,
+                action_type="market_created",
+                detail=f"Created market #{market_id}: {question[:120]}",
+                category_key=f"market:{market_id}" if market_id else None,
+            )
     except HTTPException:
         raise
     except Exception as e:
@@ -288,6 +299,34 @@ async def update_market(
                 liquidity=liquidity,
                 icon=icon,
             )
+            rule_fields_changed = any(
+                data.get(k) is not None
+                for k in (
+                    "rules",
+                    "yes_criteria",
+                    "no_criteria",
+                    "edge_cases",
+                    "resolution_source",
+                    "resolution_time",
+                )
+            )
+            await log_admin_action(
+                db,
+                request=request,
+                admin_user=user,
+                action_type="market_edited",
+                detail=f"Updated market #{market_id}: {question[:120]}",
+                category_key=f"market:{market_id}",
+            )
+            if rule_fields_changed:
+                await log_admin_action(
+                    db,
+                    request=request,
+                    admin_user=user,
+                    action_type="rules_changed",
+                    detail=f"Resolution rules updated for market #{market_id}",
+                    category_key=f"market:{market_id}",
+                )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except HTTPException:
@@ -328,6 +367,15 @@ async def set_market_clarification(
                 clarification=clarification,
                 user_id=user_id,
                 username=username,
+            )
+            action = "cleared" if clarification is None else "posted"
+            await log_admin_action(
+                db,
+                request=request,
+                admin_user=user,
+                action_type="clarification_posted",
+                detail=f"Admin clarification {action} on market #{market_id}",
+                category_key=f"market:{market_id}",
             )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -371,6 +419,7 @@ async def upload_market_image(request: Request, user=Depends(verify_token)):
 
 @router.post("/markets/close", summary="Close a market")
 async def close_market(
+    request: Request,
     db: DbSession,
     market_id: int = Query(..., ge=1),
     user=Depends(verify_token),
@@ -382,6 +431,14 @@ async def close_market(
     try:
         async with db.begin():
             row = await admin_repo.close_market(db, market_id=market_id)
+            await log_admin_action(
+                db,
+                request=request,
+                admin_user=user,
+                action_type="market_closed",
+                detail=f"Closed market #{market_id}",
+                category_key=f"market:{market_id}",
+            )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
@@ -395,6 +452,7 @@ async def close_market(
 
 @router.post("/markets/resolve", summary="Resolve a market")
 async def resolve_market(
+    request: Request,
     db: DbSession,
     market_id: int = Query(..., ge=1),
     outcome: Literal["YES", "NO"] = Query(...),
@@ -417,6 +475,14 @@ async def resolve_market(
                 user_id=user_id,
                 username=username,
             )
+            await log_admin_action(
+                db,
+                request=request,
+                admin_user=user,
+                action_type="market_resolved",
+                detail=f"Resolved market #{market_id} as {normalized_outcome}",
+                category_key=f"market:{market_id}",
+            )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:
@@ -428,6 +494,7 @@ async def resolve_market(
 
 @router.post("/resolve", summary="Resolve a market")
 async def resolve_market_direct(
+    request: Request,
     db: DbSession,
     market_id: int = Query(..., ge=1),
     outcome: Literal["YES", "NO"] = Query(...),
@@ -449,6 +516,14 @@ async def resolve_market_direct(
                 outcome=normalized_outcome,
                 user_id=user_id,
                 username=username,
+            )
+            await log_admin_action(
+                db,
+                request=request,
+                admin_user=user,
+                action_type="market_resolved",
+                detail=f"Resolved market #{market_id} as {normalized_outcome}",
+                category_key=f"market:{market_id}",
             )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -515,3 +590,144 @@ async def list_admin_payments(
         "page": ceil(offset / limit) + 1 if limit else 1,
         "pages": ceil(total / limit) if total and limit else 0,
     }
+
+
+@router.get("/audit-log")
+async def get_admin_audit_log(
+    db: DbSession,
+    user=Depends(verify_token),
+    event_type: Optional[str] = Query(default=None),
+    user_id: Optional[str] = Query(default=None),
+    market_id: Optional[int] = Query(default=None, ge=1),
+    manual_override_only: bool = Query(default=False),
+    date_from: Optional[str] = Query(default=None),
+    date_to: Optional[str] = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+):
+    role = user.get("role", "")
+    if role not in ("superadmin", "admin"):
+        raise HTTPException(status_code=403, detail="HasNotAdminRole")
+
+    parsed_from = _parse_optional_iso_datetime(date_from or "", "date_from") if date_from else None
+    parsed_to = _parse_optional_iso_datetime(date_to or "", "date_to") if date_to else None
+
+    try:
+        rows, total = await compliance_repo.list_admin_audit_log(
+            db,
+            event_type=event_type,
+            user_id=user_id,
+            market_id=market_id,
+            manual_override_only=manual_override_only,
+            date_from=parsed_from,
+            date_to=parsed_to,
+            limit=limit,
+            offset=offset,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return {
+        "ok": True,
+        "data": jsonable_encoder(rows),
+        "total": total,
+        "page": ceil(offset / limit) + 1 if limit else 1,
+        "pages": ceil(total / limit) if total and limit else 0,
+    }
+
+
+@router.get("/payout-queue")
+async def get_payout_queue(
+    db: DbSession,
+    user=Depends(verify_token),
+    status: str = Query(default="pending"),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+):
+    role = user.get("role", "")
+    if role != "superadmin":
+        raise HTTPException(status_code=403, detail="HasNotSuperadminRole")
+
+    try:
+        rows, total = await admin_repo.list_payout_queue(
+            db, status=status, limit=limit, offset=offset
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return {
+        "ok": True,
+        "data": jsonable_encoder(rows),
+        "total": total,
+        "page": ceil(offset / limit) + 1 if limit else 1,
+        "pages": ceil(total / limit) if total and limit else 0,
+    }
+
+
+@router.post("/payout-queue/{position_id}/mark-paid")
+async def mark_payout_queue_paid(
+    request: Request,
+    db: DbSession,
+    position_id: int = Path(..., ge=1),
+    user=Depends(verify_token),
+):
+    role = user.get("role", "")
+    if role != "superadmin":
+        raise HTTPException(status_code=403, detail="HasNotSuperadminRole")
+
+    try:
+        async with db.begin():
+            row = await admin_repo.mark_payout_paid(db, position_id=position_id)
+            await log_admin_action(
+                db,
+                request=request,
+                admin_user=user,
+                action_type="payout_marked_paid",
+                detail=(
+                    f"Marked payout paid: position #{position_id}, "
+                    f"user {row.get('pi_username') or row.get('user_id')}, "
+                    f"{row.get('amount_owed')} π on market #{row.get('market_id')}"
+                ),
+                category_key=f"market:{row.get('market_id')}",
+            )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.error("Error marking payout %s paid: %s", position_id, exc)
+        raise HTTPException(status_code=500, detail="Failed to mark payout paid") from exc
+
+    return {"ok": True, "data": jsonable_encoder(row)}
+
+
+@router.post("/payout-queue/{position_id}/flag")
+async def flag_payout_queue_item(
+    request: Request,
+    db: DbSession,
+    position_id: int = Path(..., ge=1),
+    user=Depends(verify_token),
+):
+    role = user.get("role", "")
+    if role != "superadmin":
+        raise HTTPException(status_code=403, detail="HasNotSuperadminRole")
+
+    data = await request.json() if request.headers.get("content-length") else {}
+    reason = _normalize_optional_text(data.get("reason")) or "Flagged for manual review"
+
+    try:
+        async with db.begin():
+            await log_admin_action(
+                db,
+                request=request,
+                admin_user=user,
+                action_type="manual_override",
+                detail=f"Payout flagged for review: position #{position_id}. {reason}",
+                category_key=f"position:{position_id}",
+                result="flagged",
+            )
+    except Exception as exc:
+        logger.error("Error flagging payout %s: %s", position_id, exc)
+        raise HTTPException(status_code=500, detail="Failed to flag payout") from exc
+
+    return {"ok": True, "data": {"position_id": position_id, "flagged": True, "reason": reason}}

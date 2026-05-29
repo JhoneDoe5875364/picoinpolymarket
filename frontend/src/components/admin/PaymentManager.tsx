@@ -8,6 +8,7 @@ import {
   ArrowUpFromLine,
   ClipboardList,
   Clock,
+  MoreHorizontal,
   Wallet,
   WalletCards,
   XCircle,
@@ -26,6 +27,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Table,
   TableBody,
@@ -80,6 +87,20 @@ type AdminPaymentRow = {
   amount_mismatch: boolean;
 };
 
+type PayoutQueueRow = {
+  position_id: number;
+  user_id: number;
+  pi_username: string | null;
+  market_id: number;
+  market_question: string;
+  outcome: string;
+  amount_owed: number;
+  wallet_address: string | null;
+  payment_status: string;
+  txid: string | null;
+  resolved_at: string | null;
+};
+
 const emptyOverview = (): PaymentOverview => ({
   user_to_app_payments_received: { count: 0, total_pi: 0 },
   app_to_user_payouts_sent: { count: 0, total_pi: 0 },
@@ -106,6 +127,14 @@ export function PaymentManager() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const [payoutRows, setPayoutRows] = useState<PayoutQueueRow[]>([]);
+  const [payoutTotal, setPayoutTotal] = useState(0);
+  const [payoutOffset, setPayoutOffset] = useState(0);
+  const [payoutLimit] = useState(25);
+  const [payoutStatus, setPayoutStatus] = useState<"pending" | "paid" | "ALL">("pending");
+  const [payoutLoading, setPayoutLoading] = useState(false);
+  const [payoutActionId, setPayoutActionId] = useState<number | null>(null);
+
   const qs = useMemo(() => {
     const params = new URLSearchParams();
     params.set("limit", String(limit));
@@ -113,6 +142,14 @@ export function PaymentManager() {
     params.set("status", statusFilter);
     return params.toString();
   }, [offset, limit, statusFilter]);
+
+  const payoutQs = useMemo(() => {
+    const params = new URLSearchParams();
+    params.set("limit", String(payoutLimit));
+    params.set("offset", String(payoutOffset));
+    params.set("status", payoutStatus);
+    return params.toString();
+  }, [payoutOffset, payoutLimit, payoutStatus]);
 
   async function loadOverview() {
     setOverviewLoading(true);
@@ -184,6 +221,91 @@ export function PaymentManager() {
     }
   }
 
+  async function loadPayoutQueue() {
+    setPayoutLoading(true);
+    try {
+      const res = await apiFetchWithToken(`/admin/payout-queue?${payoutQs}`, { method: "GET" });
+      const list = Array.isArray(res.data) ? res.data : [];
+      setPayoutRows(
+        list.map((r: PayoutQueueRow) => ({
+          ...r,
+          amount_owed: Number(r.amount_owed ?? 0),
+        }))
+      );
+      setPayoutTotal(Number(res.total ?? 0));
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Unknown error";
+      toast({ title: "Payout queue load failed", description: message, variant: "destructive" });
+    } finally {
+      setPayoutLoading(false);
+    }
+  }
+
+  async function markPayoutPaid(positionId: number) {
+    setPayoutActionId(positionId);
+    try {
+      const res = await apiFetchWithToken(`/admin/payout-queue/${positionId}/mark-paid`, {
+        method: "POST",
+      });
+      if (res.ok) {
+        toast({ title: "Payout marked paid", description: `Position #${positionId}` });
+        await loadPayoutQueue();
+        await loadOverview();
+      }
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Unknown error";
+      toast({ title: "Mark paid failed", description: message, variant: "destructive" });
+    } finally {
+      setPayoutActionId(null);
+    }
+  }
+
+  async function flagPayoutReview(positionId: number) {
+    const reason =
+      typeof window !== "undefined"
+        ? window.prompt("Reason for review (optional):", "Needs manual verification")
+        : null;
+    if (reason === null) return;
+    setPayoutActionId(positionId);
+    try {
+      const res = await apiFetchWithToken(`/admin/payout-queue/${positionId}/flag`, {
+        method: "POST",
+        body: JSON.stringify({ reason: reason || undefined }),
+      });
+      if (res.ok) {
+        toast({ title: "Flagged for review", description: `Position #${positionId}` });
+      }
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Unknown error";
+      toast({ title: "Flag failed", description: message, variant: "destructive" });
+    } finally {
+      setPayoutActionId(null);
+    }
+  }
+
+  function exportPayoutRow(row: PayoutQueueRow) {
+    const line = [
+      row.position_id,
+      row.user_id,
+      row.pi_username ?? "",
+      row.market_id,
+      `"${(row.market_question ?? "").replace(/"/g, '""')}"`,
+      row.outcome,
+      row.amount_owed,
+      row.wallet_address ?? "",
+      row.payment_status,
+      row.txid ?? "",
+      row.resolved_at ?? "",
+    ].join(",");
+    const blob = new Blob([line + "\n"], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `payout-${row.position_id}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   useEffect(() => {
     void loadOverview();
   }, []);
@@ -191,6 +313,10 @@ export function PaymentManager() {
   useEffect(() => {
     void loadPayments();
   }, [qs]);
+
+  useEffect(() => {
+    void loadPayoutQueue();
+  }, [payoutQs]);
 
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -342,6 +468,140 @@ export function PaymentManager() {
               "payments.amount vs orders.pi_amount"}
           </p>
         </div>
+      </div>
+
+      <div className="space-y-2 rounded-lg border p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="text-sm font-semibold">Payout queue</h3>
+            <p className="text-[11px] text-muted-foreground">
+              Winning positions on resolved markets — send Pi manually, then mark paid.
+            </p>
+          </div>
+          <Select
+            value={payoutStatus}
+            onValueChange={(v: typeof payoutStatus) => {
+              setPayoutOffset(0);
+              setPayoutStatus(v);
+            }}
+          >
+            <SelectTrigger className="min-w-32 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="pending">Pending</SelectItem>
+              <SelectItem value="paid">Paid</SelectItem>
+              <SelectItem value="ALL">All</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <p className="text-[11px] text-muted-foreground tabular-nums">
+          {payoutLoading ? "…" : `${payoutRows.length} shown · ${payoutTotal} total`}
+        </p>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="text-xs">User</TableHead>
+              <TableHead className="text-xs">Market</TableHead>
+              <TableHead className="text-xs">Outcome</TableHead>
+              <TableHead className="text-xs">Owed</TableHead>
+              <TableHead className="text-xs">Wallet</TableHead>
+              <TableHead className="text-xs">Status</TableHead>
+              <TableHead className="text-xs">TxID</TableHead>
+              <TableHead className="text-xs w-16">Action</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {payoutRows.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={8} className="text-xs text-muted-foreground">
+                  {payoutLoading ? "Loading…" : "No payout queue rows for this filter."}
+                </TableCell>
+              </TableRow>
+            ) : (
+              payoutRows.map((r) => (
+                <TableRow key={r.position_id}>
+                  <TableCell className="text-xs font-medium">
+                    {r.pi_username ?? `User ${r.user_id}`}
+                  </TableCell>
+                  <TableCell className="max-w-[200px] truncate text-xs" title={r.market_question}>
+                    {r.market_question}
+                  </TableCell>
+                  <TableCell className="text-xs">{r.outcome}</TableCell>
+                  <TableCell className="tabular-nums text-xs">{roundLocale(r.amount_owed)} π</TableCell>
+                  <TableCell className="max-w-[120px] truncate font-mono text-[11px] text-muted-foreground">
+                    {r.wallet_address ?? "—"}
+                  </TableCell>
+                  <TableCell className="text-xs">
+                    <Badge
+                      variant="outline"
+                      className={
+                        r.payment_status === "paid"
+                          ? "border-green-600 text-green-700"
+                          : "border-orange-500 text-orange-700"
+                      }
+                    >
+                      {r.payment_status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="font-mono text-[11px] text-muted-foreground">
+                    {r.txid ?? "—"}
+                  </TableCell>
+                  <TableCell className="text-xs">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          disabled={payoutActionId === r.position_id}
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {r.payment_status !== "paid" ? (
+                          <DropdownMenuItem onClick={() => void markPayoutPaid(r.position_id)}>
+                            Mark paid
+                          </DropdownMenuItem>
+                        ) : null}
+                        <DropdownMenuItem onClick={() => void flagPayoutReview(r.position_id)}>
+                          Flag for review
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => exportPayoutRow(r)}>Export row</DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+        {payoutTotal > payoutLimit ? (
+          <div className="flex items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 text-xs"
+              disabled={payoutOffset === 0 || payoutLoading}
+              onClick={() => setPayoutOffset(Math.max(0, payoutOffset - payoutLimit))}
+            >
+              Previous
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 text-xs"
+              disabled={payoutOffset + payoutLimit >= payoutTotal || payoutLoading}
+              onClick={() => setPayoutOffset(payoutOffset + payoutLimit)}
+            >
+              Next
+            </Button>
+          </div>
+        ) : null}
       </div>
 
       <div>

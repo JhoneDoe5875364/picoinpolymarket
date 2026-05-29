@@ -661,6 +661,141 @@ async def list_admin_payments(
     return rows, total
 
 
+def _user_wallet_subquery():
+    return (
+        select(Leaderboard.wallet_address)
+        .where(
+            Leaderboard.user_id == MarketPosition.user_id,
+            Leaderboard.wallet_address.isnot(None),
+            func.trim(Leaderboard.wallet_address) != "",
+        )
+        .order_by(Leaderboard.updated_at.desc().nullslast())
+        .limit(1)
+        .scalar_subquery()
+    )
+
+
+async def list_payout_queue(
+    session: AsyncSession,
+    *,
+    status: str = "pending",
+    limit: int = 50,
+    offset: int = 0,
+) -> Tuple[List[dict[str, Any]], int]:
+    """
+    Per-user winning positions on resolved markets awaiting manual Pi payout.
+    amount_owed = shares (winners have final_price = 1).
+    """
+    allowed_status = {"ALL", "pending", "paid"}
+    if status not in allowed_status:
+        raise ValueError("Invalid status filter")
+
+    winner_expr = MarketPosition.final_price >= Decimal("1")
+    base_filters = [
+        Market.is_resolved == True,
+        winner_expr,
+        MarketPosition.shares > 0,
+    ]
+    if status == "pending":
+        base_filters.append(MarketPosition.is_claimed == False)
+    elif status == "paid":
+        base_filters.append(MarketPosition.is_claimed == True)
+
+    amount_owed_expr = MarketPosition.shares * MarketPosition.final_price
+    wallet_expr = _user_wallet_subquery()
+
+    count_stmt = (
+        select(func.count())
+        .select_from(MarketPosition)
+        .join(Market, Market.id == MarketPosition.market_id)
+        .join(User, User.id == MarketPosition.user_id)
+        .where(*base_filters)
+    )
+    total = int(await session.scalar(count_stmt) or 0)
+
+    list_stmt = (
+        select(
+            MarketPosition.id.label("position_id"),
+            MarketPosition.user_id,
+            User.pi_username,
+            MarketPosition.market_id,
+            Market.question.label("market_question"),
+            MarketPosition.outcome,
+            amount_owed_expr.label("amount_owed"),
+            wallet_expr.label("wallet_address"),
+            MarketPosition.is_claimed,
+            Market.resolved_at,
+            MarketPosition.updated_at,
+        )
+        .join(Market, Market.id == MarketPosition.market_id)
+        .join(User, User.id == MarketPosition.user_id)
+        .where(*base_filters)
+        .order_by(Market.resolved_at.desc().nullslast(), MarketPosition.id.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    result = await session.execute(list_stmt)
+    rows: List[dict[str, Any]] = []
+    for r in result.mappings().all():
+        row = dict(r)
+        row["amount_owed"] = float(row["amount_owed"] or 0)
+        row["payment_status"] = "paid" if row.pop("is_claimed") else "pending"
+        row["txid"] = None
+        row["pi_username"] = row.get("pi_username")
+        rows.append(row)
+    return rows, total
+
+
+async def mark_payout_paid(
+    session: AsyncSession,
+    *,
+    position_id: int,
+) -> dict[str, Any]:
+    """Mark a winning position as claimed (manual payout completed)."""
+    stmt = (
+        select(
+            MarketPosition.id,
+            MarketPosition.user_id,
+            MarketPosition.market_id,
+            MarketPosition.outcome,
+            MarketPosition.shares,
+            MarketPosition.final_price,
+            MarketPosition.is_claimed,
+            Market.question,
+            User.pi_username,
+        )
+        .join(Market, Market.id == MarketPosition.market_id)
+        .join(User, User.id == MarketPosition.user_id)
+        .where(MarketPosition.id == position_id)
+        .limit(1)
+    )
+    row = (await session.execute(stmt)).mappings().first()
+    if row is None:
+        raise LookupError("Payout position not found")
+    if row["is_claimed"]:
+        raise ValueError("Payout already marked paid")
+    if row["final_price"] is None or Decimal(str(row["final_price"])) < Decimal("1"):
+        raise ValueError("Position is not a winning payout")
+
+    now = datetime.now(timezone.utc)
+    await session.execute(
+        update(MarketPosition)
+        .where(MarketPosition.id == position_id)
+        .values(is_claimed=True, updated_at=now)
+    )
+    amount_owed = float(Decimal(str(row["shares"] or 0)) * Decimal(str(row["final_price"] or 0)))
+    return {
+        "position_id": int(row["id"]),
+        "user_id": int(row["user_id"]),
+        "pi_username": row["pi_username"],
+        "market_id": int(row["market_id"]),
+        "market_question": row["question"],
+        "outcome": row["outcome"],
+        "amount_owed": amount_owed,
+        "payment_status": "paid",
+    }
+
+
 HIGH_COMMENT_WEEK_THRESHOLD = 12
 LARGE_TRADE_PI_THRESHOLD = Decimal("500")
 

@@ -5,6 +5,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from fastapi.encoders import jsonable_encoder
 
+from app.core.admin_audit import log_admin_action
 from app.core.logger import get_logger
 from app.core.security import optional_verify_token, verify_token
 from app.db.deps import DbSession
@@ -204,6 +205,7 @@ async def get_comment_by_id(
 
 @router.delete("/{comment_id:int}", summary="Delete comment")
 async def delete_comment(
+    request: Request,
     db: DbSession,
     comment_id: int = Path(..., ge=1),
     user=Depends(verify_token),
@@ -219,6 +221,16 @@ async def delete_comment(
                 requester_id=requester_id,
                 is_admin=is_admin,
             )
+            if is_admin:
+                market_id = row.get("market_id")
+                await log_admin_action(
+                    db,
+                    request=request,
+                    admin_user=user,
+                    action_type="comment_removed",
+                    detail=f"Removed comment #{comment_id} on market #{market_id}",
+                    category_key=f"market:{market_id}" if market_id else f"comment:{comment_id}",
+                )
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except LookupError as exc:

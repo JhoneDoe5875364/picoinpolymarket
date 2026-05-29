@@ -30,8 +30,9 @@ export function AppNavigation({ currentUser: _currentUser }: AppNavigationProps)
   const adminMenuItems = [
     { label: "Markets", href: "/admin/markets", section: "markets" },
     { label: "Users", href: "/admin/users", section: "users" },
-    { label: "Payments", href: "/admin/payments", section: "payment" },
+    { label: "Payments", href: "/admin/payments", section: "payments" },
     { label: "Trust / Safety", href: "/admin/trust-safety", section: "trust-safety" },
+    { label: "Audit Log", href: "/admin/audit-log", section: "audit-log" },
     { label: "Suggestions", href: "/admin/suggestions", section: "suggestions" },
   ] as const;
 
