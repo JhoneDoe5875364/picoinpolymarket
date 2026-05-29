@@ -413,7 +413,7 @@ export function MarketRules({ market }: MarketRulesProps) {
   const iconSize = "h-4 w-4";
 
   return (
-    <section className="space-y-4 pb-8">
+    <section className="space-y-4">
       <RulesCard
         title="Resolution Rules"
         headerIcon={

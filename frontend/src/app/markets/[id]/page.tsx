@@ -7,6 +7,7 @@ import { Market } from "@/lib/types";
 import { PriceHistoryChart } from "@/components/market/PriceHistoryChart";
 import { apiFetch } from "@/lib/api";
 import { MarketSummary } from "@/components/market/MarketSummary";
+import { MarketComment } from "@/components/market/MarketComment";
 import { MarketRules } from "@/components/market/MarketRules";
 import { MarketParticipants } from "@/components/market/MarketParticipants";
 import { MarketDetailMobileTrade } from "@/components/market/MarketDetailMobileTrade";
@@ -36,6 +37,8 @@ export default async function MarketDetailsPage({ params }: { params: Promise<{ 
           <PriceHistoryChart market={market} />
 
           <MarketRules market={market} />
+
+          <MarketComment market={market} />
 
           <MarketParticipants market={market} />
         </div>
