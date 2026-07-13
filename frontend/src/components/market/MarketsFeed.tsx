@@ -1,8 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { LayoutGrid, Star } from "lucide-react";
 import MarketCard from "@/components/market/MarketCard";
 import FeaturedMarketCard from "@/components/market/FeaturedMarketCard";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { apiFetch, apiFetchWithToken } from "@/lib/api";
 import { getPpxToken, useAuth } from "@/context/AuthContext";
 import type { Market } from "@/lib/types";
@@ -289,13 +293,30 @@ export default function MarketsFeed({
             : markets.map((market) => <MarketCard key={market.id} market={market} />)}
         </div>
         {!loading && markets.length === 0 && (
-          <div className="rounded-md border border-border bg-card/60 px-4 py-5 text-sm text-muted-foreground">
-            {isWatchlistPage && !ppxToken
-              ? "Log in to save markets and view your watchlist."
-              : isWatchlistPage
-                ? "No markets on your watchlist yet. Tap the star on any market card to save it here."
-                : "No markets found in this category yet."}
-          </div>
+          <EmptyState
+            icon={isWatchlistPage ? Star : LayoutGrid}
+            title={
+              isWatchlistPage && !ppxToken
+                ? "Log in to build your watchlist"
+                : isWatchlistPage
+                  ? "Your watchlist is empty"
+                  : "No open markets here yet"
+            }
+            description={
+              isWatchlistPage && !ppxToken
+                ? "Log in to save markets and view your watchlist."
+                : isWatchlistPage
+                  ? "Tap the star on any market card to save it here."
+                  : "No market in this category is open for predictions right now. Browse the other categories, or check back after the next batch opens."
+            }
+            action={
+              isWatchlistPage ? undefined : (
+                <Button asChild variant="outline" size="sm">
+                  <Link href="/all">Browse all markets</Link>
+                </Button>
+              )
+            }
+          />
         )}
         {loadingMore && (
           <div className={`${MARKETS_GRID_CLASS} mt-4`}>

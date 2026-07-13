@@ -51,8 +51,18 @@ function MoveArrow({ up }: { up: boolean }) {
   );
 }
 
+/**
+ * Smallest absolute move that still renders as a non-zero percentage.
+ * Below this, `Math.round(move * 100)` yields 0 and the badge would read "0%".
+ */
+const MIN_DISPLAYABLE_MOVE = 0.005;
+
+function hasDisplayableMove(move: number): boolean {
+  return Number.isFinite(move) && Math.abs(move) >= MIN_DISPLAYABLE_MOVE;
+}
+
 function PriceMoveBadge({ move }: { move: number }) {
-  if (!Number.isFinite(move) || move === 0) {
+  if (!hasDisplayableMove(move)) {
     return null;
   }
   const isUp = move > 0;
@@ -115,7 +125,7 @@ export function MarketCard({ market }: { market: Market | any }) {
   const priceMove24h = Number(market?.price_move_24h ?? 0);
   const showTrades = trades24h > 0;
   const showComments = comments24h > 0;
-  const showPriceMove = priceMove24h !== 0;
+  const showPriceMove = hasDisplayableMove(priceMove24h);
   const showSignals = showTrades || showComments || showPriceMove;
 
   const [outcome, setOutcome] = React.useState<null | "YES" | "NO">(null);
@@ -146,8 +156,17 @@ export function MarketCard({ market }: { market: Market | any }) {
 
   return (
     <>
-      <Link href={`/markets/${market.id}`} className="block">
-        <Card>
+      <Link
+        href={`/markets/${market.id}`}
+        className="group block rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      >
+        <Card
+          className={cn(
+            "h-full cursor-pointer transition-all duration-200 ease-out",
+            "group-hover:-translate-y-0.5 group-hover:border-primary/50 group-hover:shadow-lg group-hover:shadow-primary/10",
+            "group-active:translate-y-0 group-active:scale-[0.99] group-active:shadow-md"
+          )}
+        >
           <CardContent>
             <div className="mb-3 flex items-start gap-3">
               <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md border bg-muted/20 md:h-16 md:w-16">

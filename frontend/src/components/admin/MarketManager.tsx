@@ -18,6 +18,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { format } from "date-fns";
 import { Market } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
 
 type Status = "open" | "pending" | "resolved";
 type Category = "all" | "politics" | "economy" | "tech" | "sports" | "crypto" | "esports" | "finance" | "geopolitics" | "culture" | "weather";
@@ -30,6 +31,25 @@ type MarketSummary = {
 };
 const DEFAULT_MARKET_ICON = "/images/markets/market-default.png";
 const PAGE_SIZE = 20;
+
+const STATUS_BADGE_STYLES: Record<string, string> = {
+  open: "border-emerald-500/30 bg-emerald-500/15 text-emerald-600 dark:text-emerald-300",
+  pending: "border-amber-500/30 bg-amber-500/15 text-amber-600 dark:text-amber-300",
+  resolved: "border-slate-500/30 bg-slate-500/15 text-slate-600 dark:text-slate-300",
+};
+
+function MarketStatusBadge({ status }: { status?: string | null }) {
+  const key = (status ?? "").toLowerCase();
+  const style = STATUS_BADGE_STYLES[key] ?? "border-border bg-muted/40 text-muted-foreground";
+  const label = key ? key.charAt(0).toUpperCase() + key.slice(1) : "—";
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold capitalize ${style}`}
+    >
+      {label}
+    </span>
+  );
+}
 
 
 export function MarketManager() {
@@ -397,13 +417,13 @@ export function MarketManager() {
             <TableRow>
               <TableHead className="text-xs hidden">Id</TableHead>
               <TableHead className="text-xs">Question</TableHead>
-              <TableHead className="text-xs hidden">Status</TableHead>
+              <TableHead className="text-xs hidden lg:table-cell">Status</TableHead>
               <TableHead className="text-xs hidden">Category</TableHead>
               <TableHead className="text-xs hidden">Start Date</TableHead>
               <TableHead className="text-xs">End Date</TableHead>
               <TableHead className="text-xs hidden">Traders</TableHead>
-              <TableHead className="text-xs">Volume</TableHead>
-              <TableHead className="text-xs">Actions</TableHead>
+              <TableHead className="text-xs text-right">Volume</TableHead>
+              <TableHead className="text-xs text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -428,8 +448,8 @@ export function MarketManager() {
                     <p className="line-clamp-2 text-xs">{m.question}</p>
                   </div>
                 </TableCell>
-                <TableCell className="text-xs hidden">
-                  {m.status}
+                <TableCell className="text-xs hidden lg:table-cell">
+                  <MarketStatusBadge status={m.status} />
                 </TableCell>
                 <TableCell className="text-xs hidden">
                   {m.category}
@@ -437,8 +457,8 @@ export function MarketManager() {
                 <TableCell className="text-xs hidden">{format(new Date(m.start_date ?? ""), "MM/dd/yyyy")}</TableCell>
                 <TableCell className="text-xs">{format(new Date(m.end_date ?? ""), "MM/dd/yyyy")}</TableCell>
                 <TableCell className="text-xs hidden">{roundLocale(m.traders ?? 0)}</TableCell>
-                <TableCell className="text-xs">{roundLocalePi(m.volume ?? 0)}</TableCell>
-                <TableCell>
+                <TableCell className="text-xs text-right tabular-nums">{roundLocalePi(m.volume ?? 0)}</TableCell>
+                <TableCell className="text-right">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" className="h-8 w-8 p-0">
@@ -479,7 +499,12 @@ export function MarketManager() {
           <p className="text-sm text-muted-foreground">Loading markets...</p>
         )}
         {!isInitialLoading && rows.length === 0 && (
-          <p className="text-sm text-muted-foreground">No markets found.</p>
+          <EmptyState
+            icon={Layers3}
+            title="No markets found"
+            description="Try adjusting your search or filters, or create a new market."
+            className="my-2"
+          />
         )}
         {rows.length > 0 && (
           <div className="space-y-1">

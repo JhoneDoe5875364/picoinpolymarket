@@ -121,7 +121,35 @@ def mint_jwt_token(user_id, username, role, pi_access_token):
     return token
 
 
+SUPERADMIN_ROLES: tuple[str, ...] = ("superadmin",)
+ADMIN_ROLES: tuple[str, ...] = ("superadmin", "admin")
+
+
+def _require_roles(user: dict, allowed: tuple[str, ...], detail: str) -> dict:
+    # A bare ("superadmin") is a string, not a tuple, so `in` degrades into a
+    # substring test and lets "admin", "super" and even "" through. Refuse to
+    # run rather than silently authorise, should a caller ever pass one.
+    if not isinstance(allowed, tuple):
+        raise TypeError(f"allowed roles must be a tuple, got {type(allowed).__name__}")
+
+    role = user.get("role")
+    if not isinstance(role, str) or role not in allowed:
+        raise HTTPException(status_code=403, detail=detail)
+    return user
+
+
+async def require_superadmin(user=Depends(verify_token)) -> dict:
+    """Gate routes that settle money: market resolution, payouts, role changes."""
+    return _require_roles(user, SUPERADMIN_ROLES, "HasNotSuperadminRole")
+
+
+async def require_admin_role(user=Depends(verify_token)) -> dict:
+    """Gate routes that manage content but do not settle money."""
+    return _require_roles(user, ADMIN_ROLES, "HasNotAdminRole")
+
+
 def require_admin(x_api_key: Optional[str] = Header(None, alias="X-API-Key")):
+    """Legacy X-API-Key gate. Unrelated to the JWT role checks above."""
     want = os.getenv("ADMIN_API_KEY") or ""
     if not want or (x_api_key or "") != want:
         raise HTTPException(status_code=401, detail="Admin key invalid")

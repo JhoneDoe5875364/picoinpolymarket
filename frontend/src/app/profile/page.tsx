@@ -12,7 +12,7 @@ export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState<'positions' | 'activity' | 'payment-history'>('positions');
 
   return (
-    <div className="container mx-auto space-y-6 px-2.5 py-4 sm:space-y-7 sm:px-6 sm:py-6 lg:px-8">
+    <div className="ppx-page">
       <ProfileOverview />
 
       <section className="space-y-3">

@@ -44,7 +44,6 @@ export type ExecuteBuyTradeResult = {
   paymentId?: string;
   txid?: string;
   orderCreated: boolean;
-  paymentCreated: boolean;
   positionRecorded: boolean;
   failureReason?: TradeFailureReason;
   totalCost?: number;
@@ -66,33 +65,41 @@ export async function executeBuyTrade({
 
   const payment = buildTradePaymentPayload(price, shares);
   const paymentAmount = payment.totalCost;
-  const sideLower = outcome.toLowerCase() as "yes" | "no";
 
   onStageChange?.("preparing_payment");
 
   const scopes = ["payments"];
-  const onIncompletePaymentFound = async (paymentRecord: unknown) => {
+  // Buffered because the callback fires inside authenticate(), before we hold the
+  // Pi access token that /pi/payments/incomplete authenticates against.
+  let danglingPayment: unknown;
+  const onIncompletePaymentFound = (paymentRecord: unknown) => {
+    danglingPayment = paymentRecord;
+  };
+
+  const pi = getPi();
+  const authResult = await pi.authenticate(scopes, onIncompletePaymentFound);
+  const piAccessToken: string | undefined = (authResult as any)?.accessToken;
+
+  if (danglingPayment && piAccessToken) {
     const res = await apiFetch<{ status?: string }>(`/pi/payments/incomplete`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Authorization: `Bearer ${piAccessToken}`,
       },
-      body: JSON.stringify({ payment: paymentRecord }),
+      body: JSON.stringify({ payment: danglingPayment }),
     });
 
     if (res.status === "handled") {
       toast({
         title: "Uncompleted payment found",
-        description: String(paymentRecord),
+        description: "A previous payment is still pending.",
         variant: "destructive",
       });
     }
-  };
+  }
 
-  const pi = getPi();
-  await pi.authenticate(scopes, onIncompletePaymentFound);
-
-  const orderRes = await apiFetchWithToken<{ ok?: boolean }>(`/orders`, {
+  const orderRes = await apiFetchWithToken<{ ok?: boolean; data?: { id?: number } }>(`/orders`, {
     method: "POST",
     body: JSON.stringify({
       user_id: Number(userId),
@@ -107,40 +114,21 @@ export async function executeBuyTrade({
     }),
   });
 
-  const orderCreated = Boolean(orderRes.ok);
-  if (orderCreated) {
-    toast({
-      title: "Order created",
-      description: "Order created successfully",
-    });
-  } else {
+  const orderId = orderRes.data?.id;
+  const orderCreated = Boolean(orderRes.ok && orderId);
+  if (!orderCreated || orderId === undefined) {
     toast({
       title: "Order creation failed",
       description: "Failed to create order",
+      variant: "destructive",
     });
+    throw new Error("Order creation failed");
   }
 
-  const paymentRes = await apiFetchWithToken<{ ok?: boolean }>(`/pi/payments`, {
-    method: "POST",
-    body: JSON.stringify({
-      amount: paymentAmount,
-      memo: TRADE_COPY.sendPiMemo,
-      metadata: { userId },
-    }),
+  toast({
+    title: "Order created",
+    description: "Order created successfully",
   });
-
-  const paymentCreated = Boolean(paymentRes.ok);
-  if (paymentCreated) {
-    toast({
-      title: "Payment created",
-      description: "Payment created successfully",
-    });
-  } else {
-    toast({
-      title: "Payment creation failed",
-      description: "Failed to create payment",
-    });
-  }
 
   onStageChange?.("awaiting_pi_confirmation");
 
@@ -156,7 +144,8 @@ export async function executeBuyTrade({
     {
       amount: paymentAmount,
       memo: TRADE_COPY.sendPiMemo,
-      metadata: { userId },
+      // order_id travels with the payment so the server can bind the two.
+      metadata: { order_id: orderId, userId },
     },
     {
       onReadyForServerApproval: async (paymentId: string) => {
@@ -166,7 +155,7 @@ export async function executeBuyTrade({
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ paymentId }),
+          body: JSON.stringify({ paymentId, order_id: orderId }),
         });
       },
       onReadyForServerCompletion: async (paymentId: string, txid: string) => {
@@ -174,6 +163,8 @@ export async function executeBuyTrade({
         txidRef = txid;
         onStageChange?.("payment_detected");
 
+        // Settlement is server-side: completing the payment also records the
+        // trade, the position and the new market price, in one transaction.
         const completeRes = await apiFetchWithToken<{ status?: string }>(`/pi/payments/complete`, {
           method: "POST",
           headers: {
@@ -183,42 +174,19 @@ export async function executeBuyTrade({
         });
 
         if (completeRes.status === "completed") {
-          const positionRes = await apiFetchWithToken<{ ok?: boolean }>(`/positions`, {
-            method: "POST",
-            body: JSON.stringify({
-              market_id: marketId,
-              side: sideLower,
-              shares: payment.shares,
-              price: payment.price,
-              amount: payment.amount,
-              fee: payment.fee,
-              total_cost: payment.totalCost,
-            }),
+          positionRecorded = true;
+          onStageChange?.("position_recorded");
+          onPositionCreated?.();
+          onStageChange?.("prediction_confirmed");
+          succeeded = true;
+          status = "confirmed";
+
+          toast({
+            title: TRADE_COPY.sendPiSuccessTitle,
+            description: TRADE_COPY.sendPiSuccessDescription(paymentAmount),
           });
-
-          if (positionRes.ok) {
-            positionRecorded = true;
-            onStageChange?.("position_recorded");
-            onPositionCreated?.();
-            onStageChange?.("prediction_confirmed");
-            succeeded = true;
-            status = "confirmed";
-
-            toast({
-              title: TRADE_COPY.sendPiSuccessTitle,
-              description: TRADE_COPY.sendPiSuccessDescription(paymentAmount),
-            });
-          } else {
-            failureReason = "payment_detected_position_not_recorded";
-            status = "failed";
-            toast({
-              title: "Position Recording Failed",
-              description: "Payment was detected, but we could not record your position.",
-              variant: "destructive",
-            });
-          }
         } else {
-          failureReason = "position_recorded_confirmation_delayed";
+          failureReason = "payment_detected_position_not_recorded";
           status = "failed";
           toast({
             title: TRADE_COPY.sendPiFailedTitle,
@@ -268,7 +236,6 @@ export async function executeBuyTrade({
     paymentId: paymentIdRef,
     txid: txidRef,
     orderCreated,
-    paymentCreated,
     positionRecorded,
     totalCost: paymentAmount,
     failureReason:

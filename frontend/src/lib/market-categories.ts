@@ -14,6 +14,8 @@ export const MARKET_CATEGORIES = [
 export type MarketCategory = (typeof MARKET_CATEGORIES)[number];
 
 export const MARKET_DISCOVERY_MENUS = [
+  // "default" applies no discovery filter — every open market, sorted by volume.
+  { key: "default", label: "All", slug: "all" },
   { key: "trending", label: "Trending", slug: "" },
   { key: "new", label: "New", slug: "new" },
   { key: "hot", label: "Hot", slug: "hot" },

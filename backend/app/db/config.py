@@ -149,7 +149,9 @@ SEED_MARKET_RULE_TEMPLATE = (
     "Resolution notes must include source links and timestamp context."
 )
 SEED_MARKET_DESCRIPTION = "Auto-generated random seed market for local development."
-SEED_MARKET_ICON_TEMPLATE = "http://localhost:9002/images/markets/market-{market_id}.png"
+# Relative path: an absolute localhost URL only resolves on a dev machine, so
+# every icon falls back to the default image anywhere else.
+SEED_MARKET_ICON_TEMPLATE = "/images/markets/market-{market_id}.png"
 SEED_MARKET_START_MIN_DAYS_AGO = 1
 SEED_MARKET_START_MAX_DAYS_AGO = 30
 SEED_MARKET_END_MIN_DAYS_AHEAD = 3

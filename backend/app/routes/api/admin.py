@@ -13,7 +13,7 @@ from fastapi.encoders import jsonable_encoder
 
 from app.core.admin_audit import log_admin_action
 from app.core.logger import get_logger
-from app.core.security import verify_token
+from app.core.security import require_superadmin, verify_token
 from app.db.deps import DbSession
 from app.repositories import admin as admin_repo
 from app.repositories import compliance as compliance_repo
@@ -456,13 +456,10 @@ async def resolve_market(
     db: DbSession,
     market_id: int = Query(..., ge=1),
     outcome: Literal["YES", "NO"] = Query(...),
-    user=Depends(verify_token),
+    user=Depends(require_superadmin),
 ):
     user_id = str(user.get("sub", ""))
     username = str(user.get("username", ""))
-    role = user.get("role", "")
-    if role not in ("superadmin"):
-        raise HTTPException(status_code=403, detail="HasNotAdminRole")
 
     normalized_outcome = outcome.upper()
 
@@ -498,13 +495,10 @@ async def resolve_market_direct(
     db: DbSession,
     market_id: int = Query(..., ge=1),
     outcome: Literal["YES", "NO"] = Query(...),
-    user=Depends(verify_token),
+    user=Depends(require_superadmin),
 ):
     user_id = str(user.get("sub", ""))
     username = str(user.get("username", ""))
-    role = user.get("role", "")
-    if role not in ("superadmin"):
-        raise HTTPException(status_code=403, detail="HasNotAdminRole")
 
     normalized_outcome = outcome.upper()
 

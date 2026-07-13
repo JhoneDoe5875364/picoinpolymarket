@@ -5,6 +5,7 @@ import { cn, toNumber } from "@/lib/utils";
 import { useEffect, useMemo, useState } from "react";
 import { Crown, Medal, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import {
   Table,
   TableBody,
@@ -353,9 +354,11 @@ export default function LeaderboardPage() {
               </div>
             </div>
           ) : topThree.length === 0 ? (
-            <div className="rounded-xl border border-border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
-              No leaderboard entries found.
-            </div>
+            <EmptyState
+              icon={Trophy}
+              title="The podium is still open"
+              description="No one has ranked in this category and time range yet. Make a prediction and you could be the first to claim a spot."
+            />
           ) : (
             <div className="grid grid-cols-3 gap-2 md:gap-3">
               {podiumEntries.map((entry, idx) => (
@@ -375,7 +378,8 @@ export default function LeaderboardPage() {
             <MyRankCard entry={myEntry} />
           ) : (
             <p className="text-sm text-muted-foreground">
-              You are not ranked in the current leaderboard range.
+              You have not ranked in this category and time range yet. Place a prediction here and
+              your rank will show up once it is scored.
             </p>
           )}
         </section>

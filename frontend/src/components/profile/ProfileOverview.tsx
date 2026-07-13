@@ -1,7 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDownToLine, ArrowUpFromLine, MessageSquarePlus, Pencil, Wallet } from 'lucide-react';
+// Re-add `ArrowDownToLine, ArrowUpFromLine` with the Send/Receive Pi block and
+// `Pencil` with the Edit Profile button — both are commented out below.
+import { MessageSquarePlus, Wallet } from 'lucide-react';
 import {
   AreaSeries,
   ColorType,
@@ -53,6 +55,7 @@ type AccountWalletInfo = {
   pi_username?: string | null;
   payout_destination?: string | null;
   last_pi_verified_at?: string | null;
+  created_at?: string | null;
 };
 
 function formatWalletPreview(addr: string | null | undefined): string {
@@ -62,6 +65,15 @@ function formatWalletPreview(addr: string | null | undefined): string {
   return `${s.slice(0, 8)}…${s.slice(-6)}`;
 }
 
+/** "Joined Mar 2026", or null when the account has no usable created_at. */
+function formatJoinedDate(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (!isValid(d)) return null;
+  return `Joined ${format(d, 'MMM yyyy')}`;
+}
+
+/** Used only by the commented-out Wallet card. */
 function formatVerifiedTimestamp(iso: string | null | undefined): string {
   if (!iso) return '—';
   const d = new Date(iso);
@@ -451,9 +463,20 @@ export function ProfileOverview() {
     };
   }, [ppxUser?.id]);
 
+  // Kept for the commented-out Wallet card below — unused while it stays disabled.
   const piUsernameDisplay = walletInfo?.pi_username?.trim() || profileName;
   const piUidDisplay = walletInfo?.pi_uid?.trim() || '—';
+  const hasPayoutDestination = Boolean(walletInfo?.payout_destination?.trim());
   const payoutDisplay = formatWalletPreview(walletInfo?.payout_destination);
+
+  const joinedLabel = formatJoinedDate(walletInfo?.created_at);
+
+  // An all-zero series still renders as a flat 0π line, which reads as broken.
+  // Treat "no points" and "every point is zero" alike: show the zero-state instead.
+  const hasPnlActivity = useMemo(
+    () => pnlHistory.some((point) => point.profitLoss !== 0),
+    [pnlHistory]
+  );
 
   const pnlClassName =
     stats.profitLoss > 0
@@ -477,7 +500,9 @@ export function ProfileOverview() {
               />
               <div className="min-w-0 items-center">
                 <h1 className="truncate text-xl sm:text-3xl font-bold leading-tight">{profileName}</h1>
-                <p className="text-sm sm:text-md text-muted-foreground">Joined Mar 2026 · 0 views</p>
+                {joinedLabel ? (
+                  <p className="text-sm sm:text-md text-muted-foreground">{joinedLabel}</p>
+                ) : null}
               </div>
             </div>
             <div className="flex items-center gap-1">
@@ -497,6 +522,11 @@ export function ProfileOverview() {
                   </TooltipTrigger>
                   <TooltipContent side="bottom">Suggest a market</TooltipContent>
                 </Tooltip>
+                {/*
+                  DISABLED — Edit Profile. The button had no onClick and no editor
+                  exists; it advertised a capability the app does not have.
+                  Restore once a profile editor ships.
+
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button variant="ghost" size="icon" className="h-8 w-8" type="button">
@@ -506,6 +536,7 @@ export function ProfileOverview() {
                   </TooltipTrigger>
                   <TooltipContent side="bottom">Edit Profile</TooltipContent>
                 </Tooltip>
+                */}
               </TooltipProvider>
             </div>
           </div>
@@ -524,6 +555,26 @@ export function ProfileOverview() {
               <p className="text-xs text-muted-foreground sm:text-sm">Predictions</p>
             </div>
           </div>
+
+          {/*
+            DISABLED — Wallet card and Send/Receive Pi buttons.
+
+            Why: PredictPix never custodies Pi. Predictions are paid straight from
+            the user's Pi Wallet at trade time (the `payments` scope is requested
+            per payment; no address is ever stored). Showing a wallet balance card
+            with Send/Receive controls implied a custodial service and created
+            legal/regulatory exposure without providing any function:
+
+              - `Send Pi` / `Receive Pi` had no onClick — both were inert.
+              - `Payout destination` reads `leaderboards.wallet_address`, but no
+                code anywhere writes that column (the leaderboard updater sets it
+                to None), so it can never be populated.
+              - `Last verified` displayed `users.updated_at`, not a Pi verification
+                timestamp — a mislabelled value.
+
+            Restore this block only after real wallet linking exists: the login flow
+            must capture a wallet address and `leaderboards.wallet_address` must be
+            written. See docs/feedbacks/20260621_UX_Product_Feedback_Analysis.ko.md (#11).
 
           {ppxUser?.id ? (
             <div className="rounded-lg border border-border/60 bg-muted/15 px-3 py-3">
@@ -555,14 +606,19 @@ export function ProfileOverview() {
                   <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                     <dt className="text-muted-foreground shrink-0">Payout destination</dt>
                     <dd
-                      className="max-w-[min(100%,14rem)] truncate text-right font-mono text-xs font-medium"
+                      className={cn(
+                        "max-w-[min(100%,14rem)] truncate text-right text-xs",
+                        hasPayoutDestination
+                          ? "font-mono font-medium"
+                          : "italic text-muted-foreground"
+                      )}
                       title={
-                        walletInfo?.payout_destination?.trim()
-                          ? walletInfo.payout_destination.trim()
+                        hasPayoutDestination
+                          ? walletInfo?.payout_destination?.trim()
                           : undefined
                       }
                     >
-                      {payoutDisplay}
+                      {hasPayoutDestination ? payoutDisplay : "Not linked yet"}
                     </dd>
                   </div>
                   <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
@@ -574,27 +630,51 @@ export function ProfileOverview() {
                 </dl>
               )}
               {!walletLoading && !walletError ? (
-                <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
-                  Payout destination shows your linked mainnet address when it is stored on leaderboard rows.
-                  Last verified updates each time you complete Pi Browser authentication.
+                <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+                  Your payout destination is the mainnet address linked to your account. It appears
+                  here once you complete Pi Browser authentication, which also updates
+                  Last verified.
                 </p>
               ) : null}
             </div>
           ) : null}
 
-          <div className="grid grid-cols-2 gap-2">
-            <Button className="w-full">
-              <ArrowDownToLine className="mr-2 h-4 w-4" />
-              Send Pi
-            </Button>
-            <Button
-              variant="outline"
-              className="w-full text-muted-foreground hover:text-foreground"
-              disabled
-            >
-              <ArrowUpFromLine className="mr-2 h-4 w-4" />
-              Receive Pi
-            </Button>
+          <TooltipProvider delayDuration={300}>
+            <div className="grid grid-cols-2 gap-2">
+              <Button className="w-full">
+                <ArrowDownToLine className="mr-2 h-4 w-4" />
+                Send Pi
+              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span tabIndex={0} className="w-full">
+                    <Button
+                      variant="outline"
+                      className="w-full text-muted-foreground"
+                      disabled
+                    >
+                      <ArrowUpFromLine className="mr-2 h-4 w-4" />
+                      Receive Pi
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  Receiving Pi is not available yet — payouts are sent to your linked Pi wallet.
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          </TooltipProvider>
+          */}
+
+          <div className="flex items-start gap-2.5 rounded-lg border border-border/60 bg-muted/15 px-3 py-3">
+            <Wallet className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              <span className="font-semibold text-foreground">
+                PredictPix never holds your Pi.
+              </span>{' '}
+              Every prediction is paid straight from your Pi Wallet when you confirm it, and
+              payouts are returned to the same wallet.
+            </p>
           </div>
         </CardContent>
       </Card>
@@ -634,9 +714,12 @@ export function ProfileOverview() {
           <div className="relative h-28 shrink-0 lg:h-auto lg:min-h-0 lg:flex-1">
             {isLoading ? (
               <div className="absolute inset-0 animate-pulse rounded-md bg-muted/40" />
-            ) : pnlHistory.length === 0 ? (
-              <div className="absolute inset-0 flex items-center justify-center rounded-md border border-dashed border-border/60 text-xs text-muted-foreground">
-                No PnL history
+            ) : !hasPnlActivity ? (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 rounded-md border border-dashed border-border/60 px-4 text-center">
+                <p className="text-sm font-medium text-foreground">No results yet</p>
+                <p className="max-w-xs text-xs text-muted-foreground">
+                  Your net result appears here once you place a prediction and the market resolves.
+                </p>
               </div>
             ) : (
               <ProfilePnlChart

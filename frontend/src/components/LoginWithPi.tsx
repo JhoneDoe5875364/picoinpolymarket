@@ -76,27 +76,33 @@ export default function LoginWithPi() {
       setLoading(true);
 
       const scopes = ["username", "payments"];
+      // Buffered: this fires inside authenticate(), before we hold the Pi access
+      // token that /pi/payments/incomplete authenticates against.
+      let danglingPayment: any;
       const onIncompletePaymentFound = (payment: any) => {
-        (async () => {
-          const res = await apiFetch(`/pi/payments/incomplete`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ payment })
-          });
-
-          if (res.status == 'handled') {
-            toast({
-              title: "Uncompleted payment found",
-              description: payment,
-              variant: "destructive",
-            });
-          }
-        })()
+        danglingPayment = payment;
       };
 
       const authResult = await Pi.authenticate(scopes, onIncompletePaymentFound);
+
+      if (danglingPayment && authResult?.accessToken) {
+        const res = await apiFetch<{ status?: string }>(`/pi/payments/incomplete`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authResult.accessToken}`,
+          },
+          body: JSON.stringify({ payment: danglingPayment }),
+        });
+
+        if (res.status === "handled") {
+          toast({
+            title: "Uncompleted payment found",
+            description: "A previous payment is still pending.",
+            variant: "destructive",
+          });
+        }
+      }
 
       const { ppx_token, ppx_user } = await apiFetch("/auth/pi/verify", {
         method: "POST",
@@ -143,7 +149,11 @@ export default function LoginWithPi() {
           <Wallet className="mr-2 h-4 w-4" />
         )}
         {loading ? "Connecting…" : "Login with Pi"}
-      </Button> : <Button onClick={logout}>
+      </Button> : <Button
+        variant="ghost"
+        onClick={logout}
+        className="text-muted-foreground hover:text-foreground"
+      >
         Log out
       </Button>}
     </div>
