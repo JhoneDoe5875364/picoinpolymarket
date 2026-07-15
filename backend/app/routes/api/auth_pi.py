@@ -24,7 +24,9 @@ async def auth_pi_verify(req: VerifyRequest, db: DbSession):
     auth_result = req.authResult
 
     user = auth_result.get("user", {})
-    user_id = user.get("id")
+    # Pi's /me and authenticate() return the identifier as "uid"; keep "id" as a
+    # fallback for any caller that already normalized it.
+    user_id = user.get("uid") or user.get("id")
     username = user.get("username", f"user_{user_id}")
 
     # verify pi access token
