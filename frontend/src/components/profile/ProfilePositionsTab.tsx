@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -12,6 +13,7 @@ import { TRADE_TERMS } from '@/lib/trade/tradeTerms';
 
 export type PositionRow = {
   id: string;
+  marketId: string | null;
   marketTitle: string;
   marketImage: string | null;
   outcome: 'YES' | 'NO';
@@ -47,8 +49,10 @@ function normalizePositionRow(row: any, index: number): PositionRow {
   const pnlPercent = toNumber(row?.pnl_percent ?? 0);
   const currentPiAmount = toNumber(row?.current_pi_amount ?? 0);
 
+  const rawMarketId = row?.market_id;
   return {
     id: String(row?.id ?? index),
+    marketId: rawMarketId != null ? String(rawMarketId) : null,
     marketTitle: String(row?.question ?? 'Untitled market'),
     marketImage: row?.icon ?? 'http://localhost:9002/images/markets/market-default.png',
     outcome,
@@ -124,6 +128,7 @@ export function ProfilePositionsTab({
   isActive,
 }: ProfilePositionsTabProps) {
   const { ppxUser } = useAuth();
+  const router = useRouter();
   const [status, setStatus] = useState<'active' | 'closed'>('active');
   const [sortBy, setSortBy] = useState<(typeof SORT_OPTIONS)[number]>(TRADE_COPY.netResultLabel);
   const [searchTerm, setSearchTerm] = useState('');
@@ -294,8 +299,28 @@ export function ProfilePositionsTab({
                         ? 'text-rose-500 dark:text-rose-400'
                         : 'text-muted-foreground';
 
+                  const goToMarket = position.marketId
+                    ? () => router.push(`/markets/${position.marketId}`)
+                    : undefined;
+
                   return (
-                    <TableRow key={position.id}>
+                    <TableRow
+                      key={position.id}
+                      onClick={goToMarket}
+                      role={goToMarket ? 'link' : undefined}
+                      tabIndex={goToMarket ? 0 : undefined}
+                      onKeyDown={
+                        goToMarket
+                          ? (e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                goToMarket();
+                              }
+                            }
+                          : undefined
+                      }
+                      className={cn(goToMarket && 'cursor-pointer hover:bg-muted/50')}
+                    >
                       <TableCell className="min-w-[220px]">
                         <div className="flex min-w-0 items-center gap-3">
                           <div className="h-10 w-10 shrink-0 overflow-hidden rounded-md bg-muted">

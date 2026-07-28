@@ -510,17 +510,17 @@ export function ProfileOverview() {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 gap-1.5"
                       type="button"
                       onClick={() => setSuggestDialogOpen(true)}
                     >
                       <MessageSquarePlus className="h-4 w-4" aria-hidden />
-                      <span className="sr-only">Suggest</span>
+                      <span>Suggest a market</span>
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent side="bottom">Suggest a market</TooltipContent>
+                  <TooltipContent side="bottom">Propose a new market for admins to review</TooltipContent>
                 </Tooltip>
                 {/*
                   DISABLED — Edit Profile. The button had no onClick and no editor

@@ -103,8 +103,12 @@ def verify_payment_matches_order(
 
     expected_wallet = Config.PI_APP_WALLET_ADDRESS
     if expected_wallet:
-        if str(dto.get("to_address") or "") != expected_wallet:
-            raise PaymentVerificationError("payment was not sent to the app wallet")
+        actual_wallet = str(dto.get("to_address") or "")
+        if actual_wallet != expected_wallet:
+            raise PaymentVerificationError(
+                f"payment was not sent to the app wallet "
+                f"(expected {expected_wallet}, paid to {actual_wallet})"
+            )
     else:
         logger.warning(
             "PI_APP_WALLET_ADDRESS is unset; skipping recipient check for payment %s",

@@ -14,7 +14,12 @@ from app.models.tables.market_token import MarketToken
 from app.models.tables.market_trades import MarketTrade
 
 logger = get_logger()
-MARKET_CANDLE_REFRESH_INTERVAL_SECONDS = 60 * 60
+# How often the live refresh runs. Candles bucket by 10 minutes, but a fresh
+# trade should surface on the chart within ~1 minute, not after a full hour.
+MARKET_CANDLE_REFRESH_INTERVAL_SECONDS = 60
+# Backfill must step by the candle bucket size (10m), or it skips buckets and
+# leaves gaps in the history.
+_CANDLE_BUCKET_SECONDS = 600
 _PRICE_QUANT = Decimal("0.0001")
 _VOLUME_QUANT = Decimal("0.0001")
 
@@ -114,7 +119,7 @@ async def refresh_market_price_candles_from_earliest_trade(
     ts = earliest
     while ts <= end:
         await refresh_market_price_candles_once(session, ts)
-        ts += timedelta(seconds=MARKET_CANDLE_REFRESH_INTERVAL_SECONDS)
+        ts += timedelta(seconds=_CANDLE_BUCKET_SECONDS)
 
 
 async def run_periodic_market_price_candle_refresh(

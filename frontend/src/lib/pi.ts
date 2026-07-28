@@ -93,9 +93,12 @@ export async function initPiSDK() {
     // In dev, window.Pi will be undefined, and this will be skipped.
     const Pi = window.Pi;
     if (Pi) {
+      // Sandbox (Testnet) vs production is chosen by NEXT_PUBLIC_PI_SANDBOX.
+      // It MUST match the environment of the API key the backend uses, or Pi
+      // returns "payment_not_found" when the server re-fetches the payment.
+      const sandbox = process.env.NEXT_PUBLIC_PI_SANDBOX === "true";
       // @ts-ignore
-      // Pi.init({ version: "2.0", sandbox: true, onUnsupported: () => console.log("Pi Browser not supported.") });
-      Pi.init({ version: "2.0", onUnsupported: () => console.log("Pi Browser not supported.") });
+      Pi.init({ version: "2.0", sandbox, onUnsupported: () => console.log("Pi Browser not supported.") });
       // console.log("Pi SDK initialized");
       // toast({
       //   title: "Pi SDK initialized",

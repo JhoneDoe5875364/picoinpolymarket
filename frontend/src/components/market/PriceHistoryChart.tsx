@@ -415,6 +415,28 @@ export function PriceHistoryChart({
     )
   }
 
+  // Candles are built from trades by a periodic updater, so a freshly-traded or
+  // brand-new market has no history yet. Explain that instead of a blank chart.
+  if (chartPoints.length === 0) {
+    return (
+      <section
+        className={cn(
+          "flex w-full max-w-full min-w-0 flex-col items-center justify-center gap-2 text-center",
+          !embedded && "rounded-xl border border-border/60 bg-card p-6 shadow-sm",
+          headerVisible ? "min-h-[200px]" : "min-h-32",
+          chartClassName,
+          className
+        )}
+      >
+        <p className="text-sm font-semibold text-foreground">No price history yet</p>
+        <p className="max-w-xs text-xs text-muted-foreground">
+          The chart appears once trades start building the market&apos;s price history.
+          Check back shortly after the first trades.
+        </p>
+      </section>
+    )
+  }
+
   const volume7d = Number(market.volume_1w ?? market.volume ?? 0)
   const volume24h = Number(market.volume_24h ?? 0)
   const traders = Number(market.traders ?? market.trades_total ?? 0)

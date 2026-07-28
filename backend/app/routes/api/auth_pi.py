@@ -40,6 +40,9 @@ async def auth_pi_verify(req: VerifyRequest, db: DbSession):
         raise HTTPException(status_code=400, detail="Invalid auth result")
 
     user_row = await auth_repo.get_user_by_id(db, str(user_id))
+    # The read above autobegins a transaction (SQLAlchemy 2.0); close it before
+    # opening an explicit one below, or db.begin() raises "already begun".
+    await db.rollback()
     if not user_row:
         async with db.begin():
             user_row = await auth_repo.insert_user(
@@ -62,6 +65,8 @@ async def auth_pi_verify(req: VerifyRequest, db: DbSession):
     return {
         "ok": True,
         "ppx_user": {
+            # Frontend PpxUser reads `id`; keep `uid` for any older caller.
+            "id": user_row.get("id", ""),
             "uid": user_row.get("id", ""),
             "username": user_row.get("pi_username", ""),
             "role": role,

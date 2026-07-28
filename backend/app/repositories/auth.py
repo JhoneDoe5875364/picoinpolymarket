@@ -44,7 +44,7 @@ async def insert_user(
         pi_uid=str(user_id),
         pi_username=username,
         role_id=3,
-        status="active",
+        status="ACTIVE",  # must match the user_status enum (uppercase)
     )
     session.add(user)
     await session.flush()
