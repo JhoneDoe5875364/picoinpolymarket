@@ -27,6 +27,7 @@ import {
   TRADE_TERMS,
 } from "@/lib/trade/tradeTerms";
 import { TRADE_COPY } from "@/lib/copy/trade";
+import { fetchPayoutWallet } from "@/lib/wallet";
 
 function BreakdownRow({
   label,
@@ -90,6 +91,7 @@ export function PredictionPanel({
   const [stage, setStage] = useState<TradeProgressStage | null>(null);
   const [failureReason, setFailureReason] = useState<TradeFailureReason | null>(null);
   const [tradeResult, setTradeResult] = useState<ExecuteBuyTradeResult | null>(null);
+  const [needsWallet, setNeedsWallet] = useState(false);
   const yesPrice = market?.outcome_price_yes ?? 0.5;
   const noPrice = market?.outcome_price_no ?? 0.5;
 
@@ -141,10 +143,19 @@ export function PredictionPanel({
       return;
     }
 
+    // Require a payout wallet before spending Pi, so winnings have somewhere to go.
+    setBusy(true);
+    const payoutWallet = await fetchPayoutWallet();
+    if (!payoutWallet) {
+      setBusy(false);
+      setNeedsWallet(true);
+      return;
+    }
+    setNeedsWallet(false);
+
     setStage("preparing_payment");
     setFailureReason(null);
     setTradeResult(null);
-    setBusy(true);
 
     try {
       const result = await executeBuyTrade({
@@ -318,6 +329,24 @@ export function PredictionPanel({
               </div>
               <Link href="/profile" className="mt-2 inline-block font-medium text-primary underline">
                 View position in profile
+              </Link>
+            </div>
+          )}
+
+          {needsWallet && (
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+              <p className="font-semibold text-amber-700 dark:text-amber-300">
+                Add a payout wallet first
+              </p>
+              <p className="mt-1 text-muted-foreground">
+                Winnings are sent to your Pi wallet. Save your wallet address in your
+                profile before placing a prediction.
+              </p>
+              <Link
+                href="/profile"
+                className="mt-2 inline-block font-semibold text-primary underline"
+              >
+                Go to profile →
               </Link>
             </div>
           )}

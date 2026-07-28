@@ -17,6 +17,7 @@ import {
   TRADE_TERMS,
 } from "@/lib/trade/tradeTerms";
 import { TRADE_COPY } from "@/lib/copy/trade";
+import { fetchPayoutWallet } from "@/lib/wallet";
 
 type Props = {
   open: boolean;
@@ -38,6 +39,7 @@ export default function QuickBuyModal({ open, marketId, outcome, marketQuestion,
   const [stage, setStage] = useState<TradeProgressStage | null>(null);
   const [failureReason, setFailureReason] = useState<TradeFailureReason | null>(null);
   const [tradeResult, setTradeResult] = useState<ExecuteBuyTradeResult | null>(null);
+  const [needsWallet, setNeedsWallet] = useState(false);
   const shares = useMemo(() => {
     const parsed = Number(sharesInput);
     return sanitizeShares(parsed);
@@ -81,8 +83,19 @@ export default function QuickBuyModal({ open, marketId, outcome, marketQuestion,
       return;
     }
 
-    setStage("preparing_payment");
+    // A payout has nowhere to go without a saved wallet address. Require it
+    // before the user spends Pi, not after they win.
     setLoading(true);
+    const payoutWallet = await fetchPayoutWallet();
+    if (!payoutWallet) {
+      setLoading(false);
+      setNeedsWallet(true);
+      setMsg("");
+      return;
+    }
+    setNeedsWallet(false);
+
+    setStage("preparing_payment");
     try {
       const result = await executeBuyTrade({
         userId: ppxUser.id,
@@ -197,6 +210,24 @@ export default function QuickBuyModal({ open, marketId, outcome, marketQuestion,
               </div>
               <Link href="/profile" className="mt-2 inline-block font-medium text-primary underline">
                 View position in profile
+              </Link>
+            </div>
+          )}
+          {needsWallet && (
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+              <p className="font-semibold text-amber-700 dark:text-amber-300">
+                Add a payout wallet first
+              </p>
+              <p className="mt-1 text-muted-foreground">
+                Winnings are sent to your Pi wallet. Save your wallet address in your
+                profile before buying.
+              </p>
+              <Link
+                href="/profile"
+                onClick={onClose}
+                className="mt-2 inline-block font-semibold text-primary underline"
+              >
+                Go to profile →
               </Link>
             </div>
           )}

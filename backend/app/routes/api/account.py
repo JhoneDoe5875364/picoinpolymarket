@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
 
 from app.core.logger import get_logger
@@ -9,6 +9,32 @@ from app.repositories import account as account_repo
 logger = get_logger()
 
 router = APIRouter(prefix="/account", tags=["account"])
+
+
+@router.post("/wallet")
+async def set_wallet(request: Request, db: DbSession, user=Depends(verify_token)):
+    """Save the user's payout wallet address (they enter it themselves)."""
+    user_id = user.get("sub", "")
+    try:
+        data = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    try:
+        wallet_address = account_repo.normalize_wallet_address(
+            (data or {}).get("wallet_address")
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    try:
+        row = await account_repo.set_wallet_address(
+            db, user_id=str(user_id), wallet_address=wallet_address
+        )
+    except LookupError:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return {"ok": True, "wallet_address": row["wallet_address"]}
 
 
 @router.get("/info")

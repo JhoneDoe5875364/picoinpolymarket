@@ -21,6 +21,7 @@ import {
 import { format, isValid } from 'date-fns';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { apiFetchWithToken } from '@/lib/api';
 import { TRADE_COPY } from '@/lib/copy/trade';
@@ -390,6 +391,9 @@ export function ProfileOverview() {
   const [walletInfo, setWalletInfo] = useState<AccountWalletInfo | null>(null);
   const [walletLoading, setWalletLoading] = useState(false);
   const [walletError, setWalletError] = useState<string | null>(null);
+  const [walletInput, setWalletInput] = useState('');
+  const [walletSaving, setWalletSaving] = useState(false);
+  const [walletSaveError, setWalletSaveError] = useState<string | null>(null);
 
   const profileName = useMemo(() => {
     return (ppxUser?.username ?? 'Unknown User');
@@ -468,6 +472,36 @@ export function ProfileOverview() {
   const piUidDisplay = walletInfo?.pi_uid?.trim() || '—';
   const hasPayoutDestination = Boolean(walletInfo?.payout_destination?.trim());
   const payoutDisplay = formatWalletPreview(walletInfo?.payout_destination);
+
+  async function handleSaveWallet() {
+    const addr = walletInput.trim().toUpperCase();
+    if (!/^G[A-Z2-7]{55}$/.test(addr)) {
+      setWalletSaveError('Enter a valid Pi wallet address (starts with G, 56 characters).');
+      return;
+    }
+    setWalletSaving(true);
+    setWalletSaveError(null);
+    try {
+      const res = await apiFetchWithToken<{ ok?: boolean; wallet_address?: string }>(
+        '/account/wallet',
+        { method: 'POST', body: JSON.stringify({ wallet_address: addr }) }
+      );
+      if (res?.ok && res.wallet_address) {
+        setWalletInfo((prev) =>
+          prev
+            ? { ...prev, payout_destination: res.wallet_address ?? null }
+            : { payout_destination: res.wallet_address ?? null }
+        );
+        setWalletInput('');
+      } else {
+        setWalletSaveError('Could not save wallet address. Please try again.');
+      }
+    } catch (e) {
+      setWalletSaveError(e instanceof Error ? e.message : 'Could not save wallet address.');
+    } finally {
+      setWalletSaving(false);
+    }
+  }
 
   const joinedLabel = formatJoinedDate(walletInfo?.created_at);
 
@@ -556,115 +590,62 @@ export function ProfileOverview() {
             </div>
           </div>
 
-          {/*
-            DISABLED — Wallet card and Send/Receive Pi buttons.
-
-            Why: PredictPix never custodies Pi. Predictions are paid straight from
-            the user's Pi Wallet at trade time (the `payments` scope is requested
-            per payment; no address is ever stored). Showing a wallet balance card
-            with Send/Receive controls implied a custodial service and created
-            legal/regulatory exposure without providing any function:
-
-              - `Send Pi` / `Receive Pi` had no onClick — both were inert.
-              - `Payout destination` reads `leaderboards.wallet_address`, but no
-                code anywhere writes that column (the leaderboard updater sets it
-                to None), so it can never be populated.
-              - `Last verified` displayed `users.updated_at`, not a Pi verification
-                timestamp — a mislabelled value.
-
-            Restore this block only after real wallet linking exists: the login flow
-            must capture a wallet address and `leaderboards.wallet_address` must be
-            written. See docs/feedbacks/20260621_UX_Product_Feedback_Analysis.ko.md (#11).
-
           {ppxUser?.id ? (
             <div className="rounded-lg border border-border/60 bg-muted/15 px-3 py-3">
               <div className="flex items-center gap-2">
                 <Wallet className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Wallet</p>
-              </div>
-              {walletLoading ? (
-                <div className="mt-3 h-16 animate-pulse rounded-md bg-muted/40" />
-              ) : walletError ? (
-                <p className="mt-2 text-xs text-destructive">{walletError}</p>
-              ) : (
-                <dl className="mt-3 grid gap-2 text-sm">
-                  <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                    <dt className="text-muted-foreground">Pi username</dt>
-                    <dd className="max-w-[min(100%,14rem)] truncate text-right font-medium">
-                      {piUsernameDisplay}
-                    </dd>
-                  </div>
-                  <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                    <dt className="text-muted-foreground shrink-0">Pi user ID</dt>
-                    <dd
-                      className="max-w-[min(100%,14rem)] truncate text-right font-mono text-xs text-muted-foreground"
-                      title={piUidDisplay !== '—' ? piUidDisplay : undefined}
-                    >
-                      {piUidDisplay}
-                    </dd>
-                  </div>
-                  <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                    <dt className="text-muted-foreground shrink-0">Payout destination</dt>
-                    <dd
-                      className={cn(
-                        "max-w-[min(100%,14rem)] truncate text-right text-xs",
-                        hasPayoutDestination
-                          ? "font-mono font-medium"
-                          : "italic text-muted-foreground"
-                      )}
-                      title={
-                        hasPayoutDestination
-                          ? walletInfo?.payout_destination?.trim()
-                          : undefined
-                      }
-                    >
-                      {hasPayoutDestination ? payoutDisplay : "Not linked yet"}
-                    </dd>
-                  </div>
-                  <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                    <dt className="text-muted-foreground shrink-0">Last verified</dt>
-                    <dd className="text-right text-xs text-muted-foreground">
-                      {formatVerifiedTimestamp(walletInfo?.last_pi_verified_at)}
-                    </dd>
-                  </div>
-                </dl>
-              )}
-              {!walletLoading && !walletError ? (
-                <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-                  Your payout destination is the mainnet address linked to your account. It appears
-                  here once you complete Pi Browser authentication, which also updates
-                  Last verified.
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Payout wallet
                 </p>
-              ) : null}
+              </div>
+
+              {walletLoading ? (
+                <div className="mt-3 h-12 animate-pulse rounded-md bg-muted/40" />
+              ) : hasPayoutDestination ? (
+                <div className="mt-3 space-y-2">
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                    <dt className="text-sm text-muted-foreground shrink-0">Linked address</dt>
+                    <dd
+                      className="max-w-[min(100%,14rem)] truncate text-right font-mono text-xs font-medium"
+                      title={walletInfo?.payout_destination?.trim() ?? undefined}
+                    >
+                      {payoutDisplay}
+                    </dd>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Winnings are sent here. Update it below if your wallet changes.
+                  </p>
+                </div>
+              ) : (
+                <p className="mt-2 text-xs font-medium text-amber-600 dark:text-amber-400">
+                  Add your Pi wallet address so payouts can reach you.
+                </p>
+              )}
+
+              <div className="mt-3 space-y-2">
+                <Input
+                  value={walletInput}
+                  onChange={(e) => setWalletInput(e.target.value)}
+                  placeholder={hasPayoutDestination ? 'Update wallet address (G...)' : 'Your Pi wallet address (G...)'}
+                  spellCheck={false}
+                  autoCapitalize="characters"
+                  className="font-mono text-xs"
+                />
+                {walletSaveError ? (
+                  <p className="text-xs text-destructive">{walletSaveError}</p>
+                ) : null}
+                <Button
+                  type="button"
+                  size="sm"
+                  className="w-full"
+                  disabled={walletSaving || !walletInput.trim()}
+                  onClick={handleSaveWallet}
+                >
+                  {walletSaving ? 'Saving…' : hasPayoutDestination ? 'Update wallet' : 'Save wallet'}
+                </Button>
+              </div>
             </div>
           ) : null}
-
-          <TooltipProvider delayDuration={300}>
-            <div className="grid grid-cols-2 gap-2">
-              <Button className="w-full">
-                <ArrowDownToLine className="mr-2 h-4 w-4" />
-                Send Pi
-              </Button>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span tabIndex={0} className="w-full">
-                    <Button
-                      variant="outline"
-                      className="w-full text-muted-foreground"
-                      disabled
-                    >
-                      <ArrowUpFromLine className="mr-2 h-4 w-4" />
-                      Receive Pi
-                    </Button>
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">
-                  Receiving Pi is not available yet — payouts are sent to your linked Pi wallet.
-                </TooltipContent>
-              </Tooltip>
-            </div>
-          </TooltipProvider>
-          */}
 
           <div className="flex items-start gap-2.5 rounded-lg border border-border/60 bg-muted/15 px-3 py-3">
             <Wallet className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />

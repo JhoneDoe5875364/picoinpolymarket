@@ -30,5 +30,8 @@ class User(Base):
     )
     referral_code: Mapped[Optional[str]] = mapped_column(String)
     referred_by: Mapped[Optional[str]] = mapped_column(String)
+    # Payout destination the user enters themselves; Pi login never provides it.
+    wallet_address: Mapped[Optional[str]] = mapped_column(String)
+    wallet_updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))

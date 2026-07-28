@@ -515,8 +515,8 @@ async def metrics(session: AsyncSession) -> dict[str, Any]:
 
 def _wallet_present_expr():
     return and_(
-        Leaderboard.wallet_address.isnot(None),
-        func.trim(Leaderboard.wallet_address) != "",
+        User.wallet_address.isnot(None),
+        func.trim(User.wallet_address) != "",
     )
 
 
@@ -554,19 +554,14 @@ async def payment_operations_overview(session: AsyncSession) -> dict[str, Any]:
     )
     mismatch_count = int(await session.scalar(mismatch_stmt) or 0)
 
-    wallet_connected_stmt = select(func.count(func.distinct(Leaderboard.user_id))).where(
+    wallet_connected_stmt = select(func.count()).select_from(User).where(
         _wallet_present_expr()
     )
     wallet_connected = int(await session.scalar(wallet_connected_stmt) or 0)
 
     wallet_missing_stmt = select(func.count()).select_from(User).where(
         User.role_id == 3,
-        ~exists(
-            select(Leaderboard.user_id).where(
-                Leaderboard.user_id == User.id,
-                _wallet_present_expr(),
-            )
-        ),
+        ~_wallet_present_expr(),
     )
     wallet_missing = int(await session.scalar(wallet_missing_stmt) or 0)
 
@@ -597,7 +592,7 @@ async def payment_operations_overview(session: AsyncSession) -> dict[str, Any]:
         },
         "wallet_address_connected_users": wallet_connected,
         "wallet_address_missing_users": wallet_missing,
-        "wallet_scope_note": "Based on distinct users with a non-empty wallet on any leaderboard row.",
+        "wallet_scope_note": "Based on users who have saved a payout wallet address.",
         "payment_mismatch_warnings": {
             "count": mismatch_count,
             "scope_note": "Payment.amount differs from orders.pi_amount for the linked order.",
@@ -662,14 +657,15 @@ async def list_admin_payments(
 
 
 def _user_wallet_subquery():
+    # Payout destination lives on users (set by the user), not leaderboards
+    # (which the updater rebuilds with NULL).
     return (
-        select(Leaderboard.wallet_address)
+        select(User.wallet_address)
         .where(
-            Leaderboard.user_id == MarketPosition.user_id,
-            Leaderboard.wallet_address.isnot(None),
-            func.trim(Leaderboard.wallet_address) != "",
+            User.id == MarketPosition.user_id,
+            User.wallet_address.isnot(None),
+            func.trim(User.wallet_address) != "",
         )
-        .order_by(Leaderboard.updated_at.desc().nullslast())
         .limit(1)
         .scalar_subquery()
     )
