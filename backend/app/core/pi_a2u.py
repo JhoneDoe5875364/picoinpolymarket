@@ -65,9 +65,14 @@ def _send_sync(*, amount: float, uid: str, memo: str, metadata: dict[str, Any]) 
 
     payment_id = pi.create_payment(payment_data)
     if not payment_id:
-        # create_payment returns "" on insufficient balance or API error.
+        # create_payment returns "" for several reasons; the most common are the
+        # recipient not having authorized the wallet_address scope at login, an
+        # insufficient app-wallet balance, or a Pi API error. See server log line
+        # "HTTP-Response Data" just above for the exact reason.
         raise A2UError(
-            "create_payment failed (insufficient app-wallet balance or Pi API error)"
+            "create_payment failed. Common causes: the winner did not grant the "
+            "'wallet_address' scope (must re-login), insufficient app-wallet "
+            "balance, or a Pi API error. Check the HTTP-Response Data log line."
         )
 
     txid = pi.submit_payment(payment_id, False)

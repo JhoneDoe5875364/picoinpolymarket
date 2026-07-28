@@ -75,7 +75,9 @@ export default function LoginWithPi() {
 
       setLoading(true);
 
-      const scopes = ["username", "payments"];
+      // wallet_address lets A2U payouts reach this user by uid — without it Pi
+      // refuses ("User hasn't authorized wallet_address scope").
+      const scopes = ["username", "payments", "wallet_address"];
       // Buffered: this fires inside authenticate(), before we hold the Pi access
       // token that /pi/payments/incomplete authenticates against.
       let danglingPayment: any;

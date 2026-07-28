@@ -68,7 +68,9 @@ export async function executeBuyTrade({
 
   onStageChange?.("preparing_payment");
 
-  const scopes = ["payments"];
+  // Keep scopes consistent with login so the wallet_address grant (needed for
+  // A2U payouts) is not narrowed on re-auth.
+  const scopes = ["payments", "wallet_address"];
   // Buffered because the callback fires inside authenticate(), before we hold the
   // Pi access token that /pi/payments/incomplete authenticates against.
   let danglingPayment: unknown;
