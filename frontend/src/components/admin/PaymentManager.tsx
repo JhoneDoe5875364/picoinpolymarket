@@ -80,6 +80,8 @@ type AdminPaymentRow = {
   user_id: number;
   pi_username: string | null;
   order_id: number;
+  market_id: number | null;
+  market_question: string | null;
   amount: number;
   order_pi_amount: number;
   status: string;
@@ -719,6 +721,7 @@ export function PaymentManager() {
             <TableRow>
               <TableHead className="text-xs">User</TableHead>
               <TableHead className="text-xs">Order</TableHead>
+              <TableHead className="text-xs">Market</TableHead>
               <TableHead className="text-xs">Amounts</TableHead>
               <TableHead className="text-xs">Status</TableHead>
               <TableHead className="text-xs">Pi payment</TableHead>
@@ -728,7 +731,7 @@ export function PaymentManager() {
           <TableBody>
             {filteredRows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-xs text-muted-foreground">
+                <TableCell colSpan={7} className="text-xs text-muted-foreground">
                   {loading ? "Loading…" : "No payment rows for this filter."}
                 </TableCell>
               </TableRow>
@@ -739,6 +742,12 @@ export function PaymentManager() {
                     {r.pi_username ?? `User ${r.user_id}`}
                   </TableCell>
                   <TableCell className="font-mono text-xs">{r.order_id}</TableCell>
+                  <TableCell
+                    className="max-w-[180px] truncate text-xs"
+                    title={r.market_question || undefined}
+                  >
+                    {r.market_question || "—"}
+                  </TableCell>
                   <TableCell className="text-xs">
                     <span className="tabular-nums">{roundLocale(r.amount)} π</span>
                     <span className="text-muted-foreground"> / order </span>

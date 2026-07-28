@@ -9,6 +9,7 @@ import Link from "next/link";
 import { PredictPixLogo } from "@/components/PredictPixLogo";
 
 import AppHeader from "./AppHeader";
+import { WalletReminderBanner } from "@/components/WalletReminderBanner";
 import { usePathname } from "next/navigation";
 import { MobileBottomNav } from "@/components/MobileBottomNav";
 import { cn } from "@/lib/utils";
@@ -72,6 +73,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <>
       {!hideHeaderFooter && <AppHeader currentUser={currentUser} />}
+      {!hideHeaderFooter && <WalletReminderBanner />}
       <main
         id="content"
         className={cn("min-h-[60vh] md:pb-0", showMobileBottomNav ? "pb-20" : "pb-0")}

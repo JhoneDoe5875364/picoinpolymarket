@@ -68,6 +68,15 @@ async def create_order(
         if not market:
             raise HTTPException(status_code=404, detail="Market not found")
 
+        # Only open markets accept trades. A closed/pending/resolved market must
+        # not be buyable — otherwise users could bet after the outcome is known.
+        market_status = await orders_repo.get_market_status(db, payload.market_id)
+        if market_status != "open":
+            raise HTTPException(
+                status_code=400,
+                detail="This market is closed and no longer accepts predictions.",
+            )
+
         breakdown = compute_trade_breakdown(payload.price, payload.size)
         validate_breakdown_fields(
             amount=payload.amount,

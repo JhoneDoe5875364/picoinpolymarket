@@ -94,6 +94,12 @@ export function PredictionPanel({
   const [needsWallet, setNeedsWallet] = useState(false);
   const yesPrice = market?.outcome_price_yes ?? 0.5;
   const noPrice = market?.outcome_price_no ?? 0.5;
+  // A market only takes predictions while open. Once it closes/resolves, buying
+  // must be blocked — the backend enforces this too.
+  const isMarketOpen =
+    !market?.is_resolved &&
+    !market?.is_closed &&
+    (market?.status === undefined || market?.status === "open");
 
   const selectedPrice = useMemo(
     () => (outcome === "YES" ? yesPrice : noPrice),
@@ -125,6 +131,14 @@ export function PredictionPanel({
   };
 
   const handlePay = async () => {
+    if (!isMarketOpen) {
+      toast({
+        title: "Market closed",
+        description: "This market no longer accepts predictions.",
+        variant: "destructive",
+      });
+      return;
+    }
     if (!ppxUser) {
       toast({
         title: "Please log in",
@@ -351,16 +365,26 @@ export function PredictionPanel({
             </div>
           )}
 
+          {!isMarketOpen && (
+            <div className="rounded-md border border-border/60 bg-muted/30 p-3 text-center text-sm text-muted-foreground">
+              This market is closed and no longer accepts predictions.
+            </div>
+          )}
+
           <Button
             onClick={handlePay}
             className={cn(
               "w-full text-lg font-bold tracking-wider",
               "bg-primary text-primary-foreground hover:bg-primary/90 shadow-none"
             )}
-            disabled={busy}
+            disabled={busy || !isMarketOpen}
           >
             {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {busy ? TRADE_COPY.placingPrediction : TRADE_COPY.placePrediction}
+            {!isMarketOpen
+              ? "Market closed"
+              : busy
+                ? TRADE_COPY.placingPrediction
+                : TRADE_COPY.placePrediction}
           </Button>
         </div>
       </CardContent>

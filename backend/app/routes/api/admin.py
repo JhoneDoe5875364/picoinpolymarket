@@ -727,6 +727,9 @@ async def auto_pay_payout_queue(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    # The read above autobegins a transaction; close it so the explicit
+    # db.begin() in step 3 does not raise "already begun".
+    await db.rollback()
 
     # 2) Send Pi on-chain. Do NOT hold a DB transaction across this network call.
     try:

@@ -7,8 +7,18 @@ from typing import Any, List, Literal, Optional, Tuple
 from sqlalchemy import func, insert, inspect as sa_inspect, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.tables.market import Market
 from app.models.tables.order import Order
 from app.repositories.markets import get_market_token
+
+
+async def get_market_status(session: AsyncSession, market_id: int) -> Optional[str]:
+    """Return the market's status ('open', 'pending', 'resolved', ...) or None."""
+    result = await session.execute(
+        select(Market.status).where(Market.id == market_id)
+    )
+    return result.scalar_one_or_none()
+
 
 _ORDER_COLUMNS: dict[str, Any] = {
     "created_at": Order.created_at,

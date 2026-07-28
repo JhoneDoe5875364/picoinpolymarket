@@ -619,6 +619,8 @@ async def list_admin_payments(
             Payment.user_id,
             User.pi_username,
             Payment.order_id,
+            Order.market_id,
+            Market.question.label("market_question"),
             Payment.amount,
             Order.pi_amount.label("order_pi_amount"),
             Payment.status,
@@ -629,6 +631,7 @@ async def list_admin_payments(
         )
         .join(User, User.id == Payment.user_id)
         .join(Order, Order.id == Payment.order_id)
+        .outerjoin(Market, Market.id == Order.market_id)
     )
     if status != "ALL":
         base = base.where(Payment.status == status)
