@@ -6,8 +6,10 @@ import {
   AlertTriangle,
   ArrowDownToLine,
   ArrowUpFromLine,
+  Check,
   ClipboardList,
   Clock,
+  Copy,
   MoreHorizontal,
   Wallet,
   WalletCards,
@@ -111,6 +113,38 @@ const emptyOverview = (): PaymentOverview => ({
   wallet_address_missing_users: 0,
   payment_mismatch_warnings: { count: 0 },
 });
+
+/** Truncated address with a one-click copy button — the full value never fits. */
+function CopyableAddress({ value }: { value: string | null }) {
+  const [copied, setCopied] = useState(false);
+  if (!value) {
+    return <span className="text-muted-foreground">—</span>;
+  }
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard blocked; nothing to do */
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      title={value}
+      className="group inline-flex max-w-[160px] items-center gap-1 font-mono text-[11px] text-muted-foreground hover:text-foreground"
+    >
+      <span className="truncate">{value}</span>
+      {copied ? (
+        <Check className="h-3 w-3 shrink-0 text-green-600" />
+      ) : (
+        <Copy className="h-3 w-3 shrink-0 opacity-60 group-hover:opacity-100" />
+      )}
+    </button>
+  );
+}
 
 export function PaymentManager() {
   const { toast } = useToast();
@@ -529,8 +563,8 @@ export function PaymentManager() {
                   </TableCell>
                   <TableCell className="text-xs">{r.outcome}</TableCell>
                   <TableCell className="tabular-nums text-xs">{roundLocale(r.amount_owed)} π</TableCell>
-                  <TableCell className="max-w-[120px] truncate font-mono text-[11px] text-muted-foreground">
-                    {r.wallet_address ?? "—"}
+                  <TableCell>
+                    <CopyableAddress value={r.wallet_address} />
                   </TableCell>
                   <TableCell className="text-xs">
                     <Badge
@@ -544,8 +578,8 @@ export function PaymentManager() {
                       {r.payment_status}
                     </Badge>
                   </TableCell>
-                  <TableCell className="font-mono text-[11px] text-muted-foreground">
-                    {r.txid ?? "—"}
+                  <TableCell>
+                    <CopyableAddress value={r.txid} />
                   </TableCell>
                   <TableCell className="text-xs">
                     <DropdownMenu>
