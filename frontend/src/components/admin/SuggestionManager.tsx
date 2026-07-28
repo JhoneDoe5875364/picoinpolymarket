@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Ban, CheckCircle2, Clock, Layers3, Pencil } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { DataPagination } from "@/components/ui/data-pagination";
 import { useToast } from "@/hooks/use-toast";
 import type { Suggestion } from "@/lib/types";
 import { Badge } from "../ui/badge";
@@ -54,7 +55,7 @@ export function SuggestionManager() {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [limit] = useState(25);
+  const [limit, setLimit] = useState(20);
   const [loading, setLoading] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [summary, setSummary] = useState<SuggestionSummary>({
@@ -290,29 +291,17 @@ export function SuggestionManager() {
           </Table>
         ) : null}
 
-        {total > limit ? (
-          <div className="flex items-center justify-end gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-              disabled={page <= 1 || loading}
-            >
-              Prev
-            </Button>
-            <span className="text-xs text-muted-foreground">
-              Page {page} / {totalPages}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
-              disabled={page >= totalPages || loading}
-            >
-              Next
-            </Button>
-          </div>
-        ) : null}
+        <DataPagination
+          page={page}
+          pageSize={limit}
+          total={total}
+          disabled={loading}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => {
+            setLimit(size);
+            setPage(1);
+          }}
+        />
       </div>
     </section>
   );

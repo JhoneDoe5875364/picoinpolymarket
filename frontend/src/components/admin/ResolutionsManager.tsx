@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DataPagination } from "@/components/ui/data-pagination";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetchWithToken } from "@/lib/api";
@@ -33,7 +34,7 @@ export function ResolutionsManager() {
   const [rows, setRows] = useState<Row[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [limit] = useState(25);
+  const [limit, setLimit] = useState(20);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<string>("resolved_at");
   const [order, setOrder] = useState<"asc" | "desc">("desc");
@@ -182,16 +183,17 @@ export function ResolutionsManager() {
           </TableBody>
         </Table>
 
-        {total > limit && (
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setPage(Math.max(1, page - 1))} disabled={page <= 1}>
-              Prev
-            </Button>
-            <Button variant="outline" onClick={() => setPage(page + 1)} disabled={page * limit >= total}>
-              Next
-            </Button>
-          </div>
-        )}
+        <DataPagination
+          page={page}
+          pageSize={limit}
+          total={total}
+          disabled={loading}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => {
+            setLimit(size);
+            setPage(1);
+          }}
+        />
       </CardContent>
     </Card>
   );

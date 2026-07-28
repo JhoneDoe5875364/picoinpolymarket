@@ -7,6 +7,7 @@ import { PeriodButtonGroup, type PeriodButtonKey } from '@/components/PeriodButt
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DataPagination } from '@/components/ui/data-pagination';
 import {
   AlertTriangle,
   Clock,
@@ -72,7 +73,7 @@ export function UserManager() {
 
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
-  const [limit] = useState(20);
+  const [limit, setLimit] = useState(20);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<"pi_username" | "created_at" | "balance" | "status">("created_at");
   const [order, setOrder] = useState<"ASC" | "DESC">("DESC");
@@ -470,6 +471,17 @@ export function UserManager() {
               ))}
             </TableBody>
           </Table>
+          <DataPagination
+            page={Math.floor(offset / limit) + 1}
+            pageSize={limit}
+            total={total}
+            disabled={loading}
+            onPageChange={(p) => setOffset((p - 1) * limit)}
+            onPageSizeChange={(size) => {
+              setLimit(size);
+              setOffset(0);
+            }}
+          />
         </div>
       </section>
     </>

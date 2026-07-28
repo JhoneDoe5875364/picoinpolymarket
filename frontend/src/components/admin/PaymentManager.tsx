@@ -43,6 +43,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { DataPagination } from "@/components/ui/data-pagination";
 
 type PaymentOverview = {
   user_to_app_payments_received: { count: number; total_pi: number };
@@ -148,6 +155,25 @@ function CopyableAddress({ value }: { value: string | null }) {
   );
 }
 
+/** Market name truncated in the cell, full text on hover (question can be long). */
+function MarketCell({ question }: { question: string | null }) {
+  if (!question) {
+    return <span className="text-xs text-muted-foreground">—</span>;
+  }
+  return (
+    <TooltipProvider delayDuration={200}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="block max-w-[200px] truncate text-xs">{question}</span>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="max-w-xs">
+          {question}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
 export function PaymentManager() {
   const { toast } = useToast();
   const [overview, setOverview] = useState<PaymentOverview>(emptyOverview);
@@ -156,7 +182,7 @@ export function PaymentManager() {
   const [rows, setRows] = useState<AdminPaymentRow[]>([]);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
-  const [limit] = useState(20);
+  const [limit, setLimit] = useState(20);
   const [statusFilter, setStatusFilter] = useState<
     "ALL" | "PENDING" | "APPROVED" | "COMPLETED" | "FAILED" | "CANCELLED"
   >("ALL");
@@ -166,7 +192,7 @@ export function PaymentManager() {
   const [payoutRows, setPayoutRows] = useState<PayoutQueueRow[]>([]);
   const [payoutTotal, setPayoutTotal] = useState(0);
   const [payoutOffset, setPayoutOffset] = useState(0);
-  const [payoutLimit] = useState(25);
+  const [payoutLimit, setPayoutLimit] = useState(20);
   const [payoutStatus, setPayoutStatus] = useState<"pending" | "paid" | "ALL">("pending");
   const [payoutLoading, setPayoutLoading] = useState(false);
   const [payoutActionId, setPayoutActionId] = useState<number | null>(null);
@@ -590,8 +616,8 @@ export function PaymentManager() {
                   <TableCell className="text-xs font-medium">
                     {r.pi_username ?? `User ${r.user_id}`}
                   </TableCell>
-                  <TableCell className="max-w-[200px] truncate text-xs" title={r.market_question}>
-                    {r.market_question}
+                  <TableCell>
+                    <MarketCell question={r.market_question} />
                   </TableCell>
                   <TableCell className="text-xs">{r.outcome}</TableCell>
                   <TableCell className="tabular-nums text-xs">{roundLocale(r.amount_owed)} π</TableCell>
@@ -652,30 +678,17 @@ export function PaymentManager() {
             )}
           </TableBody>
         </Table>
-        {payoutTotal > payoutLimit ? (
-          <div className="flex items-center justify-end gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-8 text-xs"
-              disabled={payoutOffset === 0 || payoutLoading}
-              onClick={() => setPayoutOffset(Math.max(0, payoutOffset - payoutLimit))}
-            >
-              Previous
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-8 text-xs"
-              disabled={payoutOffset + payoutLimit >= payoutTotal || payoutLoading}
-              onClick={() => setPayoutOffset(payoutOffset + payoutLimit)}
-            >
-              Next
-            </Button>
-          </div>
-        ) : null}
+        <DataPagination
+          page={Math.floor(payoutOffset / payoutLimit) + 1}
+          pageSize={payoutLimit}
+          total={payoutTotal}
+          disabled={payoutLoading}
+          onPageChange={(p) => setPayoutOffset((p - 1) * payoutLimit)}
+          onPageSizeChange={(size) => {
+            setPayoutLimit(size);
+            setPayoutOffset(0);
+          }}
+        />
       </div>
 
       <div>
@@ -720,7 +733,6 @@ export function PaymentManager() {
           <TableHeader>
             <TableRow>
               <TableHead className="text-xs">User</TableHead>
-              <TableHead className="text-xs">Order</TableHead>
               <TableHead className="text-xs">Market</TableHead>
               <TableHead className="text-xs">Amounts</TableHead>
               <TableHead className="text-xs">Status</TableHead>
@@ -731,7 +743,7 @@ export function PaymentManager() {
           <TableBody>
             {filteredRows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-xs text-muted-foreground">
+                <TableCell colSpan={6} className="text-xs text-muted-foreground">
                   {loading ? "Loading…" : "No payment rows for this filter."}
                 </TableCell>
               </TableRow>
@@ -741,12 +753,8 @@ export function PaymentManager() {
                   <TableCell className="text-xs font-medium">
                     {r.pi_username ?? `User ${r.user_id}`}
                   </TableCell>
-                  <TableCell className="font-mono text-xs">{r.order_id}</TableCell>
-                  <TableCell
-                    className="max-w-[180px] truncate text-xs"
-                    title={r.market_question || undefined}
-                  >
-                    {r.market_question || "—"}
+                  <TableCell>
+                    <MarketCell question={r.market_question} />
                   </TableCell>
                   <TableCell className="text-xs">
                     <span className="tabular-nums">{roundLocale(r.amount)} π</span>
@@ -771,30 +779,17 @@ export function PaymentManager() {
           </TableBody>
         </Table>
 
-        {total > limit ? (
-          <div className="mt-2 flex items-center justify-end gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-8 text-xs"
-              disabled={offset === 0 || loading}
-              onClick={() => setOffset(Math.max(0, offset - limit))}
-            >
-              Previous
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-8 text-xs"
-              disabled={offset + limit >= total || loading}
-              onClick={() => setOffset(offset + limit)}
-            >
-              Next
-            </Button>
-          </div>
-        ) : null}
+        <DataPagination
+          page={Math.floor(offset / limit) + 1}
+          pageSize={limit}
+          total={total}
+          disabled={loading}
+          onPageChange={(p) => setOffset((p - 1) * limit)}
+          onPageSizeChange={(size) => {
+            setLimit(size);
+            setOffset(0);
+          }}
+        />
       </div>
     </section>
   );

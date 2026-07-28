@@ -7,6 +7,7 @@ import { apiFetchWithToken } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DataPagination } from "@/components/ui/data-pagination";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -82,7 +83,7 @@ export function AuditLogManager() {
   const [rows, setRows] = useState<AuditRow[]>([]);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
-  const [limit] = useState(50);
+  const [limit, setLimit] = useState(50);
   const [loading, setLoading] = useState(false);
   const [eventType, setEventType] = useState<string>("ALL");
   const [marketId, setMarketId] = useState("");
@@ -239,30 +240,17 @@ export function AuditLogManager() {
             </TableBody>
           </Table>
 
-          {total > limit ? (
-            <div className="flex items-center justify-end gap-2">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-8 text-xs"
-                disabled={offset === 0 || loading}
-                onClick={() => setOffset(Math.max(0, offset - limit))}
-              >
-                Previous
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-8 text-xs"
-                disabled={offset + limit >= total || loading}
-                onClick={() => setOffset(offset + limit)}
-              >
-                Next
-              </Button>
-            </div>
-          ) : null}
+          <DataPagination
+            page={Math.floor(offset / limit) + 1}
+            pageSize={limit}
+            total={total}
+            disabled={loading}
+            onPageChange={(p) => setOffset((p - 1) * limit)}
+            onPageSizeChange={(size) => {
+              setLimit(size);
+              setOffset(0);
+            }}
+          />
         </TabsContent>
       </Tabs>
 
