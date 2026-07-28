@@ -14,3 +14,5 @@ alembic>=1.14.0
 PyJWT
 requests
 pytz
+# A2U payouts: the vendored pi_python (app/core/vendor) needs stellar-sdk.
+stellar-sdk>=12,<16

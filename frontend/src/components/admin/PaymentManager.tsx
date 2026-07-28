@@ -294,6 +294,36 @@ export function PaymentManager() {
     }
   }
 
+  async function autoPayPayout(positionId: number) {
+    if (
+      !window.confirm(
+        `Send this payout automatically from the app wallet?\n\nThis moves real Pi on-chain and cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    setPayoutActionId(positionId);
+    try {
+      const res = await apiFetchWithToken<{ ok?: boolean; data?: { payout_txid?: string } }>(
+        `/admin/payout-queue/${positionId}/auto-pay`,
+        { method: "POST" }
+      );
+      if (res.ok) {
+        toast({
+          title: "Payout sent",
+          description: `Position #${positionId} · txid ${res.data?.payout_txid ?? ""}`,
+        });
+        await loadPayoutQueue();
+        await loadOverview();
+      }
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Unknown error";
+      toast({ title: "Auto-pay failed", description: message, variant: "destructive" });
+    } finally {
+      setPayoutActionId(null);
+    }
+  }
+
   async function flagPayoutReview(positionId: number) {
     const reason =
       typeof window !== "undefined"
@@ -596,9 +626,17 @@ export function PaymentManager() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         {r.payment_status !== "paid" ? (
-                          <DropdownMenuItem onClick={() => void markPayoutPaid(r.position_id)}>
-                            Mark paid
-                          </DropdownMenuItem>
+                          <>
+                            <DropdownMenuItem
+                              onClick={() => void autoPayPayout(r.position_id)}
+                              className="font-medium text-primary"
+                            >
+                              Auto-pay (send Pi)
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => void markPayoutPaid(r.position_id)}>
+                              Mark paid (manual)
+                            </DropdownMenuItem>
+                          </>
                         ) : null}
                         <DropdownMenuItem onClick={() => void flagPayoutReview(r.position_id)}>
                           Flag for review

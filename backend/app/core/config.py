@@ -17,3 +17,15 @@ class Config:
 
     # Tolerance, in Pi, when comparing a Pi-reported amount to our computed total.
     PAYMENT_AMOUNT_TOLERANCE = "0.0001"
+
+    # ---- A2U (app-to-user) automatic payouts ----
+    # Secret seed (starts with "S") of the app wallet that SENDS payouts. This is
+    # highly sensitive: anyone with it controls the wallet. Auto-pay stays OFF
+    # unless this is set. Leave empty to force manual payouts only.
+    PI_APP_WALLET_SECRET_SEED = (os.getenv("PI_APP_WALLET_SECRET_SEED") or "").strip()
+    # "Pi Network" (mainnet) or "Pi Testnet". Must match the wallet's network.
+    PI_NETWORK = (os.getenv("PI_NETWORK") or "Pi Testnet").strip()
+
+    @classmethod
+    def a2u_enabled(cls) -> bool:
+        return bool(cls.PI_APP_WALLET_SECRET_SEED)

@@ -11,7 +11,9 @@ import pytz
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from fastapi.encoders import jsonable_encoder
 
+from app.core import pi_a2u
 from app.core.admin_audit import log_admin_action
+from app.core.config import Config
 from app.core.logger import get_logger
 from app.core.security import require_superadmin, verify_token
 from app.db.deps import DbSession
@@ -693,6 +695,81 @@ async def mark_payout_queue_paid(
         raise HTTPException(status_code=500, detail="Failed to mark payout paid") from exc
 
     return {"ok": True, "data": jsonable_encoder(row)}
+
+
+@router.post("/payout-queue/{position_id}/auto-pay")
+async def auto_pay_payout_queue(
+    request: Request,
+    db: DbSession,
+    position_id: int = Path(..., ge=1),
+    user=Depends(verify_token),
+):
+    """Send the payout automatically (A2U), record the txid, and mark it paid.
+
+    Order matters: we send Pi FIRST (outside any DB transaction), then record the
+    result. If the send fails, nothing is marked paid. If the DB write fails after
+    a successful send, the txid is in the logs for manual reconciliation.
+    """
+    role = user.get("role", "")
+    if role != "superadmin":
+        raise HTTPException(status_code=403, detail="HasNotSuperadminRole")
+
+    if not Config.a2u_enabled():
+        raise HTTPException(
+            status_code=503,
+            detail="Auto-pay is disabled. Set PI_APP_WALLET_SECRET_SEED to enable it.",
+        )
+
+    # 1) Resolve recipient + amount and re-check it is an unpaid winning payout.
+    try:
+        target = await admin_repo.get_payout_target(db, position_id=position_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    # 2) Send Pi on-chain. Do NOT hold a DB transaction across this network call.
+    try:
+        txid = await pi_a2u.send_payout(
+            amount=target["amount_owed"],
+            uid=target["pi_uid"],
+            memo="PredictPix payout",
+            metadata={"position_id": position_id},
+        )
+    except pi_a2u.A2UError as exc:
+        logger.error("[AUTO-PAY] send failed for position %s: %s", position_id, exc)
+        raise HTTPException(status_code=502, detail=f"Payout send failed: {exc}") from exc
+
+    # 3) Record the txid and mark paid. Send already succeeded here.
+    try:
+        async with db.begin():
+            row = await admin_repo.mark_payout_paid(
+                db, position_id=position_id, txid=txid
+            )
+            await log_admin_action(
+                db,
+                request=request,
+                admin_user=user,
+                action_type="payout_auto_paid",
+                detail=(
+                    f"Auto-paid position #{position_id}, "
+                    f"user {target.get('pi_username') or target['user_id']}, "
+                    f"{target['amount_owed']} π, txid {txid}"
+                ),
+                category_key=f"position:{position_id}",
+            )
+    except Exception as exc:
+        # The Pi was already sent; surface txid so an admin can reconcile.
+        logger.error(
+            "[AUTO-PAY] SENT but DB update failed. position=%s txid=%s err=%s",
+            position_id, txid, exc,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Payout was SENT (txid {txid}) but recording it failed. Reconcile manually.",
+        ) from exc
+
+    return {"ok": True, "data": jsonable_encoder({**row, "payout_txid": txid})}
 
 
 @router.post("/payout-queue/{position_id}/flag")

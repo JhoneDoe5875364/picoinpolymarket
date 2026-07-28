@@ -27,6 +27,7 @@ class MarketPosition(Base):
     avg_price: Mapped[Decimal] = mapped_column(Numeric(24, 4), nullable=False)
     final_price: Mapped[Optional[Decimal]] = mapped_column(Numeric(24, 4))
     is_claimed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    payout_txid: Mapped[Optional[str]] = mapped_column(String)
     is_closed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))

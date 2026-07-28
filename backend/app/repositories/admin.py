@@ -730,8 +730,9 @@ async def mark_payout_paid(
     session: AsyncSession,
     *,
     position_id: int,
+    txid: str | None = None,
 ) -> dict[str, Any]:
-    """Mark a winning position as claimed (manual payout completed)."""
+    """Mark a winning position as claimed (manual or auto payout completed)."""
     stmt = (
         select(
             MarketPosition.id,
@@ -758,10 +759,13 @@ async def mark_payout_paid(
         raise ValueError("Position is not a winning payout")
 
     now = datetime.now(timezone.utc)
+    values: dict[str, Any] = {"is_claimed": True, "updated_at": now}
+    if txid:
+        values["payout_txid"] = txid
     await session.execute(
         update(MarketPosition)
         .where(MarketPosition.id == position_id)
-        .values(is_claimed=True, updated_at=now)
+        .values(**values)
     )
     amount_owed = float(Decimal(str(row["shares"] or 0)) * Decimal(str(row["final_price"] or 0)))
     return {
@@ -773,6 +777,50 @@ async def mark_payout_paid(
         "outcome": row["outcome"],
         "amount_owed": amount_owed,
         "payment_status": "paid",
+    }
+
+
+async def get_payout_target(
+    session: AsyncSession, *, position_id: int
+) -> dict[str, Any]:
+    """Resolve a winning position to what A2U needs: recipient uid and amount.
+
+    Raises LookupError / ValueError so the route can reject before sending Pi.
+    """
+    stmt = (
+        select(
+            MarketPosition.id,
+            MarketPosition.user_id,
+            MarketPosition.shares,
+            MarketPosition.final_price,
+            MarketPosition.is_claimed,
+            User.pi_uid,
+            User.pi_username,
+        )
+        .join(User, User.id == MarketPosition.user_id)
+        .where(MarketPosition.id == position_id)
+        .limit(1)
+    )
+    row = (await session.execute(stmt)).mappings().first()
+    if row is None:
+        raise LookupError("Payout position not found")
+    if row["is_claimed"]:
+        raise ValueError("Payout already marked paid")
+    if row["final_price"] is None or Decimal(str(row["final_price"])) < Decimal("1"):
+        raise ValueError("Position is not a winning payout")
+    if not row["pi_uid"]:
+        raise ValueError("Winner has no linked Pi account")
+
+    amount_owed = float(Decimal(str(row["shares"] or 0)) * Decimal(str(row["final_price"] or 0)))
+    if amount_owed <= 0:
+        raise ValueError("Nothing owed on this position")
+
+    return {
+        "position_id": int(row["id"]),
+        "user_id": int(row["user_id"]),
+        "pi_uid": str(row["pi_uid"]),
+        "pi_username": row["pi_username"],
+        "amount_owed": amount_owed,
     }
 
 
