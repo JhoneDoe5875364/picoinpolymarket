@@ -656,21 +656,6 @@ async def list_admin_payments(
     return rows, total
 
 
-def _user_wallet_subquery():
-    # Payout destination lives on users (set by the user), not leaderboards
-    # (which the updater rebuilds with NULL).
-    return (
-        select(User.wallet_address)
-        .where(
-            User.id == MarketPosition.user_id,
-            User.wallet_address.isnot(None),
-            func.trim(User.wallet_address) != "",
-        )
-        .limit(1)
-        .scalar_subquery()
-    )
-
-
 async def list_payout_queue(
     session: AsyncSession,
     *,
@@ -698,7 +683,6 @@ async def list_payout_queue(
         base_filters.append(MarketPosition.is_claimed == True)
 
     amount_owed_expr = MarketPosition.shares * MarketPosition.final_price
-    wallet_expr = _user_wallet_subquery()
 
     count_stmt = (
         select(func.count())
@@ -718,7 +702,7 @@ async def list_payout_queue(
             Market.question.label("market_question"),
             MarketPosition.outcome,
             amount_owed_expr.label("amount_owed"),
-            wallet_expr.label("wallet_address"),
+            User.wallet_address.label("wallet_address"),
             MarketPosition.is_claimed,
             Market.resolved_at,
             MarketPosition.updated_at,

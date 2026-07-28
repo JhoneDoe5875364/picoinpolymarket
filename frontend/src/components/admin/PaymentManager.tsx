@@ -453,7 +453,7 @@ export function PaymentManager() {
           <p className="mt-2 text-md font-semibold">
             {overviewLoading ? "..." : roundLocale(overview.wallet_address_missing_users)}
           </p>
-          <p className="mt-1 text-[11px] text-muted-foreground">Members with no leaderboard wallet row</p>
+          <p className="mt-1 text-[11px] text-muted-foreground">Users who have not saved a payout wallet address</p>
         </div>
         <div className="rounded-lg border p-3">
           <div className="flex items-center justify-between">
