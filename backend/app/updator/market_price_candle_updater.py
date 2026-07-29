@@ -39,6 +39,8 @@ def _safe_volume(value: Decimal | None) -> Decimal:
 async def refresh_market_price_candles_once(
     session: AsyncSession,
     timestamp: datetime,
+    *,
+    commit: bool = False,
 ) -> None:
     ts_bucket = _floor_to_10m_epoch_seconds(timestamp)
 
@@ -95,6 +97,11 @@ async def refresh_market_price_candles_once(
         updated_count += 1
 
     await session.flush()
+    if commit:
+        # flush() alone never persists: it emits SQL inside the open transaction
+        # but nothing is durable until commit. Without this the periodic refresh
+        # silently produced no new candles (chart froze at the last commit).
+        await session.commit()
     logger.info(
         "Market price candle refresh complete (bucket=%s inserted=%s updated=%s)",
         ts_bucket,
@@ -120,20 +127,32 @@ async def refresh_market_price_candles_from_earliest_trade(
     while ts <= end:
         await refresh_market_price_candles_once(session, ts)
         ts += timedelta(seconds=_CANDLE_BUCKET_SECONDS)
+    await session.commit()
+
+
+async def _refresh_once_isolated(
+    session_maker: async_sessionmaker[AsyncSession],
+) -> None:
+    """One refresh in its own short-lived session, committed and closed.
+
+    A fresh session per cycle means a transient DB error can't poison every
+    later cycle (the old single-long-session design froze all candles once its
+    one transaction broke).
+    """
+    async with session_maker() as session:
+        try:
+            now = datetime.now(timezone.utc)
+            await refresh_market_price_candles_once(session, now, commit=True)
+        except Exception:
+            await session.rollback()
+            logger.exception("Failed to refresh market price candles")
 
 
 async def run_periodic_market_price_candle_refresh(
     session_maker: async_sessionmaker[AsyncSession],
     interval_seconds: int = MARKET_CANDLE_REFRESH_INTERVAL_SECONDS,
 ) -> None:
-    async with session_maker() as session:
-        try:
-            now = datetime.now(timezone.utc)
-            await refresh_market_price_candles_once(session, now)
-            while True:
-                await asyncio.sleep(interval_seconds)
-                now = datetime.now(timezone.utc)
-                await refresh_market_price_candles_once(session, now)
-        except Exception:
-            await session.rollback()
-            logger.exception("Failed to refresh market price candles")
+    await _refresh_once_isolated(session_maker)
+    while True:
+        await asyncio.sleep(interval_seconds)
+        await _refresh_once_isolated(session_maker)
