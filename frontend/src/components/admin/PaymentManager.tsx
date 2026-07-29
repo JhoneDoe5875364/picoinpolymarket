@@ -308,10 +308,27 @@ export function PaymentManager() {
   }
 
   async function markPayoutPaid(positionId: number) {
+    // A manual mark-paid records NO on-chain txid, so a mistaken click makes the
+    // winner un-payable. Require a note documenting how they were actually paid.
+    const note =
+      typeof window !== "undefined"
+        ? window.prompt(
+            "This only MARKS the payout as paid — it does NOT send Pi.\n" +
+              "Use it only if you paid the winner another way.\n\n" +
+              "Note (how/where you paid them):",
+            ""
+          )
+        : null;
+    if (note === null) return;
+    if (!note.trim()) {
+      toast({ title: "Note required", description: "Describe how the winner was paid.", variant: "destructive" });
+      return;
+    }
     setPayoutActionId(positionId);
     try {
       const res = await apiFetchWithToken(`/admin/payout-queue/${positionId}/mark-paid`, {
         method: "POST",
+        body: JSON.stringify({ note: note.trim() }),
       });
       if (res.ok) {
         toast({ title: "Payout marked paid", description: `Position #${positionId}` });
@@ -321,6 +338,36 @@ export function PaymentManager() {
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : "Unknown error";
       toast({ title: "Mark paid failed", description: message, variant: "destructive" });
+    } finally {
+      setPayoutActionId(null);
+    }
+  }
+
+  async function unclaimPayout(positionId: number) {
+    const reason =
+      typeof window !== "undefined"
+        ? window.prompt(
+            "Return this payout to the queue (reverse a mistaken mark-paid)?\n" +
+              "Real on-chain payouts (with a txid) cannot be reversed.\n\n" +
+              "Reason:",
+            "Reversed mistaken mark-paid"
+          )
+        : null;
+    if (reason === null) return;
+    setPayoutActionId(positionId);
+    try {
+      const res = await apiFetchWithToken(`/admin/payout-queue/${positionId}/unclaim`, {
+        method: "POST",
+        body: JSON.stringify({ reason: reason || undefined }),
+      });
+      if (res.ok) {
+        toast({ title: "Payout returned to queue", description: `Position #${positionId}` });
+        await loadPayoutQueue();
+        await loadOverview();
+      }
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Unknown error";
+      toast({ title: "Reverse failed", description: message, variant: "destructive" });
     } finally {
       setPayoutActionId(null);
     }
@@ -669,7 +716,14 @@ export function PaymentManager() {
                               Mark paid (manual)
                             </DropdownMenuItem>
                           </>
-                        ) : null}
+                        ) : (
+                          <DropdownMenuItem
+                            onClick={() => void unclaimPayout(r.position_id)}
+                            className="text-amber-600"
+                          >
+                            Return to queue (reverse)
+                          </DropdownMenuItem>
+                        )}
                         <DropdownMenuItem onClick={() => void flagPayoutReview(r.position_id)}>
                           Flag for review
                         </DropdownMenuItem>

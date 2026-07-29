@@ -671,9 +671,25 @@ async def mark_payout_queue_paid(
     position_id: int = Path(..., ge=1),
     user=Depends(verify_token),
 ):
+    """Record that a winner was paid OUTSIDE the app (manual/off-chain).
+
+    This does NOT send Pi — it only marks the claim. Because a mistaken use of
+    this endpoint makes a winner un-payable (drops them from the queue with no
+    txid), it now REQUIRES a note documenting how the payout was actually made.
+    For on-chain payouts, use /auto-pay instead, which records a real txid.
+    """
     role = user.get("role", "")
     if role != "superadmin":
         raise HTTPException(status_code=403, detail="HasNotSuperadminRole")
+
+    data = await request.json() if request.headers.get("content-length") else {}
+    note = _normalize_optional_text(data.get("note"))
+    if not note:
+        raise HTTPException(
+            status_code=400,
+            detail="A note is required (how/where the winner was actually paid). "
+            "Use auto-pay for on-chain payouts.",
+        )
 
     try:
         async with db.begin():
@@ -682,11 +698,11 @@ async def mark_payout_queue_paid(
                 db,
                 request=request,
                 admin_user=user,
-                action_type="payout_marked_paid",
+                action_type="payout_marked_paid_manual",
                 detail=(
-                    f"Marked payout paid: position #{position_id}, "
+                    f"Manually marked payout paid (no on-chain txid): position #{position_id}, "
                     f"user {row.get('pi_username') or row.get('user_id')}, "
-                    f"{row.get('amount_owed')} π on market #{row.get('market_id')}"
+                    f"{row.get('amount_owed')} π on market #{row.get('market_id')}. Note: {note}"
                 ),
                 category_key=f"market:{row.get('market_id')}",
             )
@@ -697,6 +713,52 @@ async def mark_payout_queue_paid(
     except Exception as exc:
         logger.error("Error marking payout %s paid: %s", position_id, exc)
         raise HTTPException(status_code=500, detail="Failed to mark payout paid") from exc
+
+    return {"ok": True, "data": jsonable_encoder(row)}
+
+
+@router.post("/payout-queue/{position_id}/unclaim")
+async def unclaim_payout_queue_item(
+    request: Request,
+    db: DbSession,
+    position_id: int = Path(..., ge=1),
+    user=Depends(verify_token),
+):
+    """Reverse a payout marked paid in error, returning it to the queue.
+
+    Refuses if the position carries a payout_txid — a real on-chain A2U payout
+    cannot be reversed. Only claims made without an on-chain transfer (a mistaken
+    manual mark-paid) can be cleared, so winners are recoverable.
+    """
+    role = user.get("role", "")
+    if role != "superadmin":
+        raise HTTPException(status_code=403, detail="HasNotSuperadminRole")
+
+    data = await request.json() if request.headers.get("content-length") else {}
+    reason = _normalize_optional_text(data.get("reason")) or "Reversed mistaken mark-paid"
+
+    try:
+        async with db.begin():
+            row = await admin_repo.mark_payout_unpaid(db, position_id=position_id)
+            await log_admin_action(
+                db,
+                request=request,
+                admin_user=user,
+                action_type="payout_unclaimed",
+                detail=(
+                    f"Reversed payout claim: position #{position_id}, "
+                    f"user {row.get('pi_username') or row.get('user_id')}, "
+                    f"{row.get('amount_owed')} π on market #{row.get('market_id')}. Reason: {reason}"
+                ),
+                category_key=f"market:{row.get('market_id')}",
+            )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.error("Error reversing payout %s: %s", position_id, exc)
+        raise HTTPException(status_code=500, detail="Failed to reverse payout") from exc
 
     return {"ok": True, "data": jsonable_encoder(row)}
 

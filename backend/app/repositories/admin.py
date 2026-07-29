@@ -807,6 +807,62 @@ async def mark_payout_paid(
     }
 
 
+async def mark_payout_unpaid(
+    session: AsyncSession,
+    *,
+    position_id: int,
+) -> dict[str, Any]:
+    """Reverse a claim that was marked paid in error, putting it back in the queue.
+
+    SAFETY: refuses to reverse a position that carries a payout_txid — a real
+    on-chain A2U payout cannot be un-done, so its claim must never be cleared.
+    Only claims made without an on-chain transfer (e.g. a mistaken manual
+    mark-paid) can be reversed.
+    """
+    stmt = (
+        select(
+            MarketPosition.id,
+            MarketPosition.user_id,
+            MarketPosition.market_id,
+            MarketPosition.shares,
+            MarketPosition.final_price,
+            MarketPosition.is_claimed,
+            MarketPosition.payout_txid,
+            Market.question,
+            User.pi_username,
+        )
+        .join(Market, Market.id == MarketPosition.market_id)
+        .join(User, User.id == MarketPosition.user_id)
+        .where(MarketPosition.id == position_id)
+        .limit(1)
+    )
+    row = (await session.execute(stmt)).mappings().first()
+    if row is None:
+        raise LookupError("Payout position not found")
+    if not row["is_claimed"]:
+        raise ValueError("Payout is not marked paid")
+    if row["payout_txid"]:
+        raise ValueError(
+            "This payout was sent on-chain (has a txid) and cannot be reversed."
+        )
+
+    await session.execute(
+        update(MarketPosition)
+        .where(MarketPosition.id == position_id)
+        .values(is_claimed=False, updated_at=datetime.now(timezone.utc))
+    )
+    amount_owed = float(Decimal(str(row["shares"] or 0)) * Decimal(str(row["final_price"] or 0)))
+    return {
+        "position_id": int(row["id"]),
+        "user_id": int(row["user_id"]),
+        "pi_username": row["pi_username"],
+        "market_id": int(row["market_id"]),
+        "market_question": row["question"],
+        "amount_owed": amount_owed,
+        "payment_status": "pending",
+    }
+
+
 async def get_payout_target(
     session: AsyncSession, *, position_id: int
 ) -> dict[str, Any]:
