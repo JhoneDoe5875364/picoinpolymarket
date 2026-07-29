@@ -57,6 +57,7 @@ type PaymentOverview = {
     count: number;
     total_pi: number;
     tracking_note?: string;
+    scope_note?: string;
   };
   pending_payouts: {
     count: number;
@@ -80,6 +81,10 @@ type PaymentOverview = {
     count: number;
     scope_note?: string;
   };
+  app_wallet?: {
+    balance: number | null;
+    address: string | null;
+  } | null;
 };
 
 type AdminPaymentRow = {
@@ -123,6 +128,7 @@ const emptyOverview = (): PaymentOverview => ({
   wallet_address_connected_users: 0,
   wallet_address_missing_users: 0,
   payment_mismatch_warnings: { count: 0 },
+  app_wallet: null,
 });
 
 /** Truncated address with a one-click copy button — the full value never fits. */
@@ -253,6 +259,15 @@ export function PaymentManager() {
             count: Number(d.payment_mismatch_warnings?.count ?? 0),
             scope_note: d.payment_mismatch_warnings?.scope_note,
           },
+          app_wallet: d.app_wallet
+            ? {
+                balance:
+                  d.app_wallet.balance === null || d.app_wallet.balance === undefined
+                    ? null
+                    : Number(d.app_wallet.balance),
+                address: d.app_wallet.address ?? null,
+              }
+            : null,
         });
       }
     } catch (e: unknown) {
@@ -609,6 +624,24 @@ export function PaymentManager() {
           <p className="mt-1 text-[11px] text-muted-foreground">
             {overview.payment_mismatch_warnings.scope_note ??
               "payments.amount vs orders.pi_amount"}
+          </p>
+        </div>
+        <div className="rounded-lg border p-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">App wallet balance</p>
+            <Wallet className="h-4 w-4 text-emerald-500" />
+          </div>
+          <p className="mt-2 text-md font-semibold">
+            {overviewLoading
+              ? "..."
+              : overview.app_wallet && overview.app_wallet.balance !== null
+                ? `${roundLocale(overview.app_wallet.balance)} π`
+                : "—"}
+          </p>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            {overview.app_wallet
+              ? "Funds every A2U payout. Top up before it runs low."
+              : "Auto-pay disabled or balance unavailable."}
           </p>
         </div>
       </div>

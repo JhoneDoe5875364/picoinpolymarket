@@ -87,6 +87,28 @@ def _send_sync(*, amount: float, uid: str, memo: str, metadata: dict[str, Any]) 
     return txid
 
 
+def _get_balance_sync() -> Optional[float]:
+    pi = _build_client()
+    bal = pi.get_balance()
+    return float(bal) if bal is not None else None
+
+
+async def get_app_wallet_balance() -> Optional[dict[str, Any]]:
+    """App-wallet Pi balance for the payout-funding monitor.
+
+    Returns {"balance": float, "address": str} or None if A2U is disabled or the
+    lookup fails — never raises, so a dashboard call can't 500.
+    """
+    if not Config.a2u_enabled():
+        return None
+    try:
+        balance = await asyncio.to_thread(_get_balance_sync)
+        return {"balance": balance, "address": Config.PI_APP_WALLET_ADDRESS or None}
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[A2U] balance lookup failed: %s", exc)
+        return None
+
+
 async def send_payout(
     *, amount: float, uid: str, memo: str, metadata: Optional[dict[str, Any]] = None
 ) -> str:

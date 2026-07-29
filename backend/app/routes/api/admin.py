@@ -561,6 +561,9 @@ async def get_admin_payments_overview(db: DbSession, user=Depends(verify_token))
         raise HTTPException(status_code=403, detail="HasNotSuperadminRole")
 
     data = await admin_repo.payment_operations_overview(db)
+    # App-wallet balance funds every A2U payout; surface it so an admin can see
+    # when the wallet is running low. Best-effort — None if A2U is off / lookup fails.
+    data["app_wallet"] = await pi_a2u.get_app_wallet_balance()
     return {"ok": True, "data": jsonable_encoder(data)}
 
 

@@ -8,6 +8,7 @@ from typing import Any, List, Optional, Tuple
 from sqlalchemy import and_, case, exists, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import Config
 from app.models.tables.category import Category
 from app.models.tables.comment import Comment
 from app.models.tables.leaderboard import Leaderboard
@@ -561,17 +562,49 @@ async def payment_operations_overview(session: AsyncSession) -> dict[str, Any]:
     ).where(Payment.status == "FAILED")
     failed_row = (await session.execute(failed_stmt)).one()
 
-    manual_stmt = select(
-        func.count(Payment.id),
-        func.coalesce(func.sum(Payment.amount), 0),
-    ).where(Payment.status == "APPROVED")
-    manual_row = (await session.execute(manual_stmt)).one()
+    # Real A2U payouts sent: winning positions that carry an on-chain txid,
+    # plus manual-marked claims. amount = shares * final_price (what was owed).
+    a2u_stmt = select(
+        func.count(MarketPosition.id),
+        func.coalesce(func.sum(MarketPosition.shares * MarketPosition.final_price), 0),
+    ).where(
+        MarketPosition.is_claimed == True,
+        MarketPosition.payout_txid.isnot(None),
+        MarketPosition.payout_txid != "",
+    )
+    a2u_row = (await session.execute(a2u_stmt)).one()
 
+    # Manual payout queue = winners on resolved markets still awaiting payout
+    # (the same set the Payout Queue table shows), NOT the count of APPROVED
+    # payments. amount_owed = shares * final_price.
+    payout_queue_stmt = (
+        select(
+            func.count(MarketPosition.id),
+            func.coalesce(func.sum(MarketPosition.shares * MarketPosition.final_price), 0),
+        )
+        .select_from(MarketPosition)
+        .join(Market, Market.id == MarketPosition.market_id)
+        .where(
+            Market.is_resolved == True,
+            MarketPosition.final_price >= Decimal("1"),
+            MarketPosition.shares > 0,
+            MarketPosition.is_claimed == False,
+        )
+    )
+    payout_queue_row = (await session.execute(payout_queue_stmt)).one()
+
+    # Mismatch = payment amount that does NOT equal the order notional plus the
+    # platform fee. The fee makes payment > order by design, so a plain
+    # `payment != order` flagged every normal payment. Only a difference the fee
+    # cannot explain is a real mismatch.
+    fee_rate = Decimal(str(getattr(Config, "FEE_RATE", 0.02)))
+    tolerance = Decimal("0.01")
+    expected_total = Order.pi_amount * (Decimal("1") + fee_rate)
     mismatch_stmt = (
         select(func.count())
         .select_from(Payment)
         .join(Order, Order.id == Payment.order_id)
-        .where(Payment.amount != Order.pi_amount)
+        .where(func.abs(Payment.amount - expected_total) > tolerance)
     )
     mismatch_count = int(await session.scalar(mismatch_stmt) or 0)
 
@@ -592,24 +625,24 @@ async def payment_operations_overview(session: AsyncSession) -> dict[str, Any]:
             "total_pi": float(received_row[1] or 0),
         },
         "app_to_user_payouts_sent": {
-            "count": 0,
-            "total_pi": 0.0,
-            "tracking_note": "On-chain app-to-user payouts are not stored in this database yet.",
+            "count": int(a2u_row[0] or 0),
+            "total_pi": float(a2u_row[1] or 0),
+            "scope_note": "Winning payouts sent (on-chain txid) or manually marked paid.",
         },
         "pending_payouts": {
             "count": int(pending_row[0] or 0),
             "total_pi": float(pending_row[1] or 0),
-            "scope_note": "Pi payments awaiting user wallet action (user→app).",
+            "scope_note": "Buy payments awaiting user wallet action (user→app).",
         },
         "failed_payouts": {
             "count": int(failed_row[0] or 0),
             "total_pi": float(failed_row[1] or 0),
-            "scope_note": "Failed Pi payment records linked to orders.",
+            "scope_note": "Failed Pi buy-payment records linked to orders.",
         },
         "manual_payout_queue": {
-            "count": int(manual_row[0] or 0),
-            "total_pi": float(manual_row[1] or 0),
-            "scope_note": "Approved server-side; may still need Pi complete / manual follow-up.",
+            "count": int(payout_queue_row[0] or 0),
+            "total_pi": float(payout_queue_row[1] or 0),
+            "scope_note": "Winners on resolved markets awaiting payout.",
         },
         "wallet_address_connected_users": wallet_connected,
         "wallet_address_missing_users": wallet_missing,
