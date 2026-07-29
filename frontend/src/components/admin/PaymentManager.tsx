@@ -89,6 +89,8 @@ type AdminPaymentRow = {
   order_id: number;
   market_id: number | null;
   market_question: string | null;
+  outcome: string | null;
+  shares: number;
   amount: number;
   order_pi_amount: number;
   status: string;
@@ -269,6 +271,8 @@ export function PaymentManager() {
       setRows(
         list.map((r: AdminPaymentRow) => ({
           ...r,
+          outcome: r.outcome ?? null,
+          shares: Number(r.shares ?? 0),
           amount: Number(r.amount ?? 0),
           order_pi_amount: Number(r.order_pi_amount ?? 0),
           amount_mismatch: Boolean(r.amount_mismatch),
@@ -734,6 +738,7 @@ export function PaymentManager() {
             <TableRow>
               <TableHead className="text-xs">User</TableHead>
               <TableHead className="text-xs">Market</TableHead>
+              <TableHead className="text-xs">Prediction</TableHead>
               <TableHead className="text-xs">Amounts</TableHead>
               <TableHead className="text-xs">Status</TableHead>
               <TableHead className="text-xs">Pi payment</TableHead>
@@ -743,7 +748,7 @@ export function PaymentManager() {
           <TableBody>
             {filteredRows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-xs text-muted-foreground">
+                <TableCell colSpan={7} className="text-xs text-muted-foreground">
                   {loading ? "Loading…" : "No payment rows for this filter."}
                 </TableCell>
               </TableRow>
@@ -755,6 +760,24 @@ export function PaymentManager() {
                   </TableCell>
                   <TableCell>
                     <MarketCell question={r.market_question} />
+                  </TableCell>
+                  <TableCell className="text-xs whitespace-nowrap">
+                    {r.outcome ? (
+                      <span
+                        className={`inline-flex items-center rounded px-1.5 py-0.5 font-semibold ${
+                          r.outcome.toUpperCase() === "NO"
+                            ? "bg-rose-500/15 text-rose-600 dark:text-rose-300"
+                            : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300"
+                        }`}
+                      >
+                        {r.outcome.toUpperCase() === "NO" ? "No" : "Yes"}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                    <span className="ml-1.5 tabular-nums text-muted-foreground">
+                      {roundLocale(r.shares)} sh
+                    </span>
                   </TableCell>
                   <TableCell className="text-xs">
                     <span className="tabular-nums">{roundLocale(r.amount)} π</span>

@@ -642,6 +642,8 @@ async def list_admin_payments(
             Payment.order_id,
             Order.market_id,
             Market.question.label("market_question"),
+            Order.outcome.label("outcome"),
+            Order.size.label("shares"),
             Payment.amount,
             Order.pi_amount.label("order_pi_amount"),
             Payment.status,
@@ -675,6 +677,7 @@ async def list_admin_payments(
         row = dict(r)
         row["amount"] = float(row["amount"] or 0)
         row["order_pi_amount"] = float(row["order_pi_amount"] or 0)
+        row["shares"] = float(row["shares"] or 0)
         row["amount_mismatch"] = bool(row.get("amount_mismatch"))
         rows.append(row)
     return rows, total
