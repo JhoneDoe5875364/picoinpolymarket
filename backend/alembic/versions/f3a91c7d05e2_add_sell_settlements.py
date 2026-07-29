@@ -14,6 +14,7 @@ from typing import Sequence, Union
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy.dialects import postgresql
 
 revision: str = "f3a91c7d05e2"
 down_revision: Union[str, Sequence[str], None] = "e7f2b9d4a6c8"
@@ -22,16 +23,27 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Create the enum type once, explicitly. The column below reuses it with
-    # create_type=False so create_table does NOT try to CREATE TYPE a second
-    # time (which would raise DuplicateObjectError). checkfirst makes a rerun
-    # after a partially-applied migration a no-op.
-    status_enum = sa.Enum(
-        "PENDING", "SETTLED", "FAILED", name="sell_settlement_status"
+    # Create the enum type idempotently via raw SQL. A plain
+    # ``sa.Enum(...).create(checkfirst=True)`` is NOT enough here: under Alembic,
+    # ``op.create_table`` fires a before_create event with checkfirst=False, and
+    # because the enum is not attached to a MetaData, SQLAlchemy re-issues
+    # CREATE TYPE regardless of ``create_type=False`` — which is exactly what
+    # raised DuplicateObjectError. This DO block only creates the type if absent.
+    op.execute(
+        """
+        DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'sell_settlement_status') THEN
+                CREATE TYPE sell_settlement_status AS ENUM ('PENDING', 'SETTLED', 'FAILED');
+            END IF;
+        END
+        $$;
+        """
     )
-    status_enum.create(op.get_bind(), checkfirst=True)
 
-    status_col = sa.Enum(
+    # postgresql.ENUM(create_type=False) references the existing type WITHOUT
+    # emitting its own CREATE TYPE during create_table.
+    status_col = postgresql.ENUM(
         "PENDING",
         "SETTLED",
         "FAILED",
@@ -85,4 +97,4 @@ def downgrade() -> None:
         "uq_sell_settlements_request_id", "sell_settlements", type_="unique"
     )
     op.drop_table("sell_settlements")
-    sa.Enum(name="sell_settlement_status").drop(op.get_bind(), checkfirst=True)
+    op.execute("DROP TYPE IF EXISTS sell_settlement_status")
