@@ -40,9 +40,14 @@ class SellSettlement(Base):
     price: Mapped[Decimal] = mapped_column(Numeric(24, 4), nullable=False)
     net_payout: Mapped[Decimal] = mapped_column(Numeric(24, 4), nullable=False)
 
+    # PENDING  : row reserved; position NOT yet reduced (pre-flight only)
+    # PAYING   : position ALREADY reduced, A2U payout in flight
+    # SETTLED  : payout confirmed, txid recorded
+    # FAILED   : payout failed; if position was reduced it has been restored
     status: Mapped[str] = mapped_column(
         Enum(
             "PENDING",
+            "PAYING",
             "SETTLED",
             "FAILED",
             name="sell_settlement_status",

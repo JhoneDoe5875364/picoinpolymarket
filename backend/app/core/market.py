@@ -288,3 +288,45 @@ async def reduce_market_position(
         "remaining_shares": float(remaining_shares if not is_closed else Decimal("0")),
         "is_closed": is_closed,
     }
+
+
+async def restore_market_position(
+    session: AsyncSession,
+    *,
+    position_id: int,
+    add_shares: Decimal,
+    avg_price: Decimal,
+    updated_at: datetime,
+) -> None:
+    """Undo a reservation: add shares back after an A2U payout failed.
+
+    Called only when the position was already reduced (PAYING) but the payout did
+    not go through. Re-opens the position (is_closed=False) and restores pi_amount
+    at the preserved cost basis so the user keeps exactly what they had.
+    """
+    quant = PRICE_STEP
+    restored = Decimal(str(add_shares)).quantize(quant)
+    if restored <= 0:
+        return
+
+    position_row = await session.execute(
+        select(MarketPosition).where(MarketPosition.id == position_id).with_for_update()
+    )
+    position = position_row.scalar_one_or_none()
+    if position is None:
+        raise ValueError("Position to restore not found")
+
+    new_shares = (Decimal(str(position.shares)) + restored).quantize(quant)
+    new_pi_amount = (new_shares * Decimal(str(avg_price))).quantize(quant)
+
+    await session.execute(
+        update(MarketPosition)
+        .where(MarketPosition.id == position_id)
+        .values(
+            shares=new_shares,
+            pi_amount=new_pi_amount,
+            is_closed=False,
+            updated_at=updated_at,
+        )
+    )
+    await session.flush()

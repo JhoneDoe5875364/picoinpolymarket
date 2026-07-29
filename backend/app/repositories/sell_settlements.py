@@ -15,6 +15,7 @@ from decimal import Decimal
 from typing import Any, Optional
 
 from sqlalchemy import insert, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.tables.order import Order
@@ -88,7 +89,7 @@ async def create_sell_order(
     return order
 
 
-async def create_pending(
+async def create_reserved(
     session: AsyncSession,
     *,
     sell_request_id: str,
@@ -100,11 +101,21 @@ async def create_pending(
     sell_shares: Decimal,
     price: Decimal,
     net_payout: Decimal,
-) -> dict[str, Any]:
-    """Insert the PENDING settlement row. UNIQUE(sell_request_id) guards replays."""
+    status: str = "PAYING",
+) -> Optional[dict[str, Any]]:
+    """Insert the settlement row idempotently.
+
+    Uses ``ON CONFLICT (sell_request_id) DO NOTHING`` so two concurrent requests
+    carrying the SAME idempotency key cannot both create a row: the loser's
+    insert returns no row, and the caller treats that as "already in progress"
+    WITHOUT sending Pi a second time. This is the atomic replacement for the old
+    "read-then-insert" check that had a race window.
+
+    Returns the inserted row, or None when the key already existed.
+    """
     now = datetime.now(timezone.utc)
     stmt = (
-        insert(SellSettlement)
+        pg_insert(SellSettlement)
         .values(
             sell_request_id=sell_request_id,
             order_id=order_id,
@@ -115,17 +126,16 @@ async def create_pending(
             sell_shares=sell_shares,
             price=price,
             net_payout=net_payout,
-            status="PENDING",
+            status=status,
             created_at=now,
             updated_at=now,
         )
+        .on_conflict_do_nothing(index_elements=[SellSettlement.sell_request_id])
         .returning(SellSettlement)
     )
     result = await session.execute(stmt)
     row = result.scalar_one_or_none()
-    if row is None:
-        raise ValueError("Failed to create sell settlement")
-    return _to_dict(row)
+    return _to_dict(row) if row else None
 
 
 async def mark_settled(

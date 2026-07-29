@@ -23,8 +23,13 @@ from pydantic import BaseModel, Field
 from app.core import pi_a2u
 from app.core.config import Config
 from app.core.logger import get_logger
-from app.core.market import insert_market_trade, reduce_market_position, update_market_price
-from app.core.security import verify_token
+from app.core.market import (
+    insert_market_trade,
+    reduce_market_position,
+    restore_market_position,
+    update_market_price,
+)
+from app.core.security import verify_token_strict
 from app.core.trade import compute_sell_breakdown
 from app.db.deps import DbSession
 from app.repositories import markets as markets_repo
@@ -72,14 +77,26 @@ async def sell_position(
     payload: SellPositionRequest,
     db: DbSession,
     position_id: int = Path(..., ge=1),
-    user=Depends(verify_token),
+    user=Depends(verify_token_strict),
 ):
     """Close all or part of a holding at the current price; pay proceeds via A2U.
 
-    Order of operations (see design doc): validate + price + record a PENDING
-    SELL order and settlement in transaction A, send Pi OUTSIDE any transaction,
-    then reduce the position and finalize in transaction B. The user's shares are
-    never reduced unless the payout was actually sent.
+    Safe order of operations (closes the double-spend window — see V1/V2 in the
+    sell attack analysis):
+
+      Tx A (single atomic transaction, BEFORE any payout):
+        - insert the settlement idempotently (ON CONFLICT DO NOTHING); a losing
+          concurrent duplicate creates no row and is rejected without paying.
+        - lock the position (FOR UPDATE), validate, price it, and REDUCE it now.
+        - record the SELL trade, update price, mark the order EXECUTED,
+          settlement = PAYING.
+      Send Pi (A2U), OUTSIDE the transaction.
+      Tx C: on success mark SETTLED(txid); on failure RESTORE the shares and
+            mark FAILED — the user keeps exactly what they had.
+
+    Because the shares are already gone when the payout is sent, a second
+    concurrent sell of the same position fails "Sell exceeds holdings" instead of
+    triggering a second payout.
     """
     user_id = _user_id(user)
 
@@ -89,7 +106,8 @@ async def sell_position(
             detail="Selling is temporarily unavailable (auto-payout disabled).",
         )
 
-    # Idempotency: a retried request must not send Pi twice.
+    # Fast idempotency short-circuit for an already-finished request. This is an
+    # optimization only; the authoritative guard is the ON CONFLICT insert below.
     existing = await sell_repo.get_by_request_id(db, sell_request_id=payload.sell_request_id)
     await db.rollback()
     if existing is not None:
@@ -100,13 +118,13 @@ async def sell_position(
                 "txid": existing["payout_txid"],
                 "net_payout": existing["net_payout"],
             }
-        if existing["status"] == "PENDING":
+        if existing["status"] in ("PENDING", "PAYING"):
             raise HTTPException(status_code=409, detail="This sell is already being processed.")
         raise HTTPException(status_code=409, detail="This sell already failed; use a new request id.")
 
     sell_shares = Decimal(str(payload.sell_shares))
 
-    # ----- Transaction A: lock, validate, price, PENDING order + settlement -----
+    # ----- Transaction A: reserve idempotently, reduce position, record -----
     try:
         async with db.begin():
             position = await positions_repo.lock_position(
@@ -121,6 +139,7 @@ async def sell_position(
 
             market_id = int(position.market_id)
             outcome = str(position.outcome).upper()
+            position_avg_price = Decimal(str(position.avg_price))
 
             market_status = await orders_repo.get_market_status(db, market_id)
             if market_status != "open":
@@ -160,10 +179,13 @@ async def sell_position(
                 price=breakdown.price,
                 shares=breakdown.shares,
             )
-            await sell_repo.create_pending(
+            order_id = int(order.id)
+
+            # Atomic idempotency: a concurrent duplicate key inserts no row here.
+            reserved = await sell_repo.create_reserved(
                 db,
                 sell_request_id=payload.sell_request_id,
-                order_id=int(order.id),
+                order_id=order_id,
                 position_id=position_id,
                 user_id=user_id,
                 market_id=market_id,
@@ -171,8 +193,29 @@ async def sell_position(
                 sell_shares=breakdown.shares,
                 price=breakdown.price,
                 net_payout=breakdown.net_payout,
+                status="PAYING",
             )
-            order_id = int(order.id)
+            if reserved is None:
+                raise HTTPException(
+                    status_code=409, detail="This sell is already being processed."
+                )
+
+            # Reduce the position NOW, before sending Pi. This is what closes the
+            # double-spend window: the shares are consumed atomically here, so a
+            # second concurrent sell sees fewer/zero shares.
+            trade = await insert_market_trade(
+                db, user_id, market_id, outcome, breakdown.shares, datetime.now(timezone.utc), side="SELL"
+            )
+            reduce_result = await reduce_market_position(
+                db,
+                market_id=market_id,
+                user_id=user_id,
+                outcome=outcome,
+                sell_shares=breakdown.shares,
+                updated_at=datetime.now(timezone.utc),
+            )
+            await update_market_price(db, trade)
+            await payments_repo.set_order_status(db, order_id=order_id, status="EXECUTED")
     except HTTPException:
         raise
     except ValueError as exc:
@@ -191,65 +234,40 @@ async def sell_position(
         )
     except pi_a2u.A2UError as exc:
         logger.error("[SELL] payout send failed for position %s: %s", position_id, exc)
+        # The position was already reduced. Restore it so the user loses nothing.
         try:
             async with db.begin():
+                await restore_market_position(
+                    db,
+                    position_id=position_id,
+                    add_shares=breakdown.shares,
+                    avg_price=position_avg_price,
+                    updated_at=datetime.now(timezone.utc),
+                )
+                await payments_repo.set_order_status(db, order_id=order_id, status="FAILED")
                 await sell_repo.mark_failed(
                     db, sell_request_id=payload.sell_request_id, reason=str(exc)
                 )
-                await payments_repo.set_order_status(db, order_id=order_id, status="FAILED")
-        except Exception:  # pragma: no cover - best-effort cleanup
-            logger.error("[SELL] failed to mark settlement FAILED for %s", position_id)
-        # Nothing was reduced; the user's position is intact.
+        except Exception:  # pragma: no cover - best-effort recovery
+            logger.error(
+                "[SELL] payout failed AND restore failed. position=%s order=%s — "
+                "position may be short by %s shares; reconcile manually.",
+                position_id, order_id, breakdown.shares,
+            )
         raise HTTPException(status_code=502, detail=f"Payout failed: {exc}") from exc
 
-    # ----- Transaction B: reduce position, record trade, price, finalize -----
+    # ----- Tx C: finalize (payout confirmed) -----
     try:
         async with db.begin():
-            now = datetime.now(timezone.utc)
-            trade = await insert_market_trade(
-                db,
-                user_id,
-                market_id,
-                outcome,
-                breakdown.shares,
-                now,
-                side="SELL",
-            )
-            reduce_result = await reduce_market_position(
-                db,
-                market_id=market_id,
-                user_id=user_id,
-                outcome=outcome,
-                sell_shares=breakdown.shares,
-                updated_at=now,
-            )
-            await update_market_price(db, trade)
-            await payments_repo.set_order_status(db, order_id=order_id, status="EXECUTED")
             await sell_repo.mark_settled(db, sell_request_id=payload.sell_request_id, txid=txid)
     except Exception as exc:
-        # The Pi was already sent. Record txid on the settlement so it can be
-        # reconciled: money left the wallet but the position was not reduced.
+        # Payout succeeded and the position is already correctly reduced; only the
+        # SETTLED bookkeeping failed. Leave the row PAYING with the txid logged so
+        # a reconciliation pass can flip it. Do NOT restore — the sale is real.
         logger.error(
-            "[SELL] SENT but settle failed. position=%s order=%s txid=%s err=%s",
-            position_id, order_id, txid, exc,
+            "[SELL] settled on-chain but final mark failed. position=%s txid=%s err=%s",
+            position_id, txid, exc,
         )
-        try:
-            async with db.begin():
-                await sell_repo.mark_failed(
-                    db,
-                    sell_request_id=payload.sell_request_id,
-                    reason=f"settle_after_send: {exc}",
-                    txid=txid,
-                )
-        except Exception:  # pragma: no cover
-            pass
-        raise HTTPException(
-            status_code=500,
-            detail=(
-                f"Payout was sent (txid {txid}) but recording it failed. "
-                "Contact support with this reference."
-            ),
-        ) from exc
 
     logger.info(
         "[SELL] position=%s user=%s shares=%s net=%s txid=%s",

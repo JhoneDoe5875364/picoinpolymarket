@@ -27,18 +27,13 @@ PI_API_BASE = "https://api.minepi.com"
 PI_ME_URL = f"{PI_API_BASE}/v2/me"
 
 
-async def verify_token(request: Request):
-    if Config.ENVIRONMENT == "development":
-        return {
-            "sub": "1", # "3"
-            "username": "superadmin", # "dev_user"
-            "role": "superadmin", # "user"
-        }
-    
-    auth_header = request.headers.get("authorization")
-    
-    # logger.info(f"[Verify Token]: JWT_SECRET_KEY={JWT_SECRET_KEY}, JWT_ISSUER={JWT_ISSUER}, JWT_AUDIENCE={JWT_AUDIENCE}, JWT_ALGORITHM={JWT_ALGORITHM}")
+def _decode_bearer_token(request: Request) -> dict:
+    """Validate the Bearer JWT and return its payload. Never bypasses.
 
+    Shared by verify_token and verify_token_strict so money-moving routes can
+    require real auth even when ENVIRONMENT=development.
+    """
+    auth_header = request.headers.get("authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -52,16 +47,39 @@ async def verify_token(request: Request):
             token,
             JWT_SECRET_KEY,
             algorithms=[JWT_ALGORITHM],
-            audience=JWT_AUDIENCE
+            audience=JWT_AUDIENCE,
         )
 
         if payload.get("exp") < time.time():
             logger.error(f"[Verify Token]: Token expired for user {payload.get('sub')}")
             raise HTTPException(status_code=401, detail="Token expired")
-        
+
         return payload
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid token")
+
+
+async def verify_token(request: Request):
+    if Config.ENVIRONMENT == "development":
+        return {
+            "sub": "1", # "3"
+            "username": "superadmin", # "dev_user"
+            "role": "superadmin", # "user"
+        }
+
+    return _decode_bearer_token(request)
+
+
+async def verify_token_strict(request: Request):
+    """Auth for money-moving routes (A2U payouts / sells).
+
+    Unlike verify_token, this NEVER honours the development bypass: an A2U payout
+    sends real coins, so it must always be tied to a genuinely authenticated
+    user, even on a dev/staging host. See V5 in the sell attack analysis.
+    """
+    return _decode_bearer_token(request)
 
 
 async def optional_verify_token(request: Request) -> Optional[dict]:
