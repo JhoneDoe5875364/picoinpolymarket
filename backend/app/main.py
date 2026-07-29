@@ -20,6 +20,7 @@ from app.routes import include_all_routers
 from app.updator.market_close_updater import run_periodic_market_close_refresh
 from app.updator.leaderboard_updater import run_periodic_leaderboard_refresh
 from app.updator.market_price_candle_updater import run_periodic_market_price_candle_refresh
+from app.updator.payment_reconcile_updater import run_periodic_payment_reconcile
 from app.updator.market_stats_updator import (
     run_periodic_market_discovery_refresh,
     run_periodic_market_stats_24h_refresh,
@@ -42,6 +43,7 @@ async def lifespan(app: FastAPI):
     market_stats_24h_task: asyncio.Task[None] | None = None
     market_stats_extended_task: asyncio.Task[None] | None = None
     market_discovery_task: asyncio.Task[None] | None = None
+    payment_reconcile_task: asyncio.Task[None] | None = None
     try:
         engine, session_maker = create_engine_and_sessionmaker()
         app.state.async_engine = engine
@@ -95,6 +97,12 @@ async def lifespan(app: FastAPI):
         )
         app.state.market_discovery_refresh_task = market_discovery_task
         logger.info("Market discovery refresh task started")
+        payment_reconcile_task = asyncio.create_task(
+            run_periodic_payment_reconcile(session_maker),
+            name="payment-reconcile",
+        )
+        app.state.payment_reconcile_task = payment_reconcile_task
+        logger.info("Payment reconcile task started")
     except Exception as e:
         logger.warning("Database not initialized: %s", e)
         app.state.async_engine = None
@@ -107,6 +115,7 @@ async def lifespan(app: FastAPI):
         app.state.market_stats_24h_refresh_task = None
         app.state.market_stats_extended_refresh_task = None
         app.state.market_discovery_refresh_task = None
+        app.state.payment_reconcile_task = None
     yield
     if leaderboard_task is not None:
         leaderboard_task.cancel()
@@ -156,6 +165,12 @@ async def lifespan(app: FastAPI):
             await market_discovery_task
         except asyncio.CancelledError:
             logger.info("Market discovery refresh task stopped")
+    if payment_reconcile_task is not None:
+        payment_reconcile_task.cancel()
+        try:
+            await payment_reconcile_task
+        except asyncio.CancelledError:
+            logger.info("Payment reconcile task stopped")
     await dispose_engine()
     logger.info("Database engine disposed")
 

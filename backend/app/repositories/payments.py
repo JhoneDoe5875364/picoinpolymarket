@@ -7,7 +7,7 @@ us, mints the payment. See docs/feedbacks/20260621_Payment_Trade_Binding_Design.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Optional
 
@@ -31,6 +31,37 @@ def _to_dict(row: Payment) -> dict[str, Any]:
         "pi_payment_id": row.pi_payment_id,
         "txid": row.txid,
     }
+
+
+async def list_approved_for_reconcile(
+    session: AsyncSession, *, older_than_seconds: int = 0, limit: int = 100
+) -> list[dict[str, Any]]:
+    """APPROVED payments awaiting completion, oldest first.
+
+    The reconcile batch asks Pi whether each one settled on-chain. Only rows
+    older than `older_than_seconds` are returned, so a payment mid-flight (the
+    user is still signing) is left alone.
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(seconds=max(0, older_than_seconds))
+    stmt = (
+        select(
+            Payment.id,
+            Payment.user_id,
+            Payment.order_id,
+            Payment.amount,
+            Payment.pi_payment_id,
+            Payment.created_at,
+        )
+        .where(
+            Payment.status == "APPROVED",
+            Payment.pi_payment_id.isnot(None),
+            Payment.created_at <= cutoff,
+        )
+        .order_by(Payment.created_at.asc())
+        .limit(limit)
+    )
+    rows = (await session.execute(stmt)).mappings().all()
+    return [dict(r) for r in rows]
 
 
 async def get_order_for_update(
