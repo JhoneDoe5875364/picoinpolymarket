@@ -468,24 +468,28 @@ export function MarketManager() {
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem><Link href={`/admin/markets/detail/${m.id}`}>View Market Metrics</Link></DropdownMenuItem>
                       <DropdownMenuItem><Link href={`/admin/markets/${m.id}`}>Edit Market</Link></DropdownMenuItem>
-                      <DropdownMenuItem
-                        className="text-green-500"
-                        onClick={() => {
-                          setSelectedMarketId(m.id.toString());
-                          setResolveDialogOpen(true);
-                        }}
-                      >
-                        Resolve Market
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        className="text-red-500"
-                        onClick={() => {
-                          setSelectedMarketId(m.id.toString());
-                          setCloseDialogOpen(true);
-                        }}
-                      >
-                        Close Market
-                      </DropdownMenuItem>
+                      {(m.status ?? "").toLowerCase() !== "resolved" ? (
+                        <>
+                          <DropdownMenuItem
+                            className="text-green-500"
+                            onClick={() => {
+                              setSelectedMarketId(m.id.toString());
+                              setResolveDialogOpen(true);
+                            }}
+                          >
+                            Resolve Market
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="text-red-500"
+                            onClick={() => {
+                              setSelectedMarketId(m.id.toString());
+                              setCloseDialogOpen(true);
+                            }}
+                          >
+                            Close Market
+                          </DropdownMenuItem>
+                        </>
+                      ) : null}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </TableCell>

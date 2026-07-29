@@ -244,6 +244,10 @@ async def close_market(
     raise ValueError("Market cannot be closed")
 
 
+class MarketAlreadyResolvedError(Exception):
+    """Raised when resolving a market that is already resolved (re-resolve)."""
+
+
 async def resolve_market(
     session: AsyncSession,
     *,
@@ -252,6 +256,23 @@ async def resolve_market(
     user_id: str,
     username: str,
 ) -> dict[str, Any]:
+    # Guard against re-resolution. A market may be resolved exactly ONCE:
+    # re-resolving would flip resolved_outcome/final_price and corrupt the
+    # payout ledger (already-paid winners can't be clawed back). Lock the row
+    # so two concurrent resolves can't both pass this check.
+    existing = await session.execute(
+        select(Market.id, Market.is_resolved, Market.status)
+        .where(Market.id == market_id)
+        .with_for_update()
+    )
+    existing_row = existing.mappings().first()
+    if existing_row is None:
+        raise LookupError("Market not found")
+    if existing_row["is_resolved"] or existing_row["status"] == "resolved":
+        raise MarketAlreadyResolvedError(
+            f"Market #{market_id} is already resolved and cannot be resolved again."
+        )
+
     final_price_value = Decimal("1") if outcome == "YES" else Decimal("0")
     loser_price_value = Decimal("0") if outcome == "YES" else Decimal("1")
     now = datetime.now(timezone.utc)

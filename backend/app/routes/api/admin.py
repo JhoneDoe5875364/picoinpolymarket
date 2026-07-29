@@ -484,6 +484,8 @@ async def resolve_market(
             )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except admin_repo.MarketAlreadyResolvedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except Exception as exc:
         logger.error("Error resolving market %s with %s: %s", market_id, normalized_outcome, exc)
         raise HTTPException(status_code=500, detail="Failed to resolve market") from exc
@@ -523,6 +525,8 @@ async def resolve_market_direct(
             )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except admin_repo.MarketAlreadyResolvedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except Exception as exc:
         logger.error("Error resolving market %s with %s: %s", market_id, normalized_outcome, exc)
         raise HTTPException(status_code=500, detail="Failed to resolve market") from exc
