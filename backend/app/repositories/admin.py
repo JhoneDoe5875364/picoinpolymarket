@@ -658,6 +658,7 @@ async def list_admin_payments(
     session: AsyncSession,
     *,
     status: str = "ALL",
+    mismatch_only: bool = False,
     limit: int = 20,
     offset: int = 0,
 ) -> Tuple[List[dict[str, Any]], int]:
@@ -665,7 +666,12 @@ async def list_admin_payments(
     if status not in allowed:
         raise ValueError("Invalid status filter")
 
-    mismatch_expr = Payment.amount != Order.pi_amount
+    # Fee-aware mismatch: a payment is expected to equal the order notional plus
+    # the platform fee, so only a fee-unexplained difference is a real mismatch.
+    fee_rate = Decimal(str(getattr(Config, "FEE_RATE", 0.02)))
+    tolerance = Decimal("0.01")
+    expected_total = Order.pi_amount * (Decimal("1") + fee_rate)
+    mismatch_expr = func.abs(Payment.amount - expected_total) > tolerance
 
     base = (
         select(
@@ -691,6 +697,8 @@ async def list_admin_payments(
     )
     if status != "ALL":
         base = base.where(Payment.status == status)
+    if mismatch_only:
+        base = base.where(mismatch_expr)
 
     count_base = (
         select(func.count())
@@ -700,6 +708,8 @@ async def list_admin_payments(
     )
     if status != "ALL":
         count_base = count_base.where(Payment.status == status)
+    if mismatch_only:
+        count_base = count_base.where(mismatch_expr)
 
     total = int(await session.scalar(count_base) or 0)
 
@@ -712,6 +722,58 @@ async def list_admin_payments(
         row["order_pi_amount"] = float(row["order_pi_amount"] or 0)
         row["shares"] = float(row["shares"] or 0)
         row["amount_mismatch"] = bool(row.get("amount_mismatch"))
+        rows.append(row)
+    return rows, total
+
+
+async def list_payouts_sent(
+    session: AsyncSession,
+    *,
+    limit: int = 20,
+    offset: int = 0,
+) -> Tuple[List[dict[str, Any]], int]:
+    """Winning positions already paid out (claimed). Shows the on-chain txid when
+    the payout went through auto-pay; empty txid means a manual mark-paid."""
+    base_filters = [
+        MarketPosition.is_claimed == True,
+        MarketPosition.final_price >= Decimal("1"),
+    ]
+    amount_expr = MarketPosition.shares * MarketPosition.final_price
+
+    count_stmt = (
+        select(func.count())
+        .select_from(MarketPosition)
+        .where(*base_filters)
+    )
+    total = int(await session.scalar(count_stmt) or 0)
+
+    list_stmt = (
+        select(
+            MarketPosition.id.label("position_id"),
+            MarketPosition.user_id,
+            User.pi_username,
+            MarketPosition.market_id,
+            Market.question.label("market_question"),
+            MarketPosition.outcome,
+            MarketPosition.shares,
+            amount_expr.label("amount_paid"),
+            MarketPosition.payout_txid,
+            MarketPosition.updated_at,
+        )
+        .join(Market, Market.id == MarketPosition.market_id)
+        .join(User, User.id == MarketPosition.user_id)
+        .where(*base_filters)
+        .order_by(MarketPosition.updated_at.desc().nullslast(), MarketPosition.id.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    result = await session.execute(list_stmt)
+    rows: List[dict[str, Any]] = []
+    for r in result.mappings().all():
+        row = dict(r)
+        row["shares"] = float(row["shares"] or 0)
+        row["amount_paid"] = float(row["amount_paid"] or 0)
+        row["method"] = "on-chain" if row.get("payout_txid") else "manual"
         rows.append(row)
     return rows, total
 

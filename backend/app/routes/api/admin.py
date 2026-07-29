@@ -572,6 +572,7 @@ async def list_admin_payments(
     db: DbSession,
     user=Depends(verify_token),
     status: str = Query(default="ALL"),
+    mismatch_only: bool = Query(default=False),
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ):
@@ -581,11 +582,34 @@ async def list_admin_payments(
 
     try:
         rows, total = await admin_repo.list_admin_payments(
-            db, status=status, limit=limit, offset=offset
+            db, status=status, mismatch_only=mismatch_only, limit=limit, offset=offset
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    return {
+        "ok": True,
+        "data": jsonable_encoder(rows),
+        "total": total,
+        "page": ceil(offset / limit) + 1 if limit else 1,
+        "pages": ceil(total / limit) if total and limit else 0,
+    }
+
+
+@router.get("/payouts-sent")
+async def list_admin_payouts_sent(
+    db: DbSession,
+    user=Depends(verify_token),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+):
+    """A2U payouts already sent — winning positions with a payout_txid (or manually
+    marked paid). Backs the 'App-to-User payouts sent' KPI detail page."""
+    role = user.get("role", "")
+    if role != "superadmin":
+        raise HTTPException(status_code=403, detail="HasNotSuperadminRole")
+
+    rows, total = await admin_repo.list_payouts_sent(db, limit=limit, offset=offset)
     return {
         "ok": True,
         "data": jsonable_encoder(rows),

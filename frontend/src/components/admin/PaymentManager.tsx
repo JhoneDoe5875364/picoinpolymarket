@@ -1,6 +1,7 @@
 
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
@@ -519,7 +520,7 @@ export function PaymentManager() {
       </div>
 
       <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
-        <div className="rounded-lg border p-3">
+        <Link href="/admin/payments/received" className="block rounded-lg border p-3 transition-colors hover:bg-muted/40">
           <div className="flex items-center justify-between">
             <p className="text-xs text-muted-foreground">User-to-App payments received</p>
             <ArrowDownToLine className="h-4 w-4 text-emerald-500" />
@@ -530,8 +531,8 @@ export function PaymentManager() {
               : `${roundLocale(overview.user_to_app_payments_received.count)} · ${roundLocale(overview.user_to_app_payments_received.total_pi)} π`}
           </p>
           <p className="mt-1 text-[11px] text-muted-foreground">Completed Pi payments (count · total)</p>
-        </div>
-        <div className="rounded-lg border p-3">
+        </Link>
+        <Link href="/admin/payments/payouts-sent" className="block rounded-lg border p-3 transition-colors hover:bg-muted/40">
           <div className="flex items-center justify-between">
             <p className="text-xs text-muted-foreground">App-to-User payouts sent</p>
             <ArrowUpFromLine className="h-4 w-4 text-sky-500" />
@@ -542,13 +543,14 @@ export function PaymentManager() {
               : `${roundLocale(overview.app_to_user_payouts_sent.count)} · ${roundLocale(overview.app_to_user_payouts_sent.total_pi)} π`}
           </p>
           <p className="mt-1 text-[11px] text-muted-foreground">
-            {overview.app_to_user_payouts_sent.tracking_note ??
-              "Not tracked in DB until payout ledger exists."}
+            {overview.app_to_user_payouts_sent.scope_note ??
+              overview.app_to_user_payouts_sent.tracking_note ??
+              "Winning payouts sent (on-chain or manual)."}
           </p>
-        </div>
-        <div className="rounded-lg border p-3">
+        </Link>
+        <Link href="/admin/payments/pending" className="block rounded-lg border p-3 transition-colors hover:bg-muted/40">
           <div className="flex items-center justify-between">
-            <p className="text-xs text-muted-foreground">Pending payouts</p>
+            <p className="text-xs text-muted-foreground">Pending payments</p>
             <Clock className="h-4 w-4 text-orange-500" />
           </div>
           <p className="mt-2 text-md font-semibold">
@@ -557,12 +559,12 @@ export function PaymentManager() {
               : `${roundLocale(overview.pending_payouts.count)} · ${roundLocale(overview.pending_payouts.total_pi)} π`}
           </p>
           <p className="mt-1 text-[11px] text-muted-foreground">
-            {overview.pending_payouts.scope_note ?? "Pi payment records in PENDING status."}
+            {overview.pending_payouts.scope_note ?? "Buy payments in PENDING status."}
           </p>
-        </div>
-        <div className="rounded-lg border p-3">
+        </Link>
+        <Link href="/admin/payments/failed" className="block rounded-lg border p-3 transition-colors hover:bg-muted/40">
           <div className="flex items-center justify-between">
-            <p className="text-xs text-muted-foreground">Failed payouts</p>
+            <p className="text-xs text-muted-foreground">Failed payments</p>
             <XCircle className="h-4 w-4 text-red-500" />
           </div>
           <p className="mt-2 text-md font-semibold">
@@ -571,13 +573,13 @@ export function PaymentManager() {
               : `${roundLocale(overview.failed_payouts.count)} · ${roundLocale(overview.failed_payouts.total_pi)} π`}
           </p>
           <p className="mt-1 text-[11px] text-muted-foreground">
-            {overview.failed_payouts.scope_note ?? "FAILED payment records."}
+            {overview.failed_payouts.scope_note ?? "FAILED buy-payment records."}
           </p>
-        </div>
+        </Link>
       </div>
 
       <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
-        <div className="rounded-lg border p-3">
+        <Link href="/admin/payments/payout-queue" className="block rounded-lg border p-3 transition-colors hover:bg-muted/40">
           <div className="flex items-center justify-between">
             <p className="text-xs text-muted-foreground">Manual payout queue</p>
             <ClipboardList className="h-4 w-4 text-violet-500" />
@@ -588,9 +590,9 @@ export function PaymentManager() {
               : `${roundLocale(overview.manual_payout_queue.count)} · ${roundLocale(overview.manual_payout_queue.total_pi)} π`}
           </p>
           <p className="mt-1 text-[11px] text-muted-foreground">
-            {overview.manual_payout_queue.scope_note ?? "APPROVED payments awaiting completion."}
+            {overview.manual_payout_queue.scope_note ?? "Winners awaiting payout."}
           </p>
-        </div>
+        </Link>
         <div className="rounded-lg border p-3">
           <div className="flex items-center justify-between">
             <p className="text-xs text-muted-foreground">Wallet address connected</p>
@@ -613,7 +615,7 @@ export function PaymentManager() {
           </p>
           <p className="mt-1 text-[11px] text-muted-foreground">Users who have not saved a payout wallet address</p>
         </div>
-        <div className="rounded-lg border p-3">
+        <Link href="/admin/payments/mismatch" className="block rounded-lg border p-3 transition-colors hover:bg-muted/40">
           <div className="flex items-center justify-between">
             <p className="text-xs text-muted-foreground">Payment mismatch warnings</p>
             <AlertTriangle className="h-4 w-4 text-amber-600" />
@@ -625,7 +627,7 @@ export function PaymentManager() {
             {overview.payment_mismatch_warnings.scope_note ??
               "payments.amount vs orders.pi_amount"}
           </p>
-        </div>
+        </Link>
         <div className="rounded-lg border p-3">
           <div className="flex items-center justify-between">
             <p className="text-xs text-muted-foreground">App wallet balance</p>
