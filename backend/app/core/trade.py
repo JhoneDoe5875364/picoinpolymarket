@@ -59,6 +59,60 @@ def compute_trade_breakdown(price: float, shares: float) -> TradeBreakdown:
     )
 
 
+@dataclass(frozen=True)
+class SellBreakdown:
+    """Amount breakdown for closing (selling) shares back to the market.
+
+    Mirror of ``TradeBreakdown`` but for the payout direction: the fee is
+    *subtracted* from the gross proceeds rather than added on top, so
+    ``net_payout`` is what the user actually receives via A2U.
+    """
+
+    shares: Decimal
+    price: Decimal
+    gross: Decimal
+    fee: Decimal
+    net_payout: Decimal
+
+    def as_dict(self) -> dict[str, float]:
+        return {
+            "shares": float(self.shares),
+            "price": float(self.price),
+            "gross": float(self.gross),
+            "fee": float(self.fee),
+            "net_payout": float(self.net_payout),
+        }
+
+
+def compute_sell_breakdown(price: float, shares: float) -> SellBreakdown:
+    """Proceeds of selling ``shares`` at ``price``.
+
+    BUY adds the fee (``total_cost = amount + fee``); SELL subtracts it
+    (``net_payout = gross - fee``). Same FEE_RATE and quantization as
+    ``compute_trade_breakdown`` so the two directions stay symmetric.
+    """
+    safe_shares = Decimal(str(shares))
+    safe_price = Decimal(str(price))
+    if safe_shares <= 0:
+        raise ValueError("shares must be greater than 0")
+    if safe_price <= 0:
+        raise ValueError("price must be greater than 0")
+
+    gross = _quantize(safe_price * safe_shares)
+    fee = _quantize(gross * FEE_RATE)
+    net_payout = _quantize(gross - fee)
+    if net_payout <= 0:
+        raise ValueError("net payout must be greater than 0")
+
+    return SellBreakdown(
+        shares=_quantize(safe_shares),
+        price=_quantize(safe_price),
+        gross=gross,
+        fee=fee,
+        net_payout=net_payout,
+    )
+
+
 def amounts_match(expected: Decimal, actual: float | Decimal | None) -> bool:
     if actual is None:
         return False

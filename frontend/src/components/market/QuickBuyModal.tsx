@@ -18,6 +18,7 @@ import {
 } from "@/lib/trade/tradeTerms";
 import { TRADE_COPY } from "@/lib/copy/trade";
 import { fetchPayoutWallet } from "@/lib/wallet";
+import { invalidateProfileOverview } from "@/components/profile/ProfileOverview";
 
 type Props = {
   open: boolean;
@@ -107,6 +108,9 @@ export default function QuickBuyModal({ open, marketId, outcome, marketQuestion,
         onStageChange: setStage,
         onPositionCreated: () => {
           setSharesInput("");
+          // Stale profile-stats cache would otherwise survive the trade; clear
+          // it so the "View position in profile" link lands on fresh numbers.
+          invalidateProfileOverview();
           onDone?.();
         },
       });

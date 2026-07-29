@@ -29,6 +29,7 @@ import { cn, roundLocalePi, toNumber, toSignedMoney } from '@/lib/utils';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { SuggestMarketForm } from '@/components/market/SuggestMarketForm';
+import { notifyWalletUpdated } from '@/lib/wallet';
 
 type PnlPeriod = '1D' | '1W' | '1M' | 'ALL';
 
@@ -84,6 +85,17 @@ function formatVerifiedTimestamp(iso: string | null | undefined): string {
 
 const overviewCache = new Map<string, OverviewPayload>();
 const overviewInFlight = new Map<string, Promise<OverviewPayload>>();
+
+/**
+ * Drop the cached overview so the next load re-fetches fresh stats. Call this
+ * after anything that changes a user's positions (e.g. a completed trade) —
+ * `router.refresh()` only re-runs server components and leaves this client-side
+ * Map untouched, so the top-of-profile stats would otherwise stay stale.
+ */
+export function invalidateProfileOverview() {
+  overviewCache.clear();
+  overviewInFlight.clear();
+}
 
 const PERIODS: Array<{ key: PnlPeriod; label: string; caption: string }> = [
   { key: '1D', label: '1D', caption: 'Past Day' },
@@ -433,6 +445,28 @@ export function ProfileOverview() {
     };
   }, [ppxUser?.id, selectedPeriod]);
 
+  // A trade placed after this page mounted (e.g. in another tab) leaves the
+  // cache stale. Re-pull fresh stats when the tab regains focus, bypassing the
+  // cache so the top-of-profile numbers reflect the latest positions.
+  useEffect(() => {
+    function handleFocus() {
+      if (!ppxUser?.id) return;
+      invalidateProfileOverview();
+      const userId = ppxUser.id.toString();
+      fetchProfileOverview(userId, selectedPeriod)
+        .then((payload) => {
+          setStats(payload.stats);
+          setPnlHistory(payload.pnlHistory);
+        })
+        .catch(() => {
+          /* keep whatever is already shown; the mount effect surfaces errors */
+        });
+    }
+
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [ppxUser?.id, selectedPeriod]);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -493,6 +527,9 @@ export function ProfileOverview() {
             : { payout_destination: res.wallet_address ?? null }
         );
         setWalletInput('');
+        // Let the app-wide reminder banner re-check and disappear immediately,
+        // without waiting for a page reload.
+        notifyWalletUpdated();
       } else {
         setWalletSaveError('Could not save wallet address. Please try again.');
       }

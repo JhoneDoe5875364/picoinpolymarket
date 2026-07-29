@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { fetchPayoutWallet } from "@/lib/wallet";
+import { fetchPayoutWallet, WALLET_UPDATED_EVENT } from "@/lib/wallet";
 
 /**
  * App-wide reminder shown to logged-in users who have not saved a payout wallet
@@ -23,12 +23,22 @@ export function WalletReminderBanner() {
       setNeedsWallet(false);
       return;
     }
-    (async () => {
+
+    const recheck = async () => {
       const addr = await fetchPayoutWallet();
       if (!cancelled) setNeedsWallet(!addr);
-    })();
+    };
+
+    recheck();
+
+    // Re-check when the wallet is saved elsewhere (e.g. the profile page) or
+    // when the tab regains focus, so the banner disappears without a reload.
+    window.addEventListener(WALLET_UPDATED_EVENT, recheck);
+    window.addEventListener("focus", recheck);
     return () => {
       cancelled = true;
+      window.removeEventListener(WALLET_UPDATED_EVENT, recheck);
+      window.removeEventListener("focus", recheck);
     };
   }, [ppxUser?.id]);
 

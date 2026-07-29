@@ -479,6 +479,20 @@ async def get_market_token(session: AsyncSession, market_id: int, outcome: Liter
     return token
 
 
+async def get_token_and_price(
+    session: AsyncSession, market_id: int, outcome: Literal["YES", "NO"]
+) -> tuple[str, Decimal]:
+    """Return the (token, current price) pair for a market outcome."""
+    stmt = select(MarketToken.token, MarketToken.price).where(
+        MarketToken.market_id == market_id,
+        MarketToken.outcome == outcome,
+    )
+    row = (await session.execute(stmt)).one_or_none()
+    if row is None or row[0] is None or row[1] is None:
+        raise ValueError("Market token not found")
+    return row[0], Decimal(str(row[1]))
+
+
 async def get_market_price(
     session: AsyncSession, *, token: str, side: str
 ) -> Optional[dict[str, Any]]:

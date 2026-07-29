@@ -4,7 +4,7 @@ import math
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import func, select, update
+from sqlalchemy import case, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.tables.market import Market
@@ -57,10 +57,15 @@ async def insert_market_trade(
     outcome: str,
     shares: Decimal,
     created_at: datetime,
+    side: str = "BUY",
 ) -> MarketTrade:
     normalized_outcome = outcome.upper()
     if normalized_outcome not in ("YES", "NO"):
         raise ValueError("outcome must be YES or NO")
+
+    normalized_side = side.upper()
+    if normalized_side not in ("BUY", "SELL"):
+        raise ValueError("side must be BUY or SELL")
 
     quant = PRICE_STEP
     normalized_shares = Decimal(str(shares)).quantize(quant)
@@ -78,16 +83,22 @@ async def insert_market_trade(
         raise ValueError("Market token not found")
 
     normalized_price = Decimal(str(price)).quantize(quant)
+    # pi_amount is the gross (price * shares) for both directions so the AMM
+    # liquidity math in update_market_price stays symmetric. For a SELL,
+    # pi_total_amount is the net proceeds (gross - fee) actually paid out.
     pi_amount = (normalized_price * normalized_shares).quantize(quant)
     pi_fee = (pi_amount * FEE_RATE).quantize(quant)
-    pi_total_amount = (pi_amount + pi_fee).quantize(quant)
+    if normalized_side == "SELL":
+        pi_total_amount = (pi_amount - pi_fee).quantize(quant)
+    else:
+        pi_total_amount = (pi_amount + pi_fee).quantize(quant)
 
     trade = MarketTrade(
         token=token,
         market_id=market_id,
         taker_user_id=user_id,
         maker_user_id=1,
-        side="BUY",
+        side=normalized_side,
         outcome=normalized_outcome,
         price=normalized_price,
         shares=normalized_shares,
@@ -104,6 +115,8 @@ async def insert_market_trade(
 async def update_market_price(session: AsyncSession, trade: MarketTrade) -> None:
     quant = PRICE_STEP
 
+    # Volume is a cumulative "how much was traded" figure, so a SELL adds to it
+    # just like a BUY (turnover, not net flow).
     await session.execute(
         update(Market)
         .where(Market.id == trade.market_id)
@@ -118,14 +131,20 @@ async def update_market_price(session: AsyncSession, trade: MarketTrade) -> None
     if liquidity is None:
         raise ValueError("Market not found")
 
+    # Net liquidity per outcome: a BUY adds pi_amount to the pool, a SELL removes
+    # it. The amm_price() max(...,0) guards keep a pool from going negative.
+    signed_pi_amount = case(
+        (MarketTrade.side == "SELL", -MarketTrade.pi_amount),
+        else_=MarketTrade.pi_amount,
+    )
     totals_row = await session.execute(
         select(
             func.coalesce(
-                func.sum(MarketTrade.pi_amount).filter(MarketTrade.outcome == "YES"),
+                func.sum(signed_pi_amount).filter(MarketTrade.outcome == "YES"),
                 Decimal("0"),
             ),
             func.coalesce(
-                func.sum(MarketTrade.pi_amount).filter(MarketTrade.outcome == "NO"),
+                func.sum(signed_pi_amount).filter(MarketTrade.outcome == "NO"),
                 Decimal("0"),
             ),
         ).where(MarketTrade.market_id == trade.market_id)
@@ -205,3 +224,67 @@ async def update_market_position(session: AsyncSession, trade: MarketTrade) -> N
         )
     )
     await session.flush()
+
+
+async def reduce_market_position(
+    session: AsyncSession,
+    *,
+    market_id: int,
+    user_id: int,
+    outcome: str,
+    sell_shares: Decimal,
+    updated_at: datetime,
+) -> dict[str, object]:
+    """Decrement a holding when the user sells. Returns the resulting state.
+
+    Locks the position row (FOR UPDATE) so two concurrent sells cannot both
+    consume the same shares. ``avg_price`` is preserved so the remaining shares
+    keep their original cost basis; only ``pi_amount`` is prorated down. When
+    the last share is sold the position is marked closed.
+    """
+    quant = PRICE_STEP
+    normalized_outcome = outcome.upper()
+    normalized_sell = Decimal(str(sell_shares)).quantize(quant)
+    if normalized_sell <= 0:
+        raise ValueError("sell shares must be greater than 0")
+
+    position_row = await session.execute(
+        select(MarketPosition)
+        .where(
+            MarketPosition.market_id == market_id,
+            MarketPosition.user_id == user_id,
+            MarketPosition.outcome == normalized_outcome,
+        )
+        .with_for_update()
+    )
+    position = position_row.scalar_one_or_none()
+    if position is None:
+        raise ValueError("No position to sell")
+
+    current_shares = Decimal(str(position.shares)).quantize(quant)
+    if position.is_closed or current_shares <= 0:
+        raise ValueError("Position is already closed")
+    if normalized_sell > current_shares:
+        raise ValueError("Sell exceeds holdings")
+
+    avg_price = Decimal(str(position.avg_price))
+    remaining_shares = (current_shares - normalized_sell).quantize(quant)
+    remaining_pi_amount = (remaining_shares * avg_price).quantize(quant)
+    is_closed = remaining_shares <= 0
+
+    await session.execute(
+        update(MarketPosition)
+        .where(MarketPosition.id == position.id)
+        .values(
+            shares=remaining_shares if not is_closed else Decimal("0.0000"),
+            pi_amount=remaining_pi_amount if not is_closed else Decimal("0.0000"),
+            is_closed=is_closed,
+            updated_at=updated_at,
+        )
+    )
+    await session.flush()
+    return {
+        "position_id": int(position.id),
+        "remaining_shares": float(remaining_shares if not is_closed else Decimal("0")),
+        "is_closed": is_closed,
+    }

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Optional
 
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -37,6 +37,25 @@ async def get_market_snapshot_prices(
         "yes_price": yes_price,
         "no_price": no_price,
     }
+
+
+async def lock_position(
+    session: AsyncSession, *, position_id: int, user_id: int
+) -> Optional[MarketPosition]:
+    """Lock a position row (FOR UPDATE) so concurrent sells can't both consume it.
+
+    Returns None if the position does not exist or belongs to another user.
+    """
+    stmt = (
+        select(MarketPosition)
+        .where(
+            MarketPosition.id == position_id,
+            MarketPosition.user_id == user_id,
+        )
+        .with_for_update()
+    )
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none()
 
 
 async def get_market_position_snapshot(

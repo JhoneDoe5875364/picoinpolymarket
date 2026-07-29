@@ -28,6 +28,7 @@ import {
 } from "@/lib/trade/tradeTerms";
 import { TRADE_COPY } from "@/lib/copy/trade";
 import { fetchPayoutWallet } from "@/lib/wallet";
+import { invalidateProfileOverview } from "@/components/profile/ProfileOverview";
 
 function BreakdownRow({
   label,
@@ -179,7 +180,12 @@ export function PredictionPanel({
         price: selectedPrice,
         shares: safeShares,
         toast,
-        onPositionCreated: () => router.refresh(),
+        onPositionCreated: () => {
+          // Drop the stale client-side profile-stats cache; router.refresh()
+          // alone won't (it only re-runs server components).
+          invalidateProfileOverview();
+          router.refresh();
+        },
         onStageChange: setStage,
       });
       setTradeResult(result);

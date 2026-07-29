@@ -20,6 +20,7 @@ from app.models.tables.market_watchlist import MarketWatchlist
 from app.models.tables.market_price_candles import MarketPriceCandle
 from app.models.tables.order import Order
 from app.models.tables.payment import Payment
+from app.models.tables.sell_settlement import SellSettlement
 from app.models.tables.suggestion import Suggestion
 from app.models.tables.user import User
 
@@ -38,6 +39,7 @@ __all__ = [
     "User",
     "Order",
     "Payment",
+    "SellSettlement",
     "Suggestion",
     "MarketPosition",
     "MarketTrade",

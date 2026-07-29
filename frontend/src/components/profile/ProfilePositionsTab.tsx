@@ -10,6 +10,8 @@ import { PositionsToolbar } from '@/components/profile/PositionsToolbar';
 import { apiFetchWithToken } from '@/lib/api';
 import { TRADE_COPY } from '@/lib/copy/trade';
 import { TRADE_TERMS } from '@/lib/trade/tradeTerms';
+import SellModal from '@/components/market/SellModal';
+import { Button } from '@/components/ui/button';
 
 export type PositionRow = {
   id: string;
@@ -142,6 +144,8 @@ export function ProfilePositionsTab({
   const loadMoreInFlightRef = useRef(false);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const [sellTarget, setSellTarget] = useState<PositionRow | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -192,7 +196,7 @@ export function ProfilePositionsTab({
     return () => {
       cancelled = true;
     };
-  }, [ppxUser?.id, debouncedSearch, isActive, status, sortBy]);
+  }, [ppxUser?.id, debouncedSearch, isActive, status, sortBy, reloadKey]);
 
   useEffect(() => {
     if (!isActive || positionsLoading || positionsLoadingMore || !hasMorePositions) return;
@@ -360,6 +364,19 @@ export function ProfilePositionsTab({
                         <p className={cn('mt-1 text-xs font-semibold', pnlClass)}>
                           {toSignedMoney(position.pnl)} ({toPercentLabel(position.pnlPercent)})
                         </p>
+                        {status === 'active' && position.shares > 0 ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="mt-2 h-7 px-3 text-xs"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSellTarget(position);
+                            }}
+                          >
+                            Sell
+                          </Button>
+                        ) : null}
                       </TableCell>
                     </TableRow>
                   );
@@ -375,6 +392,22 @@ export function ProfilePositionsTab({
       ) : null}
       {positionsLoadingMore ? (
         <p className="text-center text-sm text-muted-foreground">Loading more positions...</p>
+      ) : null}
+
+      {sellTarget ? (
+        <SellModal
+          open={Boolean(sellTarget)}
+          positionId={sellTarget.id}
+          outcome={sellTarget.outcome}
+          marketQuestion={sellTarget.marketTitle}
+          currentPrice={sellTarget.currentPrice}
+          heldShares={sellTarget.shares}
+          onClose={() => setSellTarget(null)}
+          onSold={() => {
+            setSellTarget(null);
+            setReloadKey((k) => k + 1);
+          }}
+        />
       ) : null}
     </div>
   );
