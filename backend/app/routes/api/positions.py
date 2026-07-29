@@ -106,9 +106,30 @@ async def sell_position(
             detail="Selling is temporarily unavailable (auto-payout disabled).",
         )
 
+    # V7: reject dust and enforce a minimum sell size before doing any work.
+    if payload.sell_shares < Config.SELL_MIN_SHARES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Minimum sell is {Config.SELL_MIN_SHARES} shares.",
+        )
+
     # Fast idempotency short-circuit for an already-finished request. This is an
     # optimization only; the authoritative guard is the ON CONFLICT insert below.
     existing = await sell_repo.get_by_request_id(db, sell_request_id=payload.sell_request_id)
+    if existing is None:
+        # V7: per-user rate limit (only for genuinely new requests, so a retry of
+        # the same idempotency key is never rate-limited).
+        recent = await sell_repo.count_recent_sells(
+            db,
+            user_id=user_id,
+            window_seconds=Config.SELL_RATE_WINDOW_SECONDS,
+        )
+        if recent >= Config.SELL_RATE_MAX:
+            await db.rollback()
+            raise HTTPException(
+                status_code=429,
+                detail="Too many sells in a short period. Please wait and try again.",
+            )
     await db.rollback()
     if existing is not None:
         if existing["status"] == "SETTLED":
@@ -141,12 +162,31 @@ async def sell_position(
             outcome = str(position.outcome).upper()
             position_avg_price = Decimal(str(position.avg_price))
 
+            # V4/V6: round-trip cooldown — a position opened moments ago cannot be
+            # sold, blocking pump-buy-then-dump wash trades against the app wallet.
+            if Config.SELL_COOLDOWN_SECONDS > 0 and position.created_at is not None:
+                age = (datetime.now(timezone.utc) - position.created_at).total_seconds()
+                if age < Config.SELL_COOLDOWN_SECONDS:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="This position was opened too recently to sell. Try again shortly.",
+                    )
+
             market_status = await orders_repo.get_market_status(db, market_id)
             if market_status != "open":
                 raise HTTPException(
                     status_code=400,
                     detail="This market is closed and no longer accepts trades.",
                 )
+
+            # V4: refuse to sell into a market too thin to price safely.
+            if Config.SELL_MIN_MARKET_LIQUIDITY > 0:
+                liquidity = await markets_repo.get_market_liquidity(db, market_id)
+                if liquidity < Decimal(str(Config.SELL_MIN_MARKET_LIQUIDITY)):
+                    raise HTTPException(
+                        status_code=409,
+                        detail="This market has too little liquidity to sell right now.",
+                    )
 
             token, price = await markets_repo.get_token_and_price(db, market_id, outcome)
             if price <= 0:
@@ -162,6 +202,14 @@ async def sell_position(
                     )
 
             breakdown = compute_sell_breakdown(float(price), float(sell_shares))
+
+            # V7: reject dust payouts that would cost more in on-chain fees than
+            # they return.
+            if float(breakdown.net_payout) < Config.SELL_MIN_NET_PAYOUT:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Sale proceeds are below the {Config.SELL_MIN_NET_PAYOUT}π minimum.",
+                )
 
             pi_uid = await payments_repo.get_user_pi_uid(db, user_id=user_id)
             if not pi_uid:

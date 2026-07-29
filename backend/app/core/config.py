@@ -29,3 +29,22 @@ class Config:
     @classmethod
     def a2u_enabled(cls) -> bool:
         return bool(cls.PI_APP_WALLET_SECRET_SEED)
+
+    # ---- Sell (A2U close-out) economic guards ----
+    # See docs/feedbacks/20260729_Sell_Attack_Analysis.ko.md V4/V6/V7.
+
+    # V7: reject dust sells whose net payout would be below this, so a spammer
+    # cannot drain on-chain fees with sub-cent payouts.
+    SELL_MIN_NET_PAYOUT = float(os.getenv("SELL_MIN_NET_PAYOUT", "0.1"))
+    # V7: also require at least this many shares per sell.
+    SELL_MIN_SHARES = float(os.getenv("SELL_MIN_SHARES", "1"))
+    # V7: per-user rate limit — at most this many sells within the window.
+    SELL_RATE_MAX = int(os.getenv("SELL_RATE_MAX", "10"))
+    SELL_RATE_WINDOW_SECONDS = int(os.getenv("SELL_RATE_WINDOW_SECONDS", "60"))
+
+    # V4: a market must have at least this much liquidity before selling is
+    # allowed, so a thin market cannot be pump-and-dumped against the app wallet.
+    SELL_MIN_MARKET_LIQUIDITY = float(os.getenv("SELL_MIN_MARKET_LIQUIDITY", "0"))
+    # V4/V6: a position bought less than this many seconds ago cannot be sold
+    # (anti wash-trade / round-trip cooldown). 0 disables the cooldown.
+    SELL_COOLDOWN_SECONDS = int(os.getenv("SELL_COOLDOWN_SECONDS", "0"))

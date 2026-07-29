@@ -479,6 +479,13 @@ async def get_market_token(session: AsyncSession, market_id: int, outcome: Liter
     return token
 
 
+async def get_market_liquidity(session: AsyncSession, market_id: int) -> Decimal:
+    """Current liquidity of a market (0 if null/absent). Used by the V4 guard."""
+    row = await session.execute(select(Market.liquidity).where(Market.id == market_id))
+    val = row.scalar_one_or_none()
+    return Decimal(str(val)) if val is not None else Decimal("0")
+
+
 async def get_token_and_price(
     session: AsyncSession, market_id: int, outcome: Literal["YES", "NO"]
 ) -> tuple[str, Decimal]:

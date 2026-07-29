@@ -196,6 +196,22 @@ async def verify_token(request):
 
 ---
 
+## 수정 반영 현황 (2026-07-29)
+
+| # | 상태 | 조치 |
+|---|---|---|
+| V1 | ✅ 수정됨 | 송금 전 포지션 선차감(단일 Tx). 실패 시 `restore_market_position` 복구, `PAYING` 상태 |
+| V2 | ✅ 수정됨 | `create_reserved` = `ON CONFLICT (sell_request_id) DO NOTHING` |
+| V3 | ✅ 수정됨 | 송금실패→복구+FAILED, 송금후 마킹실패→PAYING+txid(대조) |
+| V5 | ✅ 수정됨 | `verify_token_strict` — dev 우회 배제 |
+| V4 | ✅ 완화 | `SELL_MIN_MARKET_LIQUIDITY`(최소 유동성), `SELL_COOLDOWN_SECONDS`(라운드트립 쿨다운). 기본 0=비활성, env로 켬 |
+| V6 | ✅ 완화 | V4 쿨다운으로 즉시 저가매수→고가매도 차익 차단. 근본 회계는 별도 시뮬레이션 필요 |
+| V7 | ✅ 수정됨 | `SELL_MIN_SHARES`(1), `SELL_MIN_NET_PAYOUT`(0.1π), `SELL_RATE_MAX`(10/60s) |
+
+**남은 근본 과제:** V6의 회계 구조(주당 price 받고 1 지급, [PROGRESS_LOG.md:142](../PROGRESS_LOG.md#L142))는 정책 가드로 완화만 했을 뿐 근본 해결이 아니다. 매도를 mainnet(실 Pi)으로 승격하기 전 **AMM 수수료·스프레드가 앱 지갑 순유출을 커버하는지 시뮬레이션**이 필요하다.
+
+---
+
 ## 우선순위 결론
 
 **매도를 프로덕션(실자금)에 열기 전 반드시 막아야 할 것:**

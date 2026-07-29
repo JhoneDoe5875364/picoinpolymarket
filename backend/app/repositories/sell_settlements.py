@@ -10,11 +10,11 @@ commits internally) so the caller keeps full control of the transaction boundary
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Optional
 
-from sqlalchemy import insert, select, update
+from sqlalchemy import func, insert, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -38,6 +38,27 @@ def _to_dict(row: SellSettlement) -> dict[str, Any]:
         "payout_txid": row.payout_txid,
         "failure_reason": row.failure_reason,
     }
+
+
+async def count_recent_sells(
+    session: AsyncSession, *, user_id: int, window_seconds: int
+) -> int:
+    """How many sells this user started within the last `window_seconds`.
+
+    Counts every non-terminal-failed attempt (PENDING/PAYING/SETTLED) so a burst
+    of requests cannot bypass the limit by racing. Used for the V7 rate limit.
+    """
+    since = datetime.now(timezone.utc) - timedelta(seconds=window_seconds)
+    result = await session.execute(
+        select(func.count())
+        .select_from(SellSettlement)
+        .where(
+            SellSettlement.user_id == user_id,
+            SellSettlement.created_at >= since,
+            SellSettlement.status != "FAILED",
+        )
+    )
+    return int(result.scalar_one() or 0)
 
 
 async def get_by_request_id(
