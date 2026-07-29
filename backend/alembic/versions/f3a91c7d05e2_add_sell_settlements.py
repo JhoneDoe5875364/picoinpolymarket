@@ -22,10 +22,22 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    # Create the enum type once, explicitly. The column below reuses it with
+    # create_type=False so create_table does NOT try to CREATE TYPE a second
+    # time (which would raise DuplicateObjectError). checkfirst makes a rerun
+    # after a partially-applied migration a no-op.
     status_enum = sa.Enum(
         "PENDING", "SETTLED", "FAILED", name="sell_settlement_status"
     )
     status_enum.create(op.get_bind(), checkfirst=True)
+
+    status_col = sa.Enum(
+        "PENDING",
+        "SETTLED",
+        "FAILED",
+        name="sell_settlement_status",
+        create_type=False,
+    )
 
     op.create_table(
         "sell_settlements",
@@ -41,7 +53,7 @@ def upgrade() -> None:
         sa.Column("net_payout", sa.Numeric(24, 4), nullable=False),
         sa.Column(
             "status",
-            status_enum,
+            status_col,
             nullable=False,
         ),
         sa.Column("payout_txid", sa.Text(), nullable=True),
