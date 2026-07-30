@@ -11,6 +11,7 @@ import {
   ClipboardList,
   Clock,
   Copy,
+  Loader2,
   MoreHorizontal,
   Wallet,
   WalletCards,
@@ -519,6 +520,25 @@ export function PaymentManager() {
         </p>
       </div>
 
+      <div className="rounded-lg border bg-emerald-500/5 p-4">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">App wallet balance</p>
+          <Wallet className="h-5 w-5 text-emerald-500" />
+        </div>
+        <p className="mt-2 text-2xl font-bold">
+          {overviewLoading
+            ? "..."
+            : overview.app_wallet && overview.app_wallet.balance !== null
+              ? formatPiAmount(overview.app_wallet.balance)
+              : "—"}
+        </p>
+        <p className="mt-1 text-[11px] text-muted-foreground">
+          {overview.app_wallet
+            ? "Funds every A2U payout. Top up before it runs low."
+            : "Auto-pay disabled or balance unavailable."}
+        </p>
+      </div>
+
       <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
         <Link href="/admin/payments/received" className="block rounded-lg border p-3 transition-colors hover:bg-muted/40">
           <div className="flex items-center justify-between">
@@ -628,24 +648,6 @@ export function PaymentManager() {
               "payments.amount vs orders.pi_amount"}
           </p>
         </Link>
-        <div className="rounded-lg border p-3">
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-muted-foreground">App wallet balance</p>
-            <Wallet className="h-4 w-4 text-emerald-500" />
-          </div>
-          <p className="mt-2 text-md font-semibold">
-            {overviewLoading
-              ? "..."
-              : overview.app_wallet && overview.app_wallet.balance !== null
-                ? formatPiAmount(overview.app_wallet.balance)
-                : "—"}
-          </p>
-          <p className="mt-1 text-[11px] text-muted-foreground">
-            {overview.app_wallet
-              ? "Funds every A2U payout. Top up before it runs low."
-              : "Auto-pay disabled or balance unavailable."}
-          </p>
-        </div>
       </div>
 
       <div className="space-y-2 rounded-lg border p-3">
@@ -698,7 +700,10 @@ export function PaymentManager() {
               </TableRow>
             ) : (
               payoutRows.map((r) => (
-                <TableRow key={r.position_id}>
+                <TableRow
+                  key={r.position_id}
+                  className={payoutActionId === r.position_id ? "bg-sky-500/5" : undefined}
+                >
                   <TableCell className="text-xs font-medium">
                     {r.pi_username ?? `User ${r.user_id}`}
                   </TableCell>
@@ -711,16 +716,23 @@ export function PaymentManager() {
                     <CopyableAddress value={r.wallet_address} />
                   </TableCell>
                   <TableCell className="text-xs">
-                    <Badge
-                      variant="outline"
-                      className={
-                        r.payment_status === "paid"
-                          ? "border-green-600 text-green-700"
-                          : "border-orange-500 text-orange-700"
-                      }
-                    >
-                      {r.payment_status}
-                    </Badge>
+                    {payoutActionId === r.position_id ? (
+                      <span className="inline-flex items-center gap-1.5 font-medium text-sky-600 dark:text-sky-400">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        Sending…
+                      </span>
+                    ) : (
+                      <Badge
+                        variant="outline"
+                        className={
+                          r.payment_status === "paid"
+                            ? "border-green-600 text-green-700"
+                            : "border-orange-500 text-orange-700"
+                        }
+                      >
+                        {r.payment_status}
+                      </Badge>
+                    )}
                   </TableCell>
                   <TableCell>
                     <CopyableAddress value={r.txid} />
