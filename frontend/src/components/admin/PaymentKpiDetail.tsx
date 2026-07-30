@@ -16,7 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { DataPagination } from "@/components/ui/data-pagination";
-import { roundLocale } from "@/lib/utils";
+import { formatPiAmount, roundLocale } from "@/lib/utils";
 
 type Column = {
   key: string;
@@ -75,7 +75,7 @@ const PAYMENT_COLUMNS: Column[] = [
   {
     key: "amount",
     label: "Amount",
-    render: (r) => `${roundLocale(Number(r.amount ?? 0))} π`,
+    render: (r) => formatPiAmount(Number(r.amount ?? 0)),
   },
   { key: "status", label: "Status", render: (r) => String(r.status ?? "—") },
   {
@@ -123,7 +123,7 @@ const KPI_CONFIG: Record<string, KpiConfig> = {
       {
         key: "amount_paid",
         label: "Paid",
-        render: (r) => `${roundLocale(Number(r.amount_paid ?? 0))} π`,
+        render: (r) => formatPiAmount(Number(r.amount_paid ?? 0)),
       },
       {
         key: "method",
@@ -155,7 +155,7 @@ const KPI_CONFIG: Record<string, KpiConfig> = {
       {
         key: "amount_owed",
         label: "Owed",
-        render: (r) => `${roundLocale(Number(r.amount_owed ?? 0))} π`,
+        render: (r) => formatPiAmount(Number(r.amount_owed ?? 0)),
       },
       {
         key: "wallet_address",

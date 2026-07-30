@@ -19,7 +19,7 @@ import {
 import { format } from "date-fns";
 import { apiFetchWithToken } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
-import { roundLocale } from "@/lib/utils";
+import { formatPiAmount, roundLocale } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -528,7 +528,7 @@ export function PaymentManager() {
           <p className="mt-2 text-md font-semibold">
             {overviewLoading
               ? "..."
-              : `${roundLocale(overview.user_to_app_payments_received.count)} · ${roundLocale(overview.user_to_app_payments_received.total_pi)} π`}
+              : `${roundLocale(overview.user_to_app_payments_received.count)} · ${formatPiAmount(overview.user_to_app_payments_received.total_pi)}`}
           </p>
           <p className="mt-1 text-[11px] text-muted-foreground">Completed Pi payments (count · total)</p>
         </Link>
@@ -540,7 +540,7 @@ export function PaymentManager() {
           <p className="mt-2 text-md font-semibold">
             {overviewLoading
               ? "..."
-              : `${roundLocale(overview.app_to_user_payouts_sent.count)} · ${roundLocale(overview.app_to_user_payouts_sent.total_pi)} π`}
+              : `${roundLocale(overview.app_to_user_payouts_sent.count)} · ${formatPiAmount(overview.app_to_user_payouts_sent.total_pi)}`}
           </p>
           <p className="mt-1 text-[11px] text-muted-foreground">
             {overview.app_to_user_payouts_sent.scope_note ??
@@ -556,7 +556,7 @@ export function PaymentManager() {
           <p className="mt-2 text-md font-semibold">
             {overviewLoading
               ? "..."
-              : `${roundLocale(overview.pending_payouts.count)} · ${roundLocale(overview.pending_payouts.total_pi)} π`}
+              : `${roundLocale(overview.pending_payouts.count)} · ${formatPiAmount(overview.pending_payouts.total_pi)}`}
           </p>
           <p className="mt-1 text-[11px] text-muted-foreground">
             {overview.pending_payouts.scope_note ?? "Buy payments in PENDING status."}
@@ -570,7 +570,7 @@ export function PaymentManager() {
           <p className="mt-2 text-md font-semibold">
             {overviewLoading
               ? "..."
-              : `${roundLocale(overview.failed_payouts.count)} · ${roundLocale(overview.failed_payouts.total_pi)} π`}
+              : `${roundLocale(overview.failed_payouts.count)} · ${formatPiAmount(overview.failed_payouts.total_pi)}`}
           </p>
           <p className="mt-1 text-[11px] text-muted-foreground">
             {overview.failed_payouts.scope_note ?? "FAILED buy-payment records."}
@@ -587,7 +587,7 @@ export function PaymentManager() {
           <p className="mt-2 text-md font-semibold">
             {overviewLoading
               ? "..."
-              : `${roundLocale(overview.manual_payout_queue.count)} · ${roundLocale(overview.manual_payout_queue.total_pi)} π`}
+              : `${roundLocale(overview.manual_payout_queue.count)} · ${formatPiAmount(overview.manual_payout_queue.total_pi)}`}
           </p>
           <p className="mt-1 text-[11px] text-muted-foreground">
             {overview.manual_payout_queue.scope_note ?? "Winners awaiting payout."}
@@ -637,7 +637,7 @@ export function PaymentManager() {
             {overviewLoading
               ? "..."
               : overview.app_wallet && overview.app_wallet.balance !== null
-                ? `${roundLocale(overview.app_wallet.balance)} π`
+                ? formatPiAmount(overview.app_wallet.balance)
                 : "—"}
           </p>
           <p className="mt-1 text-[11px] text-muted-foreground">
@@ -706,7 +706,7 @@ export function PaymentManager() {
                     <MarketCell question={r.market_question} />
                   </TableCell>
                   <TableCell className="text-xs">{r.outcome}</TableCell>
-                  <TableCell className="tabular-nums text-xs">{roundLocale(r.amount_owed)} π</TableCell>
+                  <TableCell className="tabular-nums text-xs">{formatPiAmount(r.amount_owed)}</TableCell>
                   <TableCell>
                     <CopyableAddress value={r.wallet_address} />
                   </TableCell>
@@ -869,9 +869,9 @@ export function PaymentManager() {
                     </span>
                   </TableCell>
                   <TableCell className="text-xs">
-                    <span className="tabular-nums">{roundLocale(r.amount)} π</span>
+                    <span className="tabular-nums">{formatPiAmount(r.amount)}</span>
                     <span className="text-muted-foreground"> / order </span>
-                    <span className="tabular-nums">{roundLocale(r.order_pi_amount)} π</span>
+                    <span className="tabular-nums">{formatPiAmount(r.order_pi_amount)}</span>
                     {r.amount_mismatch ? (
                       <Badge variant="outline" className="ml-2 border-amber-600 text-[10px] text-amber-700">
                         Mismatch

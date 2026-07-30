@@ -40,6 +40,16 @@ export function roundLocalePi(value: number | undefined): string {
   return `${Math.round(value ?? 0).toLocaleString()}π`;
 }
 
+/**
+ * Format a Pi AMOUNT for display, preserving up to 4 decimals (matching the
+ * Numeric(24,4) columns) with trailing zeros trimmed: 5.1000 -> "5.1π",
+ * 6.12 -> "6.12π", 50 -> "50π". Use this for Pi money only — NOT for counts
+ * (markets, users, trades) or share quantities, which stay integer.
+ */
+export function formatPiAmount(value: number | undefined): string {
+  return `${(value ?? 0).toLocaleString("en-US", { maximumFractionDigits: 4 })}π`;
+}
+
 export function toLocaleString(value: number): string {
   return value.toLocaleString();
 }

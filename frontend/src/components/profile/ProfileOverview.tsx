@@ -25,7 +25,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { apiFetchWithToken } from '@/lib/api';
 import { TRADE_COPY } from '@/lib/copy/trade';
-import { cn, roundLocalePi, toNumber, toSignedMoney } from '@/lib/utils';
+import { cn, formatPiAmount, toNumber, toSignedMoney } from '@/lib/utils';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { SuggestMarketForm } from '@/components/market/SuggestMarketForm';
@@ -614,11 +614,11 @@ export function ProfileOverview() {
 
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <p className="text-xl sm:text-2xl font-bold leading-none">{roundLocalePi(stats.positionsValue)}</p>
+              <p className="text-xl sm:text-2xl font-bold leading-none">{formatPiAmount(stats.positionsValue)}</p>
               <p className="text-xs text-muted-foreground sm:text-sm">Positions Value</p>
             </div>
             <div>
-              <p className="text-xl sm:text-2xl font-bold leading-none">{roundLocalePi(stats.biggestWin)}</p>
+              <p className="text-xl sm:text-2xl font-bold leading-none">{formatPiAmount(stats.biggestWin)}</p>
               <p className="text-xs text-muted-foreground sm:text-sm">Biggest Win</p>
             </div>
             <div>

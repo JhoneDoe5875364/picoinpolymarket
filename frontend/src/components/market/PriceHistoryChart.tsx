@@ -19,7 +19,7 @@ import { Skeleton } from "../ui/skeleton"
 import { apiFetch } from "@/lib/api"
 import { Market } from "@/lib/types"
 import { format, isValid } from "date-fns"
-import { cn, roundLocale, roundLocalePi } from "@/lib/utils"
+import { cn, formatPiAmount, roundLocale } from "@/lib/utils"
 
 interface PriceHistoryChartProps {
   market: Market
@@ -487,8 +487,8 @@ export function PriceHistoryChart({
 
       {showFooter && (
         <div className="mt-5 grid grid-cols-4 gap-4 text-center sm:grid-cols-4 sm:gap-6">
-          <StatBlock label="Volume (7D)" value={roundLocalePi(volume7d)} />
-          <StatBlock label="24h Volume" value={roundLocalePi(volume24h)} />
+          <StatBlock label="Volume (7D)" value={formatPiAmount(volume7d)} />
+          <StatBlock label="24h Volume" value={formatPiAmount(volume24h)} />
           <StatBlock label="Traders" value={roundLocale(traders)} />
           <StatBlock label="Holders" value={roundLocale(holders)} />
         </div>

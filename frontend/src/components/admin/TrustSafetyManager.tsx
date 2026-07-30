@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { apiFetchWithToken } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
-import { cn, roundLocale } from "@/lib/utils";
+import { cn, formatPiAmount, roundLocale } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -184,7 +184,7 @@ export function TrustSafetyManager() {
   const snapshotParts = [
     data?.generated_at ? `Updated ${fmtShort(data.generated_at)}` : null,
     th?.high_comment_count_7d != null ? `High-comment ≥ ${th.high_comment_count_7d}/7d` : null,
-    th?.large_trade_pi_7d != null ? `Large trade ≥ ${roundLocale(th.large_trade_pi_7d)} π/7d` : null,
+    th?.large_trade_pi_7d != null ? `Large trade ≥ ${formatPiAmount(th.large_trade_pi_7d)}/7d` : null,
   ].filter(Boolean);
 
   const disputedCount = data?.disputed_markets?.items?.length ?? 0;
@@ -469,7 +469,7 @@ export function TrustSafetyManager() {
                   </TableCell>
                   <TableCell className="max-w-xs truncate text-xs">{truncate(r.market_question, 96)}</TableCell>
                   <TableCell className="font-mono text-[11px]">{r.taker_user_id}</TableCell>
-                  <TableCell className="text-right text-xs font-medium tabular-nums">{roundLocale(r.pi_total_amount)} π</TableCell>
+                  <TableCell className="text-right text-xs font-medium tabular-nums">{formatPiAmount(r.pi_total_amount)}</TableCell>
                   <TableCell className="text-xs">
                     <span className="font-medium">
                       {r.side} · {r.outcome}

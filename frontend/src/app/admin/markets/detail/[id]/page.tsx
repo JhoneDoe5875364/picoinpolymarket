@@ -13,7 +13,7 @@ import {
   type AdminClarificationState,
 } from "@/components/admin/MarketAdminClarification";
 import { format } from "date-fns";
-import { roundLocale, roundLocalePi } from "@/lib/utils";
+import { formatPiAmount, roundLocale } from "@/lib/utils";
 
 type MarketDetailMetrics = {
   totalVolume: number;
@@ -192,15 +192,15 @@ export default function AdminMarketDetailPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
           <div className="rounded-lg border flex items-center justify-between p-2">
             <div className="text-xs text-muted-foreground">Total Volume</div>
-            <div className="text-md font-semibold">{roundLocalePi(metrics.totalVolume)}</div>
+            <div className="text-md font-semibold">{formatPiAmount(metrics.totalVolume)}</div>
           </div>
           <div className="rounded-lg border flex items-center justify-between p-2">
             <div className="text-xs text-muted-foreground">Yes Volume</div>
-            <div className="text-md font-semibold">{roundLocalePi(metrics.yesVolume)}</div>
+            <div className="text-md font-semibold">{formatPiAmount(metrics.yesVolume)}</div>
           </div>
           <div className="rounded-lg border flex items-center justify-between p-2">
             <div className="text-xs text-muted-foreground">No Volume</div>
-            <div className="text-md font-semibold">{roundLocalePi(metrics.noVolume)}</div>
+            <div className="text-md font-semibold">{formatPiAmount(metrics.noVolume)}</div>
           </div>
 
           <div className="rounded-lg border flex items-center justify-between p-2">
@@ -213,12 +213,12 @@ export default function AdminMarketDetailPage() {
           </div>
           <div className="rounded-lg border flex items-center justify-between p-2">
             <div className="text-xs text-muted-foreground">Average Prediction Size</div>
-            <div className="text-md font-semibold">{roundLocalePi(metrics.avgPredictionSize)}</div>
+            <div className="text-md font-semibold">{formatPiAmount(metrics.avgPredictionSize)}</div>
           </div>
 
           <div className="rounded-lg border flex items-center justify-between p-2">
             <div className="text-xs text-muted-foreground">Largest Prediction</div>
-            <div className="text-md font-semibold">{roundLocalePi(metrics.largestPrediction)}</div>
+            <div className="text-md font-semibold">{formatPiAmount(metrics.largestPrediction)}</div>
           </div>
           <div className="rounded-lg border flex items-center justify-between p-2">
             <div className="text-xs text-muted-foreground">Close Date</div>

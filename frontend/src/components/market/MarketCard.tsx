@@ -9,7 +9,7 @@ import { fmtShortDate } from "@/lib/dates";
 import MarketProbability from "@/components/market/MarketProbability";
 import QuickBuyModal from "@/components/market/QuickBuyModal";
 import { MarketCardActions } from "@/components/market/MarketCardActions";
-import { cn, roundLocalePi } from "@/lib/utils";
+import { cn, formatPiAmount } from "@/lib/utils";
 import { TRADE_COPY } from "@/lib/copy/trade";
 // -----------------------------------------------------
 const DEFAULT_MARKET_ICON = "/images/markets/market-default.png";
@@ -248,7 +248,7 @@ export function MarketCard({ market }: { market: Market | any }) {
               </p>
             )}
             <div className="mt-2 flex justify-between text-xs text-muted-foreground md:mt-4">
-              <span>· Volume: <span className="font-semibold">{roundLocalePi(volume)}</span></span>
+              <span>· Volume: <span className="font-semibold">{formatPiAmount(volume)}</span></span>
               <span>· End Date: <span className="font-semibold">{fmtShortDate(market?.end_date)}</span></span>
             </div>
           </CardContent>

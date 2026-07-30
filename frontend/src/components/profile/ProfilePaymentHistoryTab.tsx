@@ -6,7 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { cn, roundLocalePi, toNumber } from '@/lib/utils';
+import { cn, formatPiAmount, toNumber } from '@/lib/utils';
 import { apiFetchWithToken } from '@/lib/api';
 import { PaymentHistoryToolbar } from '@/components/profile/PaymentHistoryToolbar';
 import type { PaymentStatusTabValue } from '@/components/profile/PaymentStatusTabs';
@@ -119,14 +119,14 @@ function piSentReturned(status: string, amount: number): {
     return {
       sent: null,
       returned: null,
-      note: `In progress · ${roundLocalePi(amount)} π`,
+      note: `In progress · ${formatPiAmount(amount)} π`,
     };
   }
   if (status === 'FAILED') {
     return {
       sent: null,
       returned: null,
-      note: `Not collected · ${roundLocalePi(amount)} π`,
+      note: `Not collected · ${formatPiAmount(amount)} π`,
     };
   }
   return { sent: null, returned: null, note: null };
@@ -374,14 +374,14 @@ export function ProfilePaymentHistoryTab({ isActive }: ProfilePaymentHistoryTabP
                       </TableCell>
                       <TableCell className="align-top text-right text-sm font-semibold tabular-nums md:text-base">
                         {sent != null ? (
-                          <span className="text-foreground">{roundLocalePi(sent)} π</span>
+                          <span className="text-foreground">{formatPiAmount(sent)} π</span>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}
                       </TableCell>
                       <TableCell className="align-top text-right text-sm font-semibold tabular-nums md:text-base">
                         {returned != null ? (
-                          <span className="text-foreground">{roundLocalePi(returned)} π</span>
+                          <span className="text-foreground">{formatPiAmount(returned)} π</span>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}

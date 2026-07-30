@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetchWithToken } from "@/lib/api";
-import { roundLocale, roundLocalePi } from "@/lib/utils";
+import { formatPiAmount, roundLocale } from "@/lib/utils";
 import { MarketCreator } from "@/components/admin/MarketCreator";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { format } from "date-fns";
@@ -457,7 +457,7 @@ export function MarketManager() {
                 <TableCell className="text-xs hidden">{format(new Date(m.start_date ?? ""), "MM/dd/yyyy")}</TableCell>
                 <TableCell className="text-xs">{format(new Date(m.end_date ?? ""), "MM/dd/yyyy")}</TableCell>
                 <TableCell className="text-xs hidden">{roundLocale(m.traders ?? 0)}</TableCell>
-                <TableCell className="text-xs text-right tabular-nums">{roundLocalePi(m.volume ?? 0)}</TableCell>
+                <TableCell className="text-xs text-right tabular-nums">{formatPiAmount(m.volume ?? 0)}</TableCell>
                 <TableCell className="text-right">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { cn, roundLocalePi, toNumber, toPriceLabel, toRelativeTimeLabel } from '@/lib/utils';
+import { cn, formatPiAmount, toNumber, toPriceLabel, toRelativeTimeLabel } from '@/lib/utils';
 import { apiFetchWithToken } from '@/lib/api';
 import { TRADE_TERMS } from '@/lib/trade/tradeTerms';
 
@@ -222,7 +222,7 @@ export function ProfileActivityTab({
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        <p className="text-sm font-bold leading-none">{roundLocalePi(trade.piAmount)}</p>
+                        <p className="text-sm font-bold leading-none">{formatPiAmount(trade.piAmount)}</p>
                         <p className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground">
                           {toRelativeTimeLabel(trade.createdAt)}
                         </p>

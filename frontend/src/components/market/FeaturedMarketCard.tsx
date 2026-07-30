@@ -5,7 +5,7 @@ import Link from "next/link";
 import { InitialAvatar } from "@/components/market/participants/shared";
 import { PriceHistoryChart } from "@/components/market/PriceHistoryChart";
 import { MarketCardActions } from "@/components/market/MarketCardActions";
-import { cn, roundLocalePi } from "@/lib/utils";
+import { cn, formatPiAmount } from "@/lib/utils";
 import { TRADE_COPY } from "@/lib/copy/trade";
 import { fmtShortDate } from "@/lib/dates";
 import type { Market } from "@/lib/types";
@@ -166,7 +166,7 @@ export default function FeaturedMarketCard({ market }: FeaturedMarketCardProps) 
       </div>
       <div className="mt-3 flex flex-wrap items-center justify-between text-xs text-muted-foreground">
         <div className="flex gap-2">
-          <div>· Volume: <span className="font-semibold">{roundLocalePi(market.volume)}</span></div>
+          <div>· Volume: <span className="font-semibold">{formatPiAmount(market.volume)}</span></div>
           <div>· {TRADE_COPY.predictions24h}: <span className="font-semibold">{market.trades_24h ?? 0}</span></div>
         </div>
         <div className="flex">
