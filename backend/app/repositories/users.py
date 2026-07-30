@@ -360,6 +360,9 @@ async def list_positions(
             func.cast(MarketPosition.shares * yes_price - MarketPosition.pi_amount, Float).label("pnl"),
             func.cast((MarketPosition.shares * yes_price - MarketPosition.pi_amount) / MarketPosition.pi_amount * 100, Float).label("pnl_percent"),
             func.cast(MarketPosition.shares * yes_price, Float).label("current_pi_amount"),
+            MarketPosition.final_price.label("final_price"),
+            Market.is_resolved.label("is_resolved"),
+            Market.resolved_outcome.label("resolved_outcome"),
         )
         .join(Market, Market.id == MarketPosition.market_id)
         .outerjoin(
@@ -385,6 +388,9 @@ async def list_positions(
             func.cast(MarketPosition.shares * no_price - MarketPosition.pi_amount, Float).label("pnl"),
             func.cast((MarketPosition.shares * no_price - MarketPosition.pi_amount) / MarketPosition.pi_amount * 100, Float).label("pnl_percent"),
             func.cast(MarketPosition.shares * no_price, Float).label("current_pi_amount"),
+            MarketPosition.final_price.label("final_price"),
+            Market.is_resolved.label("is_resolved"),
+            Market.resolved_outcome.label("resolved_outcome"),
         )
         .join(Market, Market.id == MarketPosition.market_id)
         .outerjoin(

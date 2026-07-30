@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/table";
 import { DataPagination } from "@/components/ui/data-pagination";
 import { formatPiAmount, roundLocale } from "@/lib/utils";
+import { ResultBadge, type PredictionResult } from "@/components/market/ResultBadge";
 
 type Column = {
   key: string;
@@ -72,6 +73,11 @@ const PAYMENT_COLUMNS: Column[] = [
   marketCol,
   { key: "outcome", label: "Prediction", render: (r) => outcomeBadge(r.outcome) },
   { key: "shares", label: "Shares", render: (r) => `${roundLocale(Number(r.shares ?? 0))} sh` },
+  {
+    key: "result",
+    label: "Result",
+    render: (r) => <ResultBadge result={(String(r.result ?? "open") as PredictionResult)} />,
+  },
   {
     key: "amount",
     label: "Amount",

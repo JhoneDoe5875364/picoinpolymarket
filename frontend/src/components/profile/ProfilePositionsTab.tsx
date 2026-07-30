@@ -12,6 +12,7 @@ import { TRADE_COPY } from '@/lib/copy/trade';
 import { TRADE_TERMS } from '@/lib/trade/tradeTerms';
 import SellModal from '@/components/market/SellModal';
 import { Button } from '@/components/ui/button';
+import { ResultBadge, positionResult } from '@/components/market/ResultBadge';
 
 export type PositionRow = {
   id: string;
@@ -25,6 +26,8 @@ export type PositionRow = {
   pnl: number;
   pnlPercent: number;
   currentPiAmount: number;
+  finalPrice: number | null;
+  isResolved: boolean;
 };
 
 const SORT_OPTIONS = [
@@ -50,6 +53,8 @@ function normalizePositionRow(row: any, index: number): PositionRow {
   const pnl = toNumber(row?.pnl ?? 0);
   const pnlPercent = toNumber(row?.pnl_percent ?? 0);
   const currentPiAmount = toNumber(row?.current_pi_amount ?? 0);
+  const finalPrice = row?.final_price == null ? null : toNumber(row.final_price);
+  const isResolved = Boolean(row?.is_resolved);
 
   const rawMarketId = row?.market_id;
   return {
@@ -64,6 +69,8 @@ function normalizePositionRow(row: any, index: number): PositionRow {
     pnl,
     pnlPercent,
     currentPiAmount,
+    finalPrice,
+    isResolved,
   };
 }
 
@@ -347,6 +354,15 @@ export function ProfilePositionsTab({
                               >
                                 {position.outcome === 'NO' ? 'No' : 'Yes'} {toPriceLabel(position.avgPrice)}
                               </span>
+                              {status === 'closed' ? (
+                                <ResultBadge
+                                  result={positionResult({
+                                    isResolved: position.isResolved,
+                                    finalPrice: position.finalPrice,
+                                    isClosed: true,
+                                  })}
+                                />
+                              ) : null}
                               <span>{position.shares.toFixed(1)} shares</span>
                             </div>
                           </div>

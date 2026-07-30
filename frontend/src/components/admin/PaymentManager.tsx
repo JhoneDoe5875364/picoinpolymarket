@@ -21,6 +21,7 @@ import { format } from "date-fns";
 import { apiFetchWithToken } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { formatPiAmount, roundLocale } from "@/lib/utils";
+import { ResultBadge } from "@/components/market/ResultBadge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -97,6 +98,7 @@ type AdminPaymentRow = {
   market_id: number | null;
   market_question: string | null;
   outcome: string | null;
+  result: "won" | "lost" | "open";
   shares: number;
   amount: number;
   order_pi_amount: number;
@@ -289,6 +291,7 @@ export function PaymentManager() {
         list.map((r: AdminPaymentRow) => ({
           ...r,
           outcome: r.outcome ?? null,
+          result: r.result ?? "open",
           shares: Number(r.shares ?? 0),
           amount: Number(r.amount ?? 0),
           order_pi_amount: Number(r.order_pi_amount ?? 0),
@@ -840,6 +843,7 @@ export function PaymentManager() {
               <TableHead className="text-xs">User</TableHead>
               <TableHead className="text-xs">Market</TableHead>
               <TableHead className="text-xs">Prediction</TableHead>
+              <TableHead className="text-xs">Result</TableHead>
               <TableHead className="text-xs">Amounts</TableHead>
               <TableHead className="text-xs">Status</TableHead>
               <TableHead className="text-xs">Pi payment</TableHead>
@@ -849,7 +853,7 @@ export function PaymentManager() {
           <TableBody>
             {filteredRows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-xs text-muted-foreground">
+                <TableCell colSpan={8} className="text-xs text-muted-foreground">
                   {loading ? "Loading…" : "No payment rows for this filter."}
                 </TableCell>
               </TableRow>
@@ -879,6 +883,9 @@ export function PaymentManager() {
                     <span className="ml-1.5 tabular-nums text-muted-foreground">
                       {roundLocale(r.shares)} sh
                     </span>
+                  </TableCell>
+                  <TableCell className="text-xs">
+                    <ResultBadge result={r.result} />
                   </TableCell>
                   <TableCell className="text-xs">
                     <span className="tabular-nums">{formatPiAmount(r.amount)}</span>

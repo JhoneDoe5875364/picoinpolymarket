@@ -681,6 +681,8 @@ async def list_admin_payments(
             Payment.order_id,
             Order.market_id,
             Market.question.label("market_question"),
+            Market.is_resolved.label("is_resolved"),
+            Market.resolved_outcome.label("resolved_outcome"),
             Order.outcome.label("outcome"),
             Order.size.label("shares"),
             Payment.amount,
@@ -722,6 +724,16 @@ async def list_admin_payments(
         row["order_pi_amount"] = float(row["order_pi_amount"] or 0)
         row["shares"] = float(row["shares"] or 0)
         row["amount_mismatch"] = bool(row.get("amount_mismatch"))
+        # Prediction result vs the market outcome: won if my side matches the
+        # resolved outcome, lost if it doesn't, open while the market is unresolved.
+        if row.get("is_resolved") and row.get("resolved_outcome"):
+            row["result"] = (
+                "won"
+                if str(row["outcome"]).upper() == str(row["resolved_outcome"]).upper()
+                else "lost"
+            )
+        else:
+            row["result"] = "open"
         rows.append(row)
     return rows, total
 
