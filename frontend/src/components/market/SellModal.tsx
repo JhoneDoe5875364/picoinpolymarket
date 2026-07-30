@@ -3,7 +3,8 @@
 import { useMemo, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { executeSellTrade, type SellTradeResult } from "@/lib/trade/executeSellTrade";
-import { formatPi, sanitizeShares } from "@/lib/trade/tradeTerms";
+import { sanitizeShares } from "@/lib/trade/tradeTerms";
+import { formatPiAmount } from "@/lib/utils";
 import { FEE } from "@/lib/constants";
 import { invalidateProfileOverview } from "@/components/profile/ProfileOverview";
 
@@ -88,7 +89,7 @@ export default function SellModal({
         setSharesInput("");
         toast({
           title: "Sale complete",
-          description: `You received ${formatPi(res.netPayout ?? breakdown.netPayout)}.`,
+          description: `You received ${formatPiAmount(res.netPayout ?? breakdown.netPayout)}.`,
         });
         onSold?.();
       } else {
@@ -148,23 +149,23 @@ export default function SellModal({
           <div className="space-y-2 rounded-xl border border-border/80 bg-muted/20 p-3 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Current price</span>
-              <span>{currentPrice.toFixed(2)} π</span>
+              <span>{formatPiAmount(currentPrice)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Shares</span>
-              <span>{shares.toFixed(2)}</span>
+              <span>{shares}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Gross</span>
-              <span>{formatPi(breakdown.gross)}</span>
+              <span>{formatPiAmount(breakdown.gross)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Fee</span>
-              <span>-{formatPi(breakdown.fee)}</span>
+              <span>-{formatPiAmount(breakdown.fee)}</span>
             </div>
             <div className="flex justify-between font-semibold">
               <span className="text-foreground">You receive</span>
-              <span>{formatPi(breakdown.netPayout)}</span>
+              <span>{formatPiAmount(breakdown.netPayout)}</span>
             </div>
           </div>
 
@@ -172,7 +173,7 @@ export default function SellModal({
             <div className="rounded-md border border-emerald-500/40 bg-emerald-500/5 p-3 text-xs">
               <p className="font-semibold text-foreground">Sale submitted successfully.</p>
               <div className="mt-2 space-y-1 text-muted-foreground">
-                <p>Received: {formatPi(result.netPayout ?? breakdown.netPayout)}</p>
+                <p>Received: {formatPiAmount(result.netPayout ?? breakdown.netPayout)}</p>
                 <p>Reference ID: {result.txid || "Pending"}</p>
                 <p>
                   {result.isClosed
