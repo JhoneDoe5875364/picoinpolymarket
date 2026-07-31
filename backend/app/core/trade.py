@@ -113,6 +113,36 @@ def compute_sell_breakdown(price: float, shares: float) -> SellBreakdown:
     )
 
 
+def compute_pool_sell_price(
+    *,
+    escrow_pool: float | Decimal,
+    outcome_price: float | Decimal,
+    outcome_total_shares: float | Decimal,
+) -> Decimal:
+    """Fully-collateralized sell price per share (pre-resolution exit).
+
+    A pre-resolution sell must be backed by funds already in the market, never
+    by the platform. The market will pay AT MOST ``escrow_pool`` in total, and
+    this outcome's expected claim on the pool is ``escrow_pool * outcome_price``
+    (outcome_price is the AMM's win-probability estimate, 0..1). Splitting that
+    across the outcome's shares gives a per-share exit value that can never make
+    the sum of all exits exceed the pool:
+
+        price = (escrow_pool * outcome_price) / outcome_total_shares
+
+    Returns 0 when there are no shares or nothing to back the exit.
+    """
+    pool = Decimal(str(escrow_pool or 0))
+    prob = Decimal(str(outcome_price or 0))
+    total_shares = Decimal(str(outcome_total_shares or 0))
+    if pool <= 0 or prob <= 0 or total_shares <= 0:
+        return Decimal("0")
+    price = (pool * prob) / total_shares
+    # Never exceed 1π/share (the settlement ceiling) — a thin market could push
+    # the raw figure above 1, which would over-pay relative to a winning share.
+    return min(_quantize(price), Decimal("1.0000"))
+
+
 def amounts_match(expected: Decimal, actual: float | Decimal | None) -> bool:
     if actual is None:
         return False

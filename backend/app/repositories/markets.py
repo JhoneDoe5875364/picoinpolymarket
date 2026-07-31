@@ -486,6 +486,26 @@ async def get_market_liquidity(session: AsyncSession, market_id: int) -> Decimal
     return Decimal(str(val)) if val is not None else Decimal("0")
 
 
+async def get_escrow_and_outcome_shares(
+    session: AsyncSession, market_id: int, outcome: str
+) -> tuple[Decimal, Decimal]:
+    """(escrow_pool, total open shares on `outcome`) for the pool-based sell price."""
+    from app.models.tables.market_position import MarketPosition
+
+    pool_row = await session.execute(select(Market.escrow_pool).where(Market.id == market_id))
+    pool = Decimal(str(pool_row.scalar_one_or_none() or 0))
+
+    shares_row = await session.execute(
+        select(func.coalesce(func.sum(MarketPosition.shares), 0)).where(
+            MarketPosition.market_id == market_id,
+            MarketPosition.outcome == outcome.upper(),
+            MarketPosition.shares > 0,
+        )
+    )
+    total_shares = Decimal(str(shares_row.scalar_one() or 0))
+    return pool, total_shares
+
+
 async def get_token_and_price(
     session: AsyncSession, market_id: int, outcome: Literal["YES", "NO"]
 ) -> tuple[str, Decimal]:

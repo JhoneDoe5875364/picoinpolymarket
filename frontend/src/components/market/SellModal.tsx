@@ -1,11 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { executeSellTrade, type SellTradeResult } from "@/lib/trade/executeSellTrade";
 import { sanitizeShares } from "@/lib/trade/tradeTerms";
+import { apiFetchWithToken } from "@/lib/api";
 import { formatPiAmount } from "@/lib/utils";
-import { FEE } from "@/lib/constants";
 import { invalidateProfileOverview } from "@/components/profile/ProfileOverview";
 
 type Props = {
@@ -19,19 +19,13 @@ type Props = {
   onSold?: () => void; // refresh callback after a successful sell
 };
 
-type SellBreakdown = {
+type SellQuote = {
+  price: number;
   gross: number;
   fee: number;
   netPayout: number;
+  sellable: boolean;
 };
-
-function calculateSellBreakdown(price: number, rawShares: number): SellBreakdown {
-  const shares = sanitizeShares(rawShares);
-  const safePrice = Number.isFinite(price) && price > 0 ? price : 0;
-  const gross = safePrice * shares;
-  const fee = gross * FEE;
-  return { gross, fee, netPayout: gross - fee };
-}
 
 export default function SellModal({
   open,
@@ -49,12 +43,49 @@ export default function SellModal({
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string>("");
   const [result, setResult] = useState<SellTradeResult | null>(null);
+  const [quote, setQuote] = useState<SellQuote | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
 
   const shares = useMemo(() => sanitizeShares(Number(sharesInput)), [sharesInput]);
-  const breakdown = useMemo(
-    () => calculateSellBreakdown(currentPrice, shares),
-    [currentPrice, shares]
-  );
+
+  // The real sell price is pool-collateralized and computed server-side, so we
+  // fetch a live quote instead of guessing from the AMM price. Debounced.
+  useEffect(() => {
+    if (!open || shares <= 0) {
+      setQuote(null);
+      return;
+    }
+    let cancelled = false;
+    setQuoteLoading(true);
+    const timer = window.setTimeout(async () => {
+      try {
+        const res = await apiFetchWithToken<{
+          ok?: boolean;
+          sellable?: boolean;
+          price?: number;
+          gross?: number;
+          fee?: number;
+          net_payout?: number;
+        }>(`/positions/${positionId}/sell-quote?shares=${shares}`, { method: "GET" });
+        if (cancelled) return;
+        setQuote({
+          price: Number(res?.price ?? 0),
+          gross: Number(res?.gross ?? 0),
+          fee: Number(res?.fee ?? 0),
+          netPayout: Number(res?.net_payout ?? 0),
+          sellable: Boolean(res?.sellable),
+        });
+      } catch {
+        if (!cancelled) setQuote(null);
+      } finally {
+        if (!cancelled) setQuoteLoading(false);
+      }
+    }, 300);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [open, positionId, shares]);
 
   if (!open) return null;
 
@@ -81,7 +112,8 @@ export default function SellModal({
       const res = await executeSellTrade({
         positionId,
         sellShares: entered,
-        expectedPrice: currentPrice,
+        // Guard against the pool price moving between quote and execution.
+        expectedPrice: quote?.price,
       });
       setResult(res);
       if (res.ok) {
@@ -89,7 +121,7 @@ export default function SellModal({
         setSharesInput("");
         toast({
           title: "Sale complete",
-          description: `You received ${formatPiAmount(res.netPayout ?? breakdown.netPayout)}.`,
+          description: `You received ${formatPiAmount(res.netPayout ?? quote?.netPayout ?? 0)}.`,
         });
         onSold?.();
       } else {
@@ -148,8 +180,8 @@ export default function SellModal({
 
           <div className="space-y-2 rounded-xl border border-border/80 bg-muted/20 p-3 text-sm">
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Current price</span>
-              <span>{formatPiAmount(currentPrice)}</span>
+              <span className="text-muted-foreground">Sell price / share</span>
+              <span>{quoteLoading ? "…" : formatPiAmount(quote?.price ?? 0)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Shares</span>
@@ -157,23 +189,26 @@ export default function SellModal({
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Gross</span>
-              <span>{formatPiAmount(breakdown.gross)}</span>
+              <span>{quoteLoading ? "…" : formatPiAmount(quote?.gross ?? 0)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Fee</span>
-              <span>-{formatPiAmount(breakdown.fee)}</span>
+              <span>{quoteLoading ? "…" : `-${formatPiAmount(quote?.fee ?? 0)}`}</span>
             </div>
             <div className="flex justify-between font-semibold">
               <span className="text-foreground">You receive</span>
-              <span>{formatPiAmount(breakdown.netPayout)}</span>
+              <span>{quoteLoading ? "…" : formatPiAmount(quote?.netPayout ?? 0)}</span>
             </div>
+            <p className="pt-1 text-[11px] text-muted-foreground">
+              Price is your share of the market pool — always backed by funds already in the market.
+            </p>
           </div>
 
           {result?.ok && (
             <div className="rounded-md border border-emerald-500/40 bg-emerald-500/5 p-3 text-xs">
               <p className="font-semibold text-foreground">Sale submitted successfully.</p>
               <div className="mt-2 space-y-1 text-muted-foreground">
-                <p>Received: {formatPiAmount(result.netPayout ?? breakdown.netPayout)}</p>
+                <p>Received: {formatPiAmount(result.netPayout ?? quote?.netPayout ?? 0)}</p>
                 <p>Reference ID: {result.txid || "Pending"}</p>
                 <p>
                   {result.isClosed

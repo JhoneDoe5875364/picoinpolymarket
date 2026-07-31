@@ -24,7 +24,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.core.market import amm_price  # noqa: E402
-from app.core.trade import compute_sell_breakdown, compute_trade_breakdown  # noqa: E402
+from app.core.trade import compute_pool_sell_price, compute_sell_breakdown, compute_trade_breakdown  # noqa: E402
 
 FEE = Decimal("0.02")
 
@@ -65,7 +65,15 @@ class Book:
         return p, b
 
     def sell(self, outcome: str, shares: float):
-        p = self.price(outcome)
+        # Pool-collateralized exit price (mirrors production).
+        amm = self.price(outcome)
+        total_shares = self.yes_shares if outcome == "YES" else self.no_shares
+        pool_now = q(self.stake_in - self.paid_out)
+        p = compute_pool_sell_price(
+            escrow_pool=pool_now, outcome_price=amm, outcome_total_shares=total_shares
+        )
+        if p <= 0:
+            return None, None
         s = compute_sell_breakdown(float(p), shares)
         self.house -= q(s.net_payout)      # pay gross-fee
         self.fees += q(s.fee)

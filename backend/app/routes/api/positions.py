@@ -17,7 +17,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException, Path
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from pydantic import BaseModel, Field
 
 from app.core import pi_a2u
@@ -32,7 +32,7 @@ from app.core.market import (
     update_market_price,
 )
 from app.core.security import verify_token_strict
-from app.core.trade import compute_sell_breakdown
+from app.core.trade import compute_pool_sell_price, compute_sell_breakdown
 from app.db.deps import DbSession
 from app.repositories import markets as markets_repo
 from app.repositories import orders as orders_repo
@@ -190,9 +190,28 @@ async def sell_position(
                         detail="This market has too little liquidity to sell right now.",
                     )
 
-            token, price = await markets_repo.get_token_and_price(db, market_id, outcome)
-            if price <= 0:
+            token, amm_price = await markets_repo.get_token_and_price(db, market_id, outcome)
+            if amm_price <= 0:
                 raise HTTPException(status_code=400, detail="Invalid market price")
+
+            # Fully-collateralized exit price: the seller's proportional claim on
+            # the escrow pool (weighted by the AMM win-probability), NOT the raw
+            # AMM price. This guarantees a pre-resolution sell can never pay out
+            # more than the market already holds — the platform is never the
+            # counterparty. See docs/.../V6 escrow design + collateral invariant.
+            escrow_pool, outcome_total_shares = await markets_repo.get_escrow_and_outcome_shares(
+                db, market_id, outcome
+            )
+            price = compute_pool_sell_price(
+                escrow_pool=escrow_pool,
+                outcome_price=amm_price,
+                outcome_total_shares=outcome_total_shares,
+            )
+            if price <= 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail="This position cannot be sold right now (no pool value to back it).",
+                )
 
             if payload.expected_price is not None:
                 expected = Decimal(str(payload.expected_price))
@@ -336,4 +355,60 @@ async def sell_position(
         "shares_sold": float(breakdown.shares),
         "remaining_shares": reduce_result["remaining_shares"],
         "is_closed": reduce_result["is_closed"],
+    }
+
+
+@router.get("/{position_id}/sell-quote", summary="Preview the pool-collateralized sell payout")
+async def sell_quote(
+    db: DbSession,
+    position_id: int = Path(..., ge=1),
+    shares: float = Query(..., gt=0),
+    user=Depends(verify_token_strict),
+):
+    """Return the exact price/breakdown a sell of `shares` would use, so the UI
+    shows what the server will actually pay. Same pool-based pricing as the sell
+    route — never the raw AMM price."""
+    user_id = _user_id(user)
+
+    position = await positions_repo.lock_position(db, position_id=position_id, user_id=user_id)
+    await db.rollback()
+    if position is None:
+        raise HTTPException(status_code=404, detail="Position not found")
+    if position.is_closed or Decimal(str(position.shares)) <= 0:
+        raise HTTPException(status_code=400, detail="Position is already closed")
+
+    sell_shares = Decimal(str(shares))
+    if sell_shares > Decimal(str(position.shares)):
+        sell_shares = Decimal(str(position.shares))
+
+    market_id = int(position.market_id)
+    outcome = str(position.outcome).upper()
+    _token, amm_price = await markets_repo.get_token_and_price(db, market_id, outcome)
+    escrow_pool, outcome_total_shares = await markets_repo.get_escrow_and_outcome_shares(
+        db, market_id, outcome
+    )
+    price = compute_pool_sell_price(
+        escrow_pool=escrow_pool,
+        outcome_price=amm_price,
+        outcome_total_shares=outcome_total_shares,
+    )
+    if price <= 0:
+        return {
+            "ok": True,
+            "sellable": False,
+            "price": 0.0,
+            "gross": 0.0,
+            "fee": 0.0,
+            "net_payout": 0.0,
+            "reason": "No pool value currently backs this position.",
+        }
+    breakdown = compute_sell_breakdown(float(price), float(sell_shares))
+    return {
+        "ok": True,
+        "sellable": float(breakdown.net_payout) >= Config.SELL_MIN_NET_PAYOUT,
+        "price": float(breakdown.price),
+        "shares": float(breakdown.shares),
+        "gross": float(breakdown.gross),
+        "fee": float(breakdown.fee),
+        "net_payout": float(breakdown.net_payout),
     }
