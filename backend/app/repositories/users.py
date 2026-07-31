@@ -300,7 +300,10 @@ async def update_user_status(
     user_row = result.mappings().first()
     if not user_row:
         raise LookupError("User not found")
-    await session.commit()
+    # Do NOT commit here: the caller wraps this in `async with db.begin()` and
+    # also logs an admin action in the same transaction. Committing here closes
+    # that transaction early, so the follow-up log raised "Can't operate on
+    # closed transaction". Let the caller's context manager commit.
     return dict(user_row)
 
 
