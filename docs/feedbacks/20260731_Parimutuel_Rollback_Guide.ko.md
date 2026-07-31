@@ -1,11 +1,34 @@
 # 파리뮤추얼 에스크로 회계 — 롤백 가이드
 
 > 작성일: 2026-07-31
-> 대상 변경: 커밋 **`c9b97db`** "feat(accounting): pari-mutuel escrow so house nets only fees (V6 fix)"
-> 롤백 기준점(직전 상태): 커밋 **`4559cec`**
+> 대상 변경 (2개 커밋):
+> - **`c9b97db`** "pari-mutuel escrow so house nets only fees (V6 fix)" — 정산 회계
+> - **`3b7110f`** "pool-collateralized exit price so platform is never counterparty" — 매도가
+> 롤백 기준점(둘 다 되돌린 직전 상태): 커밋 **`4559cec`**
 > 관련 설계: [20260729_V6_Escrow_Accounting_Design.ko.md](20260729_V6_Escrow_Accounting_Design.ko.md)
 
-이 문서는 방금 도입한 **파리뮤추얼 에스크로 회계**를 되돌려 **"승자에게 shares×1 고정 지급"** 이던 이전 동작으로 복구하는 방법을 정리한다.
+이 문서는 방금 도입한 **파리뮤추얼 에스크로 회계**(정산) + **풀 담보 매도가**(매도)를 되돌려, **"승자에게 shares×1 고정 지급 + AMM 현재가로 매도"** 이던 이전 동작으로 복구하는 방법을 정리한다.
+
+> **두 커밋은 함께 되돌려야 정합적이다.** `3b7110f`(매도가)만 되돌리면 정산은 파리뮤추얼인데 매도는 AMM이라 담보 불변식이 다시 깨진다. `c9b97db`(정산)만 되돌리면 escrow 컬럼이 사라져 매도 풀가격 계산이 실패한다. 순서: **`3b7110f` → `c9b97db`** 순으로 revert(최신부터).
+
+---
+
+## 이번 2차 변경(`3b7110f`) 요약 — 풀 담보 매도가
+
+| 항목 | 이전 (롤백 후) | 이후 (현재) |
+|---|---|---|
+| 매도 가격 | AMM 현재가 (`get_token_and_price`) | 풀 비례 `min(1, pool×prob/shares)` |
+| 매도 초과 시 | 풀 초과하면 차단(502) → 사용자 못 팖 | 항상 풀 이하 → 매끄럽게 매도 |
+| 매도 견적 | 프론트 로컬 계산 (AMM가) | 서버 `GET /positions/{id}/sell-quote` |
+
+변경 파일 (`3b7110f`):
+- `backend/app/core/trade.py` (`compute_pool_sell_price` 추가)
+- `backend/app/repositories/markets.py` (`get_escrow_and_outcome_shares` 추가)
+- `backend/app/routes/api/positions.py` (매도가 교체 + `/sell-quote` 엔드포인트)
+- `backend/bin/sim_collateral_invariant.py`, `sim_house_pnl.py` (검증 도구)
+- `frontend/src/components/market/SellModal.tsx` (서버 견적 fetch)
+
+이 커밋은 **DB 스키마를 바꾸지 않는다** (마이그레이션 없음). 코드 revert만으로 완전히 되돌아간다.
 
 ---
 
@@ -63,7 +86,8 @@ WHERE is_resolved = true AND pool_at_resolution IS NOT NULL;
 **옵션 A — revert (권장, 이력 보존):**
 ```bash
 cd /e/Work_Data/01_PredictPix
-git revert --no-edit c9b97db
+git revert --no-edit 3b7110f    # 먼저 매도가(최신)
+git revert --no-edit c9b97db    # 그다음 정산 회계
 git push origin master        # 또는 push online master
 ```
 `revert`는 새 커밋으로 변경을 역적용하므로 이력이 남아 안전하다.
@@ -136,7 +160,7 @@ sudo systemctl restart predictpix-api
 
 **완전 롤백 (안전):**
 - [ ] `pool_at_resolution IS NOT NULL` 마켓 없음 확인
-- [ ] `git revert c9b97db` + push
+- [ ] `git revert 3b7110f` 그다음 `git revert c9b97db` + push (최신부터)
 - [ ] 서버 `alembic downgrade a4c82f1e9b7d`
 - [ ] api 재시작 + 프론트 재빌드
 - [ ] 이전 동작(shares×1, Estimated Return) 복구 확인
