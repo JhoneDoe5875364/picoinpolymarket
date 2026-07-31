@@ -31,6 +31,17 @@ class Market(Base):
     end_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     liquidity: Mapped[Optional[Decimal]] = mapped_column(Numeric(18, 4))
     volume: Mapped[Decimal] = mapped_column(Numeric(24, 4), default=Decimal("0"))
+    # ---- Pari-mutuel escrow accounting (V6 fix) ----
+    # escrow_pool: principal (amount, fee-excluded) currently held for this market.
+    #   += on buy settle, -= on sell refund and on winner payout. Never negative.
+    # gross_staked / gross_paid_out: cumulative audit totals.
+    # pool_at_resolution / winners_total_shares: frozen at resolve time; each
+    #   winner's payout = pool_at_resolution * shares / winners_total_shares.
+    escrow_pool: Mapped[Decimal] = mapped_column(Numeric(24, 4), nullable=False, default=Decimal("0"))
+    gross_staked: Mapped[Decimal] = mapped_column(Numeric(24, 4), nullable=False, default=Decimal("0"))
+    gross_paid_out: Mapped[Decimal] = mapped_column(Numeric(24, 4), nullable=False, default=Decimal("0"))
+    pool_at_resolution: Mapped[Optional[Decimal]] = mapped_column(Numeric(24, 4))
+    winners_total_shares: Mapped[Optional[Decimal]] = mapped_column(Numeric(24, 4))
     status: Mapped[str] = mapped_column(String, default="open")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_closed: Mapped[bool] = mapped_column(Boolean, default=False)

@@ -24,6 +24,8 @@ from app.core import pi_a2u
 from app.core.config import Config
 from app.core.logger import get_logger
 from app.core.market import (
+    credit_escrow_pool_reversal,
+    deduct_from_escrow_pool,
     insert_market_trade,
     reduce_market_position,
     restore_market_position,
@@ -263,6 +265,9 @@ async def sell_position(
                 updated_at=datetime.now(timezone.utc),
             )
             await update_market_price(db, trade)
+            # The refund leaves the market's escrow pool. Guarded so a sell can
+            # never pay out more than the pool holds.
+            await deduct_from_escrow_pool(db, market_id, breakdown.net_payout)
             await payments_repo.set_order_status(db, order_id=order_id, status="EXECUTED")
     except HTTPException:
         raise
@@ -292,6 +297,8 @@ async def sell_position(
                     avg_price=position_avg_price,
                     updated_at=datetime.now(timezone.utc),
                 )
+                # Payout never left, so put the refund back into the escrow pool.
+                await credit_escrow_pool_reversal(db, market_id, breakdown.net_payout)
                 await payments_repo.set_order_status(db, order_id=order_id, status="FAILED")
                 await sell_repo.mark_failed(
                     db, sell_request_id=payload.sell_request_id, reason=str(exc)

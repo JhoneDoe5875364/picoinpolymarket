@@ -112,6 +112,70 @@ async def insert_market_trade(
     return trade
 
 
+async def add_to_escrow_pool(session: AsyncSession, market_id: int, amount: Decimal) -> None:
+    """Credit staked principal (fee-excluded) to the market's escrow pool on buy."""
+    amt = Decimal(str(amount)).quantize(PRICE_STEP)
+    if amt <= 0:
+        return
+    await session.execute(
+        update(Market)
+        .where(Market.id == market_id)
+        .values(
+            escrow_pool=(func.coalesce(Market.escrow_pool, Decimal("0")) + amt),
+            gross_staked=(func.coalesce(Market.gross_staked, Decimal("0")) + amt),
+        )
+    )
+
+
+async def deduct_from_escrow_pool(
+    session: AsyncSession, market_id: int, amount: Decimal, *, allow_negative: bool = False
+) -> Decimal:
+    """Debit the escrow pool on sell refund / winner payout. Returns new balance.
+
+    Refuses to go negative unless allow_negative (used only during controlled
+    backfill). The escrow pool is the market's own money — a debit larger than
+    the balance means an accounting bug upstream.
+    """
+    amt = Decimal(str(amount)).quantize(PRICE_STEP)
+    row = await session.execute(select(Market.escrow_pool).where(Market.id == market_id))
+    current = row.scalar_one_or_none()
+    current = Decimal(str(current or 0))
+    if not allow_negative and amt > current:
+        raise ValueError(
+            f"escrow underflow: market {market_id} pool={current} < debit {amt}"
+        )
+    await session.execute(
+        update(Market)
+        .where(Market.id == market_id)
+        .values(
+            escrow_pool=(func.coalesce(Market.escrow_pool, Decimal("0")) - amt),
+            gross_paid_out=(func.coalesce(Market.gross_paid_out, Decimal("0")) + amt),
+        )
+    )
+    return (current - amt).quantize(PRICE_STEP)
+
+
+async def credit_escrow_pool_reversal(
+    session: AsyncSession, market_id: int, amount: Decimal
+) -> None:
+    """Undo a prior escrow debit (e.g. a sell whose payout later failed).
+
+    Adds `amount` back to escrow_pool and subtracts it from gross_paid_out, so
+    the audit totals stay consistent — this is NOT new stake.
+    """
+    amt = Decimal(str(amount)).quantize(PRICE_STEP)
+    if amt <= 0:
+        return
+    await session.execute(
+        update(Market)
+        .where(Market.id == market_id)
+        .values(
+            escrow_pool=(func.coalesce(Market.escrow_pool, Decimal("0")) + amt),
+            gross_paid_out=(func.coalesce(Market.gross_paid_out, Decimal("0")) - amt),
+        )
+    )
+
+
 async def update_market_price(session: AsyncSession, trade: MarketTrade) -> None:
     quant = PRICE_STEP
 

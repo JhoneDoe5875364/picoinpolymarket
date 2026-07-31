@@ -4,7 +4,9 @@ export const TRADE_COPY = {
   amount: "Amount",
   fee: "Fee",
   totalCost: "Total Cost",
-  estimatedReturn: "Estimated Return",
+  // Pari-mutuel: winners split the market pool, so payout is not a fixed 1π per
+  // share — it varies with how many share the winning side. Show it as a max.
+  estimatedReturn: "Max Return (varies)",
   netResult: "Net Result",
   lossIfIncorrect: "Loss if Incorrect",
 

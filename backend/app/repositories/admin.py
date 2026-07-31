@@ -274,9 +274,31 @@ async def resolve_market(
             f"Market #{market_id} is already resolved and cannot be resolved again."
         )
 
-    final_price_value = Decimal("1") if outcome == "YES" else Decimal("0")
-    loser_price_value = Decimal("0") if outcome == "YES" else Decimal("1")
     now = datetime.now(timezone.utc)
+
+    # ---- Pari-mutuel settlement ----
+    # The winners share this market's escrow pool in proportion to their shares.
+    # dividend_per_share = pool / Σ(winning shares). A winner's payout is then
+    # shares * dividend_per_share, so the total paid to winners == the pool and
+    # the house nets only fees (loser stakes fund winners). If no winners exist
+    # (nobody bet the winning side), the pool is retained (see backfill/void note).
+    pool_row = await session.execute(select(Market.escrow_pool).where(Market.id == market_id))
+    pool = Decimal(str(pool_row.scalar_one_or_none() or 0)).quantize(Decimal("0.0001"))
+
+    winners_shares_row = await session.execute(
+        select(func.coalesce(func.sum(MarketPosition.shares), Decimal("0"))).where(
+            MarketPosition.market_id == market_id,
+            MarketPosition.outcome == outcome,
+            MarketPosition.shares > 0,
+        )
+    )
+    winners_total_shares = Decimal(str(winners_shares_row.scalar_one() or 0)).quantize(Decimal("0.0001"))
+
+    if winners_total_shares > 0:
+        dividend_per_share = (pool / winners_total_shares).quantize(Decimal("0.0001"))
+    else:
+        dividend_per_share = Decimal("0")
+
     update_stmt = (
         update(Market)
         .where(Market.id == market_id)
@@ -292,6 +314,8 @@ async def resolve_market(
             resolved_by_user_id=user_id,
             resolved_by_username=username,
             status="resolved",
+            pool_at_resolution=pool,
+            winners_total_shares=winners_total_shares,
             updated_at=now,
         )
         .returning(
@@ -309,6 +333,8 @@ async def resolve_market(
     if not updated_row:
         raise LookupError("Market not found")
 
+    # Winner final_price = dividend per share (parimutuel), loser = 0. This keeps
+    # the existing "shares * final_price" payout formula correct everywhere.
     await session.execute(
         update(MarketPosition)
         .where(
@@ -318,23 +344,33 @@ async def resolve_market(
         .values(
             is_closed=True,
             final_price=case(
-                (MarketPosition.outcome == outcome, final_price_value),
-                else_=loser_price_value,
-            )
+                (MarketPosition.outcome == outcome, dividend_per_share),
+                else_=Decimal("0"),
+            ),
         )
     )
+    # Token price shows the settled per-share value of the winning side. The
+    # token price column is NUMERIC(5,4) (max 9.9999), while a parimutuel
+    # dividend can exceed that; the authoritative value lives in
+    # MarketPosition.final_price (NUMERIC(24,4)). Cap the display token price so
+    # the write can't overflow.
+    token_price_display = min(dividend_per_share, Decimal("9.9999"))
     await session.execute(
         update(MarketToken)
         .where(MarketToken.market_id == market_id)
         .values(
             price=case(
-                (MarketToken.outcome == outcome, final_price_value),
-                else_=loser_price_value,
+                (MarketToken.outcome == outcome, token_price_display),
+                else_=Decimal("0"),
             )
         )
     )
 
-    return dict(updated_row)
+    result = dict(updated_row)
+    result["pool_at_resolution"] = float(pool)
+    result["winners_total_shares"] = float(winners_total_shares)
+    result["dividend_per_share"] = float(dividend_per_share)
+    return result
 
 
 async def metrics(session: AsyncSession) -> dict[str, Any]:
@@ -586,7 +622,7 @@ async def payment_operations_overview(session: AsyncSession) -> dict[str, Any]:
         .join(Market, Market.id == MarketPosition.market_id)
         .where(
             Market.is_resolved == True,
-            MarketPosition.final_price >= Decimal("1"),
+            MarketPosition.final_price > Decimal("0"),
             MarketPosition.shares > 0,
             MarketPosition.is_claimed == False,
         )
@@ -748,7 +784,7 @@ async def list_payouts_sent(
     the payout went through auto-pay; empty txid means a manual mark-paid."""
     base_filters = [
         MarketPosition.is_claimed == True,
-        MarketPosition.final_price >= Decimal("1"),
+        MarketPosition.final_price > Decimal("0"),
     ]
     amount_expr = MarketPosition.shares * MarketPosition.final_price
 
@@ -805,7 +841,7 @@ async def list_payout_queue(
     if status not in allowed_status:
         raise ValueError("Invalid status filter")
 
-    winner_expr = MarketPosition.final_price >= Decimal("1")
+    winner_expr = MarketPosition.final_price > Decimal("0")
     base_filters = [
         Market.is_resolved == True,
         winner_expr,
@@ -889,7 +925,7 @@ async def mark_payout_paid(
         raise LookupError("Payout position not found")
     if row["is_claimed"]:
         raise ValueError("Payout already marked paid")
-    if row["final_price"] is None or Decimal(str(row["final_price"])) < Decimal("1"):
+    if row["final_price"] is None or Decimal(str(row["final_price"])) <= Decimal("0"):
         raise ValueError("Position is not a winning payout")
 
     now = datetime.now(timezone.utc)
@@ -901,7 +937,13 @@ async def mark_payout_paid(
         .where(MarketPosition.id == position_id)
         .values(**values)
     )
-    amount_owed = float(Decimal(str(row["shares"] or 0)) * Decimal(str(row["final_price"] or 0)))
+    amount_owed_dec = (Decimal(str(row["shares"] or 0)) * Decimal(str(row["final_price"] or 0))).quantize(Decimal("0.0001"))
+    # The payout leaves this market's escrow pool. allow_negative because tiny
+    # rounding across many winners can leave a sub-quantum residual; the pool was
+    # sized to exactly cover the winners at resolution.
+    from app.core.market import deduct_from_escrow_pool as _deduct_escrow
+    await _deduct_escrow(session, int(row["market_id"]), amount_owed_dec, allow_negative=True)
+    amount_owed = float(amount_owed_dec)
     return {
         "position_id": int(row["id"]),
         "user_id": int(row["user_id"]),
@@ -958,7 +1000,11 @@ async def mark_payout_unpaid(
         .where(MarketPosition.id == position_id)
         .values(is_claimed=False, updated_at=datetime.now(timezone.utc))
     )
-    amount_owed = float(Decimal(str(row["shares"] or 0)) * Decimal(str(row["final_price"] or 0)))
+    amount_owed_dec = (Decimal(str(row["shares"] or 0)) * Decimal(str(row["final_price"] or 0))).quantize(Decimal("0.0001"))
+    # Reversing a mistaken mark-paid puts the money back into the escrow pool.
+    from app.core.market import credit_escrow_pool_reversal as _credit_escrow
+    await _credit_escrow(session, int(row["market_id"]), amount_owed_dec)
+    amount_owed = float(amount_owed_dec)
     return {
         "position_id": int(row["id"]),
         "user_id": int(row["user_id"]),
@@ -996,7 +1042,7 @@ async def get_payout_target(
         raise LookupError("Payout position not found")
     if row["is_claimed"]:
         raise ValueError("Payout already marked paid")
-    if row["final_price"] is None or Decimal(str(row["final_price"])) < Decimal("1"):
+    if row["final_price"] is None or Decimal(str(row["final_price"])) <= Decimal("0"):
         raise ValueError("Position is not a winning payout")
     if not row["pi_uid"]:
         raise ValueError("Winner has no linked Pi account")

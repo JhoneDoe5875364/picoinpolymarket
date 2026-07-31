@@ -39,11 +39,11 @@ export function positionResult(args: {
   finalPrice?: number | null;
   isClosed?: boolean | null;
 }): PredictionResult {
-  const { isResolved, finalPrice, isClosed } = args;
+  const { finalPrice, isClosed } = args;
+  // Pari-mutuel: a winner's final_price is the dividend per share (> 0, and may
+  // be below 1), a loser's is exactly 0. final_price is only set at resolution.
   if (finalPrice !== null && finalPrice !== undefined) {
-    if (isResolved || finalPrice === 0 || finalPrice >= 1) {
-      return finalPrice >= 1 ? "won" : "lost";
-    }
+    return finalPrice > 0 ? "won" : "lost";
   }
   if (isClosed) return "sold";
   return "open";

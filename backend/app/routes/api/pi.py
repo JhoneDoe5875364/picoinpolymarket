@@ -16,7 +16,12 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from app.core import pi_client
 from app.core.config import Config
 from app.core.logger import get_logger
-from app.core.market import insert_market_trade, update_market_position, update_market_price
+from app.core.market import (
+    add_to_escrow_pool,
+    insert_market_trade,
+    update_market_position,
+    update_market_price,
+)
 from app.core.pi_client import PaymentVerificationError, PiPaymentError
 from app.core.security import _verify_with_pi, verify_token
 from app.db.deps import DbSession
@@ -198,6 +203,9 @@ async def complete_pi_payments(request: Request, db: DbSession, user=Depends(ver
             )
             await update_market_position(db, trade)
             await update_market_price(db, trade)
+            # Escrow the staked principal (fee-excluded) so it can later fund the
+            # winners of this market. order.pi_amount = price*size (no fee).
+            await add_to_escrow_pool(db, int(order.market_id), Decimal(str(order.pi_amount)))
             await payments_repo.set_order_status(db, order_id=order_id, status="EXECUTED")
     except HTTPException:
         raise
