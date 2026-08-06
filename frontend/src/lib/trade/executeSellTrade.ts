@@ -47,7 +47,9 @@ export async function executeSellTrade({
     sell_shares: sellShares,
     sell_request_id: newSellRequestId(),
   };
-  if (expectedPrice !== undefined && Number.isFinite(expectedPrice)) {
+  // The server declares expected_price as gt=0, so sending 0 (a failed quote)
+  // would be rejected with a 422 instead of a readable error.
+  if (expectedPrice !== undefined && Number.isFinite(expectedPrice) && expectedPrice > 0) {
     body.expected_price = expectedPrice;
   }
 

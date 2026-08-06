@@ -361,7 +361,11 @@ async def list_positions(
             MarketPosition.avg_price.label("avg_price"),
             yes_price.label("current_price"),
             func.cast(MarketPosition.shares * yes_price - MarketPosition.pi_amount, Float).label("pnl"),
-            func.cast((MarketPosition.shares * yes_price - MarketPosition.pi_amount) / MarketPosition.pi_amount * 100, Float).label("pnl_percent"),
+            # NULLIF: a fully sold position has pi_amount = 0 (see
+            # core.market.reduce_market_position), and dividing by it raises
+            # "division by zero" in Postgres — which 500s the whole closed-
+            # positions page. NULL percent renders as 0 on the client.
+            func.cast((MarketPosition.shares * yes_price - MarketPosition.pi_amount) / func.nullif(MarketPosition.pi_amount, 0) * 100, Float).label("pnl_percent"),
             func.cast(MarketPosition.shares * yes_price, Float).label("current_pi_amount"),
             MarketPosition.final_price.label("final_price"),
             Market.is_resolved.label("is_resolved"),
@@ -389,7 +393,9 @@ async def list_positions(
             MarketPosition.avg_price.label("avg_price"),
             no_price.label("current_price"),
             func.cast(MarketPosition.shares * no_price - MarketPosition.pi_amount, Float).label("pnl"),
-            func.cast((MarketPosition.shares * no_price - MarketPosition.pi_amount) / MarketPosition.pi_amount * 100, Float).label("pnl_percent"),
+            # NULLIF: see the YES branch above — pi_amount is 0 once a position
+            # has been sold out, and 0 as a divisor kills the whole query.
+            func.cast((MarketPosition.shares * no_price - MarketPosition.pi_amount) / func.nullif(MarketPosition.pi_amount, 0) * 100, Float).label("pnl_percent"),
             func.cast(MarketPosition.shares * no_price, Float).label("current_pi_amount"),
             MarketPosition.final_price.label("final_price"),
             Market.is_resolved.label("is_resolved"),

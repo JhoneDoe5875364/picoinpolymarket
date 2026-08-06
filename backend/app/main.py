@@ -11,8 +11,10 @@ _backend_root = Path(__file__).resolve().parent.parent
 load_dotenv(_backend_root / ".env")
 load_dotenv()
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.logger import get_logger, setup_logger
 from app.db.session import create_engine_and_sessionmaker, dispose_engine
@@ -183,6 +185,36 @@ app = FastAPI(
     openapi_url=os.getenv("OPENAPI_URL", "/openapi.json"),
     lifespan=lifespan,
 )
+
+class ServerErrorJSONMiddleware(BaseHTTPMiddleware):
+    """Convert an unhandled exception into a JSON 500 *inside* the CORS layer.
+
+    Starlette's built-in ServerErrorMiddleware sits outside every user
+    middleware, so the 500 it emits never passes back through CORSMiddleware and
+    reaches the browser with no Access-Control-Allow-Origin header. The browser
+    then discards it and the client sees only a generic "failed to fetch" —
+    every server error looks like a network outage. That masked a sell-quote 500
+    as a legitimate 0π price for days. Handling it here, one layer inside CORS,
+    keeps the header on the response so clients see the real status.
+
+    Registered BEFORE CORSMiddleware on purpose: add_middleware() prepends, so
+    the last one added is the outermost. CORS must stay outermost.
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        try:
+            return await call_next(request)
+        except Exception:  # noqa: BLE001 - last-resort net; HTTPException never reaches here
+            logger.exception(
+                "[UNHANDLED] %s %s", request.method, request.url.path
+            )
+            return JSONResponse(
+                status_code=500,
+                content={"ok": False, "detail": "Internal server error"},
+            )
+
+
+app.add_middleware(ServerErrorJSONMiddleware)
 
 allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:9002")
 origins = [o.strip() for o in allowed_origins.split(",") if o.strip()]

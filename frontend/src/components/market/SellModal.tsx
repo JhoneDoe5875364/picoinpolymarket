@@ -45,6 +45,7 @@ export default function SellModal({
   const [result, setResult] = useState<SellTradeResult | null>(null);
   const [quote, setQuote] = useState<SellQuote | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
+  const [quoteError, setQuoteError] = useState<string>("");
 
   const shares = useMemo(() => sanitizeShares(Number(sharesInput)), [sharesInput]);
 
@@ -53,10 +54,12 @@ export default function SellModal({
   useEffect(() => {
     if (!open || shares <= 0) {
       setQuote(null);
+      setQuoteError("");
       return;
     }
     let cancelled = false;
     setQuoteLoading(true);
+    setQuoteError("");
     const timer = window.setTimeout(async () => {
       try {
         const res = await apiFetchWithToken<{
@@ -66,6 +69,7 @@ export default function SellModal({
           gross?: number;
           fee?: number;
           net_payout?: number;
+          reason?: string;
         }>(`/positions/${positionId}/sell-quote?shares=${shares}`, { method: "GET" });
         if (cancelled) return;
         setQuote({
@@ -75,8 +79,19 @@ export default function SellModal({
           netPayout: Number(res?.net_payout ?? 0),
           sellable: Boolean(res?.sellable),
         });
-      } catch {
-        if (!cancelled) setQuote(null);
+        setQuoteError(
+          res?.sellable === false
+            ? res?.reason || "This position cannot be sold right now."
+            : ""
+        );
+      } catch (error) {
+        if (cancelled) return;
+        // Never render a failed quote as 0π — a silent catch here made a server
+        // 500 look like a legitimate "worth nothing" price.
+        setQuote(null);
+        setQuoteError(
+          error instanceof Error ? error.message : "Could not load the sell quote."
+        );
       } finally {
         if (!cancelled) setQuoteLoading(false);
       }
@@ -88,6 +103,19 @@ export default function SellModal({
   }, [open, positionId, shares]);
 
   if (!open) return null;
+
+  // Only a live, sellable quote may arm the button. Without one we do not know
+  // what the server would pay, so selling blind is never allowed.
+  const canSell =
+    !quoteLoading &&
+    Boolean(quote?.sellable) &&
+    (quote?.price ?? 0) > 0 &&
+    shares > 0 &&
+    shares <= heldShares + 1e-9;
+
+  // Show a dash, never 0π, when there is no quote to show.
+  const quoteAmount = (value: number | undefined) =>
+    quoteLoading ? "…" : quote ? formatPiAmount(value ?? 0) : "—";
 
   const handleSellAll = () => {
     setSharesInput(String(heldShares));
@@ -104,6 +132,12 @@ export default function SellModal({
     }
     if (entered > heldShares + 1e-9) {
       setMsg(`You only hold ${heldShares} shares.`);
+      return;
+    }
+    // Never submit without a usable quote: expected_price must be > 0 or the
+    // server rejects the request outright (422).
+    if (!quote || !quote.sellable || quote.price <= 0) {
+      setMsg(quoteError || "No live sell quote available. Please try again.");
       return;
     }
 
@@ -181,7 +215,7 @@ export default function SellModal({
           <div className="space-y-2 rounded-xl border border-border/80 bg-muted/20 p-3 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Sell price / share</span>
-              <span>{quoteLoading ? "…" : formatPiAmount(quote?.price ?? 0)}</span>
+              <span>{quoteAmount(quote?.price)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Shares</span>
@@ -189,15 +223,17 @@ export default function SellModal({
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Gross</span>
-              <span>{quoteLoading ? "…" : formatPiAmount(quote?.gross ?? 0)}</span>
+              <span>{quoteAmount(quote?.gross)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Fee</span>
-              <span>{quoteLoading ? "…" : `-${formatPiAmount(quote?.fee ?? 0)}`}</span>
+              <span>
+                {quoteLoading ? "…" : quote ? `-${formatPiAmount(quote.fee)}` : "—"}
+              </span>
             </div>
             <div className="flex justify-between font-semibold">
               <span className="text-foreground">You receive</span>
-              <span>{quoteLoading ? "…" : formatPiAmount(quote?.netPayout ?? 0)}</span>
+              <span>{quoteAmount(quote?.netPayout)}</span>
             </div>
             <p className="pt-1 text-[11px] text-muted-foreground">
               Price is your share of the market pool — always backed by funds already in the market.
@@ -219,6 +255,10 @@ export default function SellModal({
             </div>
           )}
 
+          {quoteError && !result?.ok && (
+            <div className="text-sm text-destructive">{quoteError}</div>
+          )}
+
           {msg && <div className="text-sm text-destructive">{msg}</div>}
         </div>
 
@@ -231,9 +271,11 @@ export default function SellModal({
             {result?.ok ? "Close" : "Cancel"}
           </button>
           <button
-            className={`rounded-md px-4 py-2 text-white glowing-focus btn-no ${loading ? "opacity-80" : ""}`}
+            className={`rounded-md px-4 py-2 text-white glowing-focus btn-no ${
+              loading || !canSell ? "opacity-50" : ""
+            }`}
             onClick={handleSell}
-            disabled={loading || Boolean(result?.ok)}
+            disabled={loading || Boolean(result?.ok) || !canSell}
           >
             {loading ? "Selling…" : "Sell"}
           </button>

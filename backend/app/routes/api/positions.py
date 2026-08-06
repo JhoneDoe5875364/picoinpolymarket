@@ -367,23 +367,60 @@ async def sell_quote(
 ):
     """Return the exact price/breakdown a sell of `shares` would use, so the UI
     shows what the server will actually pay. Same pool-based pricing as the sell
-    route — never the raw AMM price."""
+    route — never the raw AMM price.
+
+    `sellable` mirrors the guards POST /sell enforces and every rejection carries
+    a `reason`, so a UI that arms its Sell button on this flag never offers a
+    sale the sell route would turn around and reject.
+    """
     user_id = _user_id(user)
 
     position = await positions_repo.lock_position(db, position_id=position_id, user_id=user_id)
-    await db.rollback()
     if position is None:
+        await db.rollback()
         raise HTTPException(status_code=404, detail="Position not found")
-    if position.is_closed or Decimal(str(position.shares)) <= 0:
-        raise HTTPException(status_code=400, detail="Position is already closed")
 
-    sell_shares = Decimal(str(shares))
-    if sell_shares > Decimal(str(position.shares)):
-        sell_shares = Decimal(str(position.shares))
-
+    # Copy every field we need into plain Python values BEFORE releasing the
+    # transaction. `rollback()` expires every ORM instance in the session, and a
+    # later attribute read would re-SELECT it — implicit IO that raises
+    # MissingGreenlet under asyncio and 500s the whole quote.
+    is_closed = bool(position.is_closed)
+    held_shares = Decimal(str(position.shares))
     market_id = int(position.market_id)
     outcome = str(position.outcome).upper()
-    _token, amm_price = await markets_repo.get_token_and_price(db, market_id, outcome)
+    await db.rollback()
+
+    if is_closed or held_shares <= 0:
+        raise HTTPException(status_code=400, detail="Position is already closed")
+
+    sell_shares = min(Decimal(str(shares)), held_shares)
+
+    def _not_sellable(reason: str, price: Decimal = Decimal("0")) -> dict:
+        return {
+            "ok": True,
+            "sellable": False,
+            "price": float(price),
+            "shares": float(sell_shares),
+            "gross": 0.0,
+            "fee": 0.0,
+            "net_payout": 0.0,
+            "reason": reason,
+        }
+
+    if not Config.a2u_enabled():
+        return _not_sellable("Selling is temporarily unavailable (auto-payout disabled).")
+    if sell_shares < Decimal(str(Config.SELL_MIN_SHARES)):
+        return _not_sellable(f"Minimum sell is {Config.SELL_MIN_SHARES} shares.")
+
+    market_status = await orders_repo.get_market_status(db, market_id)
+    if market_status != "open":
+        return _not_sellable("This market is closed and no longer accepts trades.")
+
+    try:
+        _token, amm_price = await markets_repo.get_token_and_price(db, market_id, outcome)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     escrow_pool, outcome_total_shares = await markets_repo.get_escrow_and_outcome_shares(
         db, market_id, outcome
     )
@@ -393,22 +430,26 @@ async def sell_quote(
         outcome_total_shares=outcome_total_shares,
     )
     if price <= 0:
-        return {
-            "ok": True,
-            "sellable": False,
-            "price": 0.0,
-            "gross": 0.0,
-            "fee": 0.0,
-            "net_payout": 0.0,
-            "reason": "No pool value currently backs this position.",
-        }
-    breakdown = compute_sell_breakdown(float(price), float(sell_shares))
-    return {
+        return _not_sellable("No pool value currently backs this position.")
+
+    try:
+        breakdown = compute_sell_breakdown(float(price), float(sell_shares))
+    except ValueError:
+        # Dust: the proceeds round to nothing at 4dp.
+        return _not_sellable("This amount is too small to sell.", price)
+
+    net_payout = float(breakdown.net_payout)
+    quote: dict = {
         "ok": True,
-        "sellable": float(breakdown.net_payout) >= Config.SELL_MIN_NET_PAYOUT,
+        "sellable": net_payout >= Config.SELL_MIN_NET_PAYOUT,
         "price": float(breakdown.price),
         "shares": float(breakdown.shares),
         "gross": float(breakdown.gross),
         "fee": float(breakdown.fee),
-        "net_payout": float(breakdown.net_payout),
+        "net_payout": net_payout,
     }
+    if not quote["sellable"]:
+        quote["reason"] = (
+            f"Sale proceeds are below the {Config.SELL_MIN_NET_PAYOUT}π minimum."
+        )
+    return quote

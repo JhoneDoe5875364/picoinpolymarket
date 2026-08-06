@@ -27,7 +27,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core import pi_client
 from app.core.logger import get_logger
-from app.core.market import insert_market_trade, update_market_position, update_market_price
+from app.core.market import (
+    add_to_escrow_pool,
+    insert_market_trade,
+    update_market_position,
+    update_market_price,
+)
 from app.repositories import payments as payments_repo
 
 logger = get_logger()
@@ -77,6 +82,11 @@ async def _settle_verified(session: AsyncSession, payment: dict, dto: dict, txid
         )
         await update_market_position(session, trade)
         await update_market_price(session, trade)
+        # Must mirror the complete route exactly: a buy settled here stakes the
+        # same principal, so it has to fund the escrow pool too. Omitting it
+        # leaves the market under-collateralised — sell quotes come out too low
+        # and winners are short-changed at resolution.
+        await add_to_escrow_pool(session, int(order.market_id), Decimal(str(order.pi_amount)))
         await payments_repo.set_order_status(session, order_id=order_id, status="EXECUTED")
     return True
 
